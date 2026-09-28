@@ -391,6 +391,44 @@ describe('runLoopTick', () => {
 		expect(invalid.fixRounds.map((f) => f.action)).toEqual(['block'])
 	})
 
+	it('caps live plus new agents at maxAgents, fixes first (#167)', async () => {
+		const tick = async (config?: object) => {
+			const root = checkout(newTmpDir())
+			if (config) fs.outputJsonSync(`${root}/.repo-ai.json`, config)
+			await fs.ensureDir(`${root}-worktrees/ai-4-fix`)
+			return runLoopTick({
+				root,
+				env: {},
+				now: NOW,
+				gh: fakeGh({
+					// Live: #1's implementer (no PR), #2's code reviewer, #3's fixer.
+					wip: [1, 2, 3, 4],
+					prs: [
+						pr(20, 'ai-2-review', ['ai-review', 'ai-reviewing-code']),
+						pr(21, 'ai-3-fixing', ['ai-changes', 'ai-fixing']),
+						pr(22, 'ai-4-fix', ['ai-changes']),
+					],
+					changes: { 21: 1, 22: 1 },
+					queue: [{ number: 40, title: 'ok', body: 'b', labels: [], author_association: 'OWNER' }],
+				}),
+			})
+		}
+		const unset = await tick()
+		expect(unset.liveAgents).toBe(3)
+		expect(unset.fixRounds.map((f) => f.action)).toEqual(['spawn'])
+		expect(unset.reviewsToSpawn).toEqual([{ pr: 20, issue: 2, arm: 'sec' }])
+		expect(unset.slots).toBe(2)
+
+		const capped = await tick({ maxAgents: 4 })
+		expect(capped.fixRounds.map((f) => f.pr)).toEqual([22])
+		expect(capped.reviewsToSpawn).toEqual([])
+		expect(capped.slots).toBe(0)
+
+		const full = await tick({ maxAgents: 3 })
+		expect(full.fixRounds).toEqual([])
+		expect(full.slots).toBe(0)
+	})
+
 	describe('autoMerge needs the opt-in and the release gate (#142)', () => {
 		const tick = async (optIn: boolean, gated: boolean) => {
 			const root = checkout(newTmpDir())
