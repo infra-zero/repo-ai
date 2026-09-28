@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
-import { checkAutoMerge, runDoctor } from '../../../src/cli/commands/doctor.js'
+import { checkAutoMerge, checkHumanUser, runDoctor } from '../../../src/cli/commands/doctor.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
 
 const newTmpDir = useTmpDir()
@@ -28,6 +28,51 @@ describe('runDoctor — loop config location', () => {
 	it('says nothing about loop config with neither file', async () => {
 		const results = await runDoctor(newTmpDir())
 		expect(results.find((r) => r.check === 'Loop config')).toBeUndefined()
+	})
+})
+
+describe('checkHumanUser (#162)', () => {
+	it('is ok when humanUser is set', async () => {
+		const r = await checkHumanUser(newTmpDir(), 'acme-owner')
+		expect(r).toMatchObject({ status: 'ok', detail: expect.stringContaining('acme-owner') })
+	})
+
+	it('skips outside a git repo', async () => {
+		const r = await checkHumanUser(newTmpDir(), undefined)
+		expect(r.status).toBe('ok')
+	})
+
+	it('is not applicable when the repo owner is a user', async () => {
+		const dir = newTmpDir()
+		fs.ensureDirSync(join(dir, '.git'))
+		const r = await checkHumanUser(dir, undefined, async () => ({
+			ok: true,
+			stdout: 'User\n',
+			stderr: '',
+		}))
+		expect(r).toMatchObject({ status: 'ok', detail: expect.stringMatching(/not applicable/) })
+	})
+
+	it('drifts on an organisation-owned repo with no humanUser', async () => {
+		const dir = newTmpDir()
+		fs.ensureDirSync(join(dir, '.git'))
+		const r = await checkHumanUser(dir, undefined, async () => ({
+			ok: true,
+			stdout: 'Organization\n',
+			stderr: '',
+		}))
+		expect(r.status).toBe('drift')
+	})
+
+	it('self-skips when the owner cannot be verified', async () => {
+		const dir = newTmpDir()
+		fs.ensureDirSync(join(dir, '.git'))
+		const r = await checkHumanUser(dir, undefined, async () => ({
+			ok: false,
+			stdout: '',
+			stderr: 'connection refused',
+		}))
+		expect(r.status).toBe('ok')
 	})
 })
 

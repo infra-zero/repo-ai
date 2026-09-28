@@ -23,7 +23,7 @@ export interface LoopEnv {
 	ownerRepo: string
 	/** `AI_LOOP_AGENT`, else `rules.aiLoop.agentUser`; empty unless assignable. */
 	agentUser: string
-	/** The repo owner when it is a User; empty for an organisation. */
+	/** `humanUser`, else the repo owner when it is a User; empty for an organisation with no `humanUser` set (#162). */
 	humanUser: string
 	/** Who `gh` authenticates as. */
 	me: string
@@ -83,16 +83,18 @@ export async function resolveLoopEnv(options: LoopEnvOptions = {}): Promise<Loop
 		agentUser = ''
 	}
 
-	const humanUser = ownerRepo
-		? await ghOut(gh, [
-				'api',
-				`repos/${ownerRepo}`,
-				'--jq',
-				'if .owner.type == "User" then .owner.login else "" end',
-			])
-		: ''
-	const me = await ghOut(gh, ['api', 'user', '--jq', '.login'])
 	const config = root ? await readConfig(root) : null
+	const humanUser =
+		config?.humanUser ||
+		(ownerRepo
+			? await ghOut(gh, [
+					'api',
+					`repos/${ownerRepo}`,
+					'--jq',
+					'if .owner.type == "User" then .owner.login else "" end',
+				])
+			: '')
+	const me = await ghOut(gh, ['api', 'user', '--jq', '.login'])
 	const budgetTokens = config?.budgetTokens ?? DEFAULT_BUDGET_TOKENS
 	const quietStopMinutes = config?.quietStopMinutes ?? DEFAULT_QUIET_STOP_MINUTES
 
