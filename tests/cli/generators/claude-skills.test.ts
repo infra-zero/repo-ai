@@ -6,6 +6,9 @@ import {
 	claudeSkillStatus,
 	HASH_KEY,
 	installClaudeSkill,
+	PLUGIN_NAME,
+	pluginInstallPaths,
+	pluginSkillStale,
 	readShippedSkill,
 	readSkillVersion,
 	removeRetiredSkill,
@@ -409,5 +412,60 @@ describe('removeRetiredSkill (#87)', () => {
 
 		write(dir, '---\nname: ai-workflow\n---\nbody\n')
 		expect((await removeRetiredSkill(dir, 'ai-workflow')).status).toBe('kept')
+	})
+})
+
+describe('pluginInstallPaths (#154)', () => {
+	it('is empty with no ~/.claude/plugins at all', async () => {
+		expect(await pluginInstallPaths(newTmpDir())).toEqual([])
+	})
+
+	it('is empty when installed_plugins.json names no repo-ai key', async () => {
+		const home = newTmpDir()
+		await fs.outputJson(join(home, '.claude', 'plugins', 'installed_plugins.json'), {
+			version: 2,
+			plugins: { 'frontend-design@claude-plugins-official': [{ installPath: '/x' }] },
+		})
+		expect(await pluginInstallPaths(home)).toEqual([])
+	})
+
+	it('collects installPath from every scope, deduplicated, keyed by any marketplace alias', async () => {
+		const home = newTmpDir()
+		await fs.outputJson(join(home, '.claude', 'plugins', 'installed_plugins.json'), {
+			version: 2,
+			plugins: {
+				[`${PLUGIN_NAME}@${PLUGIN_NAME}`]: [
+					{ scope: 'user', installPath: '/a' },
+					{ scope: 'user', installPath: '/a' },
+				],
+				[`${PLUGIN_NAME}@a-fork`]: [{ scope: 'project', installPath: '/b' }],
+			},
+		})
+		expect(await pluginInstallPaths(home)).toEqual(['/a', '/b'])
+	})
+
+	it('is empty on unreadable JSON', async () => {
+		const home = newTmpDir()
+		await fs.outputFile(join(home, '.claude', 'plugins', 'installed_plugins.json'), 'not json')
+		expect(await pluginInstallPaths(home)).toEqual([])
+	})
+})
+
+describe('pluginSkillStale (#154)', () => {
+	it('is false when the cached copy matches what this package ships', async () => {
+		const dir = newTmpDir()
+		const shipped = await readShippedSkill('ai-loop')
+		await fs.outputFile(join(dir, 'skills', 'ai-loop', 'SKILL.md'), shipped.content)
+		expect(await pluginSkillStale('ai-loop', dir)).toBe(false)
+	})
+
+	it('is true when the cached copy differs — the plugin is never a fork', async () => {
+		const dir = newTmpDir()
+		await fs.outputFile(join(dir, 'skills', 'ai-loop', 'SKILL.md'), 'stale content\n')
+		expect(await pluginSkillStale('ai-loop', dir)).toBe(true)
+	})
+
+	it('is false when nothing is cached at that path', async () => {
+		expect(await pluginSkillStale('ai-loop', newTmpDir())).toBe(false)
 	})
 })

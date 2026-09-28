@@ -28,10 +28,15 @@ const label = (name: string, over: Partial<Record<string, unknown>> = {}) => ({
 	...over,
 })
 
-/** Serves `gh label list`; edits/creates succeed unless `write` says otherwise. */
+/** Serves `gh api .../labels --paginate --slurp` as a single page; edits/creates succeed unless `write` says otherwise. */
 function fakeGh(labels: unknown[], write?: GhResult): GhExec {
+	return fakeGhPages([labels], write)
+}
+
+/** Same, but `pages` lets a test spread `labels` across more than one page. */
+function fakeGhPages(pages: unknown[][], write?: GhResult): GhExec {
 	return vi.fn(async (args: string[]) => {
-		if (args[1] === 'list') return ok(JSON.stringify(labels))
+		if (args[0] === 'api' && args.includes('--slurp')) return ok(JSON.stringify(pages))
 		if (args[1] === 'edit' || args[1] === 'create') return write ?? ok('')
 		return { ok: false, stdout: '', stderr: `unexpected ${args.join(' ')}`, code: 1 }
 	})
@@ -104,6 +109,16 @@ describe('checkLoopLabels', () => {
 		expect(r.status).toBe('ok')
 		expect(r.detail).toContain('could not read labels')
 	})
+
+	it('reads every label across more than one page (#163)', async () => {
+		const all = allCorrect()
+		const page1 = all.slice(0, 8)
+		const page2 = all.slice(8)
+		expect(page2.length).toBeGreaterThan(0)
+		const r = await checkLoopLabels(gitRepo(), fakeGhPages([page1, page2]))
+		expect(r.status).toBe('ok')
+		expect(r.detail).toContain('match spec')
+	})
 })
 
 describe('applyLoopLabels', () => {
@@ -132,7 +147,7 @@ describe('applyLoopLabels', () => {
 		const labels = allCorrect().map((l) => ({ ...l, color: l.color.toUpperCase() }))
 		const exec = fakeGh(labels)
 		expect(await applyLoopLabels(gitRepo(), exec)).toEqual([])
-		expect(vi.mocked(exec).mock.calls.every((c) => c[0][1] === 'list')).toBe(true)
+		expect(vi.mocked(exec).mock.calls.every((c) => c[0][0] === 'api')).toBe(true)
 	})
 
 	it('creates a missing label on a repo already running the loop', async () => {
@@ -143,7 +158,7 @@ describe('applyLoopLabels', () => {
 	it('writes nothing to a repo that does not use the loop', async () => {
 		const exec = fakeGh([{ name: 'bug', color: 'd73a4a', description: '' }])
 		expect(await applyLoopLabels(gitRepo(), exec)).toEqual([])
-		expect(vi.mocked(exec).mock.calls.every((c) => c[0][1] === 'list')).toBe(true)
+		expect(vi.mocked(exec).mock.calls.every((c) => c[0][0] === 'api')).toBe(true)
 	})
 
 	it('creates the whole set on a fresh repo when bootstrapping (setup, #12)', async () => {

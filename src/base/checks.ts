@@ -1,5 +1,7 @@
 import {
 	claudeSkillStatus,
+	pluginInstallPaths,
+	pluginSkillStale,
 	resolveSkillsDir,
 	RETIRED_SKILLS,
 	SHIPPED_SKILLS,
@@ -164,6 +166,45 @@ export async function checkRequiredSkills(
 		}
 	}
 	return { check, status: 'optional-missing', detail: parts.join('; '), hint }
+}
+
+/**
+ * The Claude Code plugin copy of the shipped skills (#132), against what this
+ * package ships (#154). The plugin is Claude Code's own unversioned git
+ * checkout — never a fork a human hand-edited — so unlike `checkClaudeSkills`
+ * a mismatch is always staleness, never something to protect. Same severity
+ * rule: it probes `~/.claude/plugins`, not the repo, so it never fails doctor.
+ */
+export async function checkPluginSkills(home?: string): Promise<CheckResult> {
+	const check = 'Plugin skills'
+	const installPaths = await pluginInstallPaths(home)
+	if (installPaths.length === 0) {
+		return {
+			check,
+			status: 'optional-missing',
+			detail: 'not installed via the Claude Code plugin',
+			hint: 'Run `/plugin install repo-ai@repo-ai` in Claude Code, or skip it and use `fix claude-skills` instead',
+		}
+	}
+	const stale = new Set<string>()
+	for (const installPath of installPaths) {
+		for (const name of SHIPPED_SKILLS) {
+			if (await pluginSkillStale(name, installPath)) stale.add(name)
+		}
+	}
+	if (stale.size > 0) {
+		return {
+			check,
+			status: 'optional-missing',
+			detail: `plugin copy behind this package: ${[...stale].join(', ')}`,
+			hint: 'Run `/plugin update repo-ai@repo-ai` in Claude Code',
+		}
+	}
+	return {
+		check,
+		status: 'ok',
+		detail: `plugin copy at ${installPaths.length === 1 ? installPaths[0] : `${installPaths.length} install paths`} matches what this package ships`,
+	}
 }
 
 /**
