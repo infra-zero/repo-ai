@@ -16,7 +16,16 @@ const tick = (extra: Partial<LoopTickResult> = {}) =>
 		summary: 'idle',
 		slots: 6,
 		...Object.fromEntries(
-			['adopt', 'disarm', 'handoffs', 'sendBacks', 'stripMergeReady', 'toClean', 'stalled']
+			[
+				'adopt',
+				'disarm',
+				'handoffs',
+				'sendBacks',
+				'rerunFailed',
+				'stripMergeReady',
+				'toClean',
+				'stalled',
+			]
 				.concat(['decay', 'verdicts', 'reviewsToSpawn', 'fixRounds', 'pickups', 'updateBranches'])
 				.map((k) => [k, []])
 		),

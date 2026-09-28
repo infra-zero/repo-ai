@@ -180,6 +180,12 @@ describe('runLoopApply transitions (#147)', () => {
 			comments: [{ kind: 'send-back', pr: 12, sendBack }],
 		},
 		{
+			name: 'reruns a first-attempt ci-red run instead of spending a fix round (#202)',
+			work: { rerunFailed: [{ pr: 10, issue: 1, runId: 555 }] },
+			calls: [['run', 'rerun', '555', '--failed']],
+			errors: 0,
+		},
+		{
 			name: 'relabels a closed ai-wip issue and hands an open one to the human',
 			work: {
 				toClean: [
