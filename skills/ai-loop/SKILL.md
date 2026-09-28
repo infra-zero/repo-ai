@@ -180,7 +180,7 @@ After the `🤖 *Automated — triage …*` header, **lead with `## To lift this
 Workflow({name: 'ai-loop-pickup', args: {repo: <ownerRepo>, agentUser: <agentUser>, humanUser: <humanUser>, namedReviewers, budgetTokens: <budgetTokens>, maxFixRounds: <maxFixRounds>, issues: [{number, title, slug, worktree}, …]}})
 ```
 
-It implements, reviews, and runs up to `<maxFixRounds>` fix rounds per issue. `namedReviewers` is `true` only when **both** `code-reviewer` and `security-expert` are Agent types here; pass unset users as `""`. **No `Workflow` tool?** Take the implementer prompt from `workflows/ai-loop-pickup.js`, spawn implementers as background `Agent` calls one at a time (≤ `slots`), then each PR's two reviewers; leave fix rounds to Pass 3 and report `Workflow tool missing: Pass 4 ran as background agents, no token cap`. On completion print one line per issue (`#82 → PR #90, code PASS, sec PASS, 1 fix round`) and act on nothing.
+It implements, reviews, and runs up to `<maxFixRounds>` fix rounds per issue. `namedReviewers` is `true` only when **both** `code-reviewer` and `security-expert` are Agent types here; pass unset users as `""`. **No `Workflow` tool?** Take the implementer prompt from `workflows/ai-loop-pickup.js`, spawn implementers as background `Agent` calls one at a time (≤ `slots`), then each PR's two reviewers; leave fix rounds to Pass 3 and report `Workflow tool missing: Pass 4 ran as background agents, no token cap`. On completion print one line per issue (`#82 → PR #90, code PASS, sec PASS, 1 fix round`), plus one naming each label in `.skipped` (agents the token budget skipped, e.g. `security-expert:#82:r1`), and act on nothing.
 
 ## Pass 5 — report
 
