@@ -275,7 +275,13 @@ describe('runLoopTick', () => {
 		])
 		expect(r.updateBranches).toEqual([{ pr: 11, issue: 2 }])
 		expect(r.sendBacks).toEqual([
-			{ pr: 12, issue: 3, reason: 'ci-red', failing: [{ name: 'test', link: 'l' }] },
+			{
+				pr: 12,
+				issue: 3,
+				reason: 'ci-red',
+				label: 'ai-changes',
+				failing: [{ name: 'test', link: 'l' }],
+			},
 		])
 		expect(r.disarm).toEqual([13])
 		expect(r.verdicts).toEqual([{ pr: 14, arm: 'code', verdict: 'PASS' }])
@@ -444,7 +450,9 @@ describe('runLoopTick', () => {
 		})
 		expect(r.errors).toEqual([])
 		expect(r.updateBranches).toEqual([])
-		expect(r.sendBacks).toEqual([{ pr: 11, issue: 2, reason: 'BLOCKED', failing: [] }])
+		expect(r.sendBacks).toEqual([
+			{ pr: 11, issue: 2, reason: 'BLOCKED', label: 'ai-changes', failing: [] },
+		])
 	})
 
 	it('waits on a BLOCKED PR whose required checks have not reported yet (#112)', async () => {
@@ -465,7 +473,50 @@ describe('runLoopTick', () => {
 		})
 		expect(r.errors).toEqual([])
 		expect(r.handoffs).toEqual([])
-		expect(r.sendBacks).toEqual([{ pr: 11, issue: 2, reason: 'BLOCKED', failing: [] }])
+		expect(r.sendBacks).toEqual([
+			{ pr: 11, issue: 2, reason: 'BLOCKED', label: 'ai-changes', failing: [] },
+		])
+	})
+
+	it('sends a DIRTY passed PR back with ai-conflicts, not ai-changes (#176)', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({
+				wip: [1],
+				prs: [pr(10, 'ai-1-dirty', ['ai-review', 'ai-ok-code', 'ai-ok-sec'])],
+				merge: { 10: 'DIRTY' },
+			}),
+		})
+		expect(r.sendBacks).toEqual([
+			{ pr: 10, issue: 1, reason: 'DIRTY', label: 'ai-conflicts', failing: [] },
+		])
+	})
+
+	it('starts a fixer for ai-conflicts without it costing a fix round (#176)', async () => {
+		const root = checkout(newTmpDir())
+		await fs.ensureDir(`${root}-worktrees/ai-1-rebase`)
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({
+				wip: [1],
+				prs: [pr(10, 'ai-1-rebase', ['ai-conflicts'])],
+			}),
+		})
+		expect(r.fixRounds).toEqual([
+			{
+				pr: 10,
+				issue: 1,
+				worktree: `${root}-worktrees/ai-1-rebase`,
+				applications: 0,
+				action: 'spawn',
+				reason: 'round 0',
+			},
+		])
 	})
 
 	it('spawns one combined reviewer for a docs-only PR (#53)', async () => {
