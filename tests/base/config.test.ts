@@ -69,6 +69,14 @@ describe('readConfig', () => {
 		expect((await readConfig(dir)).autoMerge).toBe(false)
 	})
 
+	it('reads ciWorkflow, trimmed, and ignores a blank one (#201)', async () => {
+		const dir = newTmpDir()
+		fs.outputJsonSync(join(dir, '.repo-ai.json'), { ciWorkflow: ' test.yml ' })
+		expect((await readConfig(dir)).ciWorkflow).toBe('test.yml')
+		fs.outputJsonSync(join(dir, '.repo-ai.json'), { ciWorkflow: '  ' })
+		expect((await readConfig(dir)).ciWorkflow).toBeUndefined()
+	})
+
 	it('reads humanUser, trimmed, and ignores a blank one (#162)', async () => {
 		const dir = newTmpDir()
 		fs.outputJsonSync(join(dir, '.repo-ai.json'), { humanUser: ' acme-owner ' })

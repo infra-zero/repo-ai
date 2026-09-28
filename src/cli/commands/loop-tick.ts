@@ -275,17 +275,25 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	const errors = result.errors
 	const seams = { root, git: options.git, gh: options.gh }
 
+	const config = await readConfig(root)
+	const { ciWorkflow } = config
 	// #153: worth surfacing even on a halting tick — decoupled from worktree state.
-	const ciWarning = await ciRunWarning(gh, ownerRepo, env.defaultBranch, now)
+	const ciWarning = await ciRunWarning(gh, ownerRepo, env.defaultBranch, now, ciWorkflow)
 	if (ciWarning) result.warnings.push(ciWarning)
 	// #146: same reasoning — a stuck approval pins main's push concurrency group.
-	const releaseWarning = await releaseStuckWarning(gh, ownerRepo, env.defaultBranch, now)
+	const releaseWarning = await releaseStuckWarning(
+		gh,
+		ownerRepo,
+		env.defaultBranch,
+		now,
+		ciWorkflow
+	)
 	if (releaseWarning) {
 		result.warnings.push(releaseWarning)
 		result.releaseStuck = true
 	}
 	// #204: same reasoning — a failed release job is silent otherwise, and nothing publishes.
-	const releaseFailedMsg = await releaseFailedWarning(gh, ownerRepo, env.defaultBranch)
+	const releaseFailedMsg = await releaseFailedWarning(gh, ownerRepo, env.defaultBranch, ciWorkflow)
 	if (releaseFailedMsg) {
 		result.warnings.push(releaseFailedMsg)
 		result.releaseFailed = true
@@ -384,7 +392,6 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	])
 	result.releaseGated = await releaseGated(gh, ownerRepo, root)
 	// Both keys: the repo's explicit opt-in and a human gate before the registry (#142).
-	const config = await readConfig(root)
 	const autoMerge = config.autoMerge === true && result.releaseGated
 
 	for (const pr of prs ?? []) {
