@@ -1,6 +1,8 @@
 import path from 'node:path'
 import chalk from 'chalk'
 import fs from 'fs-extra'
+import { resolveDefaultBranch } from '../../base/default-branch.js'
+import { type GhExec, realGhExec } from '../../base/gh.js'
 import { type GitExec, realGitExec } from '../../base/git.js'
 import { defaultWorktreeRoot } from './loop-guard.js'
 
@@ -42,8 +44,9 @@ export interface LoopWorktreeAddOptions {
 	worktreeRoot?: string
 	base?: string
 	json?: boolean
-	/** Test seam. */
+	/** Test seams. */
 	git?: GitExec
+	gh?: GhExec
 }
 
 /**
@@ -96,6 +99,7 @@ export async function runLoopWorktreeAdd(
 	const worktree = path.join(worktreeRoot, slug)
 	// A checkout of a real repo takes longer than realGitExec's 5s default.
 	const git: GitExec = options.git ?? ((args) => realGitExec(args, root, 120_000))
+	const gh: GhExec = options.gh ?? ((args, stdin) => realGhExec(args, stdin, root))
 	const result: LoopWorktreeAddResult = {
 		root,
 		worktree,
@@ -111,7 +115,15 @@ export async function runLoopWorktreeAdd(
 		result.messages.push(`⚠ '${slug}' is not ai-<issue>-<kebab-slug>`)
 		return result
 	}
-	const base = options.base ?? 'origin/main'
+	let base = options.base
+	if (base === undefined) {
+		const defaultBranch = await resolveDefaultBranch(git, gh)
+		if (!defaultBranch) {
+			result.messages.push('⚠ could not resolve the default branch — pass --base')
+			return result
+		}
+		base = `origin/${defaultBranch}`
+	}
 	// Goes to git as an argument; a leading dash would be read as an option.
 	if (base.startsWith('-')) {
 		result.messages.push(`⚠ '${base}' is not a ref`)

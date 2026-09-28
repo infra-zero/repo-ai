@@ -39,6 +39,8 @@ function checkout(parent: string): string {
 	git(dir, 'config', 'user.name', 'Test')
 	git(dir, 'commit', '-q', '--allow-empty', '-m', 'init')
 	git(dir, 'push', '-q', 'origin', 'main')
+	// The bare origin is empty at clone time, so `clone` never set origin/HEAD on its own.
+	git(dir, 'remote', 'set-head', 'origin', '--auto')
 	return fs.realpathSync(dir)
 }
 

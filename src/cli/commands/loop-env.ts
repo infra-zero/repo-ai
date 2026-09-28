@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { LOGIN } from '../../base/agent-user.js'
 import { DEFAULT_BUDGET_TOKENS, DEFAULT_QUIET_STOP_MINUTES, readConfig } from '../../base/config.js'
+import { resolveDefaultBranch } from '../../base/default-branch.js'
 import { type GitExec, realGitExec } from '../../base/git.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
 import { configuredAgentUser, defaultWorktreeRoot } from './loop-guard.js'
@@ -21,6 +22,8 @@ export interface LoopEnv {
 	worktreeRoot: string
 	/** From the working directory's remote, never from an argument. */
 	ownerRepo: string
+	/** The repo's default branch (`main`, `master`, …), never `origin/`-prefixed. Empty when unresolvable. */
+	defaultBranch: string
 	/** `AI_LOOP_AGENT`, else `rules.aiLoop.agentUser`; empty unless assignable. */
 	agentUser: string
 	/** The repo owner when it is a User; empty for an organisation. */
@@ -71,6 +74,9 @@ export async function resolveLoopEnv(options: LoopEnvOptions = {}): Promise<Loop
 	])
 	if (!ownerRepo) warnings.push('could not resolve the GitHub repo from the working directory')
 
+	const defaultBranch = await resolveDefaultBranch(git, gh)
+	if (!defaultBranch) warnings.push('could not resolve the default branch')
+
 	let agentUser = env.AI_LOOP_AGENT?.trim() || (root ? await configuredAgentUser(root) : '') || ''
 	// LOGIN is the injection boundary — the login goes into an API path.
 	if (
@@ -100,6 +106,7 @@ export async function resolveLoopEnv(options: LoopEnvOptions = {}): Promise<Loop
 		root,
 		worktreeRoot,
 		ownerRepo,
+		defaultBranch,
 		agentUser,
 		humanUser,
 		me,
@@ -113,6 +120,7 @@ const VARS: [string, keyof Omit<LoopEnv, 'warnings'>][] = [
 	['ROOT', 'root'],
 	['WT_ROOT', 'worktreeRoot'],
 	['OWNER_REPO', 'ownerRepo'],
+	['DEFAULT_BRANCH', 'defaultBranch'],
 	['AGENT_USER', 'agentUser'],
 	['HUMAN_USER', 'humanUser'],
 	['ME', 'me'],
