@@ -22,7 +22,7 @@ import { runLoopWorktreeAdd } from './loop-worktree.js'
  *
  * - Pass 1: `disarm`, `handoffs` (merge-ready, assignees, label removals),
  *   `stripMergeReady`, `updateBranches`, `rerunFailed` (`gh run rerun --failed`,
- *   #202), `sendBacks`.
+ *   #202), `resync` (an empty commit on a branch its PR lags, #219), `sendBacks`.
  * - Pass 2: removes the `toClean` worktrees (re-checking each: PR closed, or its
  *   `(#<PR>)` squash landed, #149), runs `loop guard --removed` for the
  *   `node_modules` rebuild, relabels every cleaned issue, and applies the label
@@ -55,6 +55,7 @@ export interface Applied {
 		| 'strip-merge-ready'
 		| 'update-branch'
 		| 'rerun'
+		| 'resync'
 		| 'send-back'
 		| 'relabel'
 		| 'stall'
@@ -236,6 +237,37 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 	// A first-attempt ci-red gets one free rerun instead of spending a fix round (#202).
 	for (const f of tick.rerunFailed)
 		for (const id of f.runIds) await run(1, 'rerun', f.pr, ['run', 'rerun', String(id), '--failed'])
+
+	// An empty commit on the lagging head: the new push event makes GitHub resync the PR (#219).
+	// The ref update is fast-forward only, so a branch that moved since the tick is left alone.
+	const repo = `repos/${tick.env.ownerRepo}`
+	for (const x of tick.resync) {
+		const c = await gh([
+			'api',
+			`${repo}/git/commits`,
+			'-f',
+			'message=chore: resync PR head [ai-loop]',
+			'-f',
+			`tree=${x.tree}`,
+			'-f',
+			`parents[]=${x.sha}`,
+			'--jq',
+			'.sha',
+		])
+		const sha = c.stdout.trim()
+		if (!c.ok || !sha) {
+			result.errors.push(`resync #${x.pr}: could not create the empty commit: ${c.stderr.trim()}`)
+			continue
+		}
+		await run(1, 'resync', x.pr, [
+			'api',
+			'-X',
+			'PATCH',
+			`${repo}/git/refs/heads/${x.branch}`,
+			'-f',
+			`sha=${sha}`,
+		])
+	}
 
 	for (const s of tick.sendBacks) await sendBack(s)
 
