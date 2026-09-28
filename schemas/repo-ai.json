@@ -88,6 +88,11 @@
       "type": "integer",
       "minimum": 1,
       "description": "Agents running at once across every Workflow, counted from claim labels: an open ai-wip issue with no PR yet, each ai-reviewing-* claim, each ai-fixing claim. `loop tick` trims fix rounds, then reviews, then pickup slots so live plus new stays at or under it. Unset means no cap. Values below 1 are ignored."
+    },
+    "ciWorkflow": {
+      "type": "string",
+      "default": "ci.yml",
+      "description": "File name of the CI workflow under .github/workflows that runs on pushes to the default branch. `loop tick` and `doctor` watch its runs for cancelled-with-no-jobs, stuck-approval and failed-release symptoms; `doctor` warns when the file does not exist. PR checks need no setting — they cover every workflow."
     }
   }
 }

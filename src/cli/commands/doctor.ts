@@ -10,7 +10,12 @@ import {
 	checkRequiredSkills,
 	checkWorkflows,
 } from '../../base/checks.js'
-import { ciRunWarning, releaseFailedWarning, releaseStuckWarning } from '../../base/ci-runs.js'
+import {
+	ciRunWarning,
+	DEFAULT_CI_WORKFLOW,
+	releaseFailedWarning,
+	releaseStuckWarning,
+} from '../../base/ci-runs.js'
 import { CONFIG_FILE, readConfig } from '../../base/config.js'
 import { checkConfigSchema } from '../../base/config-schema.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
@@ -159,7 +164,18 @@ export async function checkCiRuns(
 	if (!nwo || !branch) {
 		return { check, status: 'ok', detail: 'skipped — could not resolve the GitHub repo' }
 	}
-	const warning = await ciRunWarning(gh, nwo, branch, now)
+	const workflow = (await readConfig(dir)).ciWorkflow ?? DEFAULT_CI_WORKFLOW
+	// #201: a misnamed workflow 404s every probe, which reads as "healthy".
+	const probe = await gh(['api', `repos/${nwo}/actions/workflows/${encodeURIComponent(workflow)}`])
+	if (!probe.ok && /HTTP 404/.test(probe.stderr)) {
+		return {
+			check,
+			status: 'drift',
+			detail: `CI workflow ${workflow} not found in ${nwo}`,
+			hint: `Set \`ciWorkflow\` in ${CONFIG_FILE} to the file name of the workflow that runs on pushes to ${branch}`,
+		}
+	}
+	const warning = await ciRunWarning(gh, nwo, branch, now, workflow)
 	return warning
 		? { check, status: 'drift', detail: warning }
 		: { check, status: 'ok', detail: `${branch} push runs look healthy` }
@@ -181,7 +197,8 @@ export async function checkReleaseStuck(
 	if (!nwo || !branch) {
 		return { check, status: 'ok', detail: 'skipped — could not resolve the GitHub repo' }
 	}
-	const warning = await releaseStuckWarning(gh, nwo, branch, now)
+	const { ciWorkflow } = await readConfig(dir)
+	const warning = await releaseStuckWarning(gh, nwo, branch, now, ciWorkflow)
 	return warning
 		? { check, status: 'drift', detail: warning }
 		: { check, status: 'ok', detail: 'no release run stuck waiting on approval' }
@@ -199,7 +216,8 @@ export async function checkReleaseFailed(dir: string, exec?: GhExec): Promise<Ch
 	if (!nwo || !branch) {
 		return { check, status: 'ok', detail: 'skipped — could not resolve the GitHub repo' }
 	}
-	const warning = await releaseFailedWarning(gh, nwo, branch)
+	const { ciWorkflow } = await readConfig(dir)
+	const warning = await releaseFailedWarning(gh, nwo, branch, ciWorkflow)
 	return warning
 		? { check, status: 'drift', detail: warning }
 		: { check, status: 'ok', detail: 'no failed release run' }
