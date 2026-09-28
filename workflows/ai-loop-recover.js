@@ -18,8 +18,8 @@ const FIXED = {
 	required: ['pushed', 'summary'],
 }
 
-/** The tick's 8-task cap — prose alone let a tick over-claim (#41). */
-const MAX_TASKS = 8
+/** The tick's task cap — prose alone let a tick over-claim (#41). #158: `args.maxTasksPerTick` overrides. */
+const MAX_TASKS = args.maxTasksPerTick ?? 8
 // #101: a user message relayed into a running Workflow once hijacked three
 // reviewers. The skill's templates carry this too; appended here in case a
 // caller's prompt doesn't.

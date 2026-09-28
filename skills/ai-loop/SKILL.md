@@ -135,13 +135,17 @@ in Pass 2.
 
 ## Limits — do not exceed (the loop runs unattended against a monthly cap)
 
-- **6 issues in flight**, counted from open issues labelled `ai-wip` (`slots`).
+Each limit is a `.repo-ai.json` key, resolved into `loop tick`'s `.env` (#158); the value
+is the configured one, else the default shown.
+
+- **`<maxInFlight>` issues in flight** (default 6), counted from open issues labelled `ai-wip` (`slots`).
 - **Reviewers see the diff only** — `gh pr view` + `gh pr diff` + the issue body.
   No repo-wide exploration, no Explore agents.
-- **2 fix rounds per PR.** On the 3rd `ai-changes`, stop and mark `ai-blocked`.
-- **8 review and fix agents per tick**, in one Workflow; the rest wait for the next tick.
+- **`<maxFixRounds>` fix rounds per PR** (default 2). On `ai-changes` application
+  number `<maxFixRounds> + 1`, stop and mark `ai-blocked`.
+- **`<maxTasksPerTick>` review and fix agents per tick** (default 8), in one Workflow; the rest wait for the next tick.
   Pass 4's pickups run in their own Workflow, bounded by `slots`. Both `budgetTokens`
-  and the 8-task cap are enforced in the script itself (#41), not just here in prose —
+  and the task cap are enforced in the script itself (#41), not just here in prose —
   a tick that would run over either skips the excess, `log()`s it, and leaves the
   issue/PR labelled for the next tick to pick up.
 - **An idle tick spawns zero agents.** Skip to Pass 5 and say one line.
@@ -164,7 +168,8 @@ commands start with a plain executable** (`npx`, `gh`, `git`) so an allow rule
 can match them, and nothing is exported into the shell for a later command to
 read (#150). The tick's `.env` holds what the loop resolved once: `root`,
 `worktreeRoot`, `ownerRepo`, `defaultBranch`, `agentUser`, `humanUser`, `me`,
-`budgetTokens`, `quietStopMinutes`. **A `<name>` below is `.env.<name>`, written
+`budgetTokens`, `quietStopMinutes`, `maxInFlight`, `maxFixRounds`,
+`maxTasksPerTick`, `staleMinutes`, `busyMinutes`, `idleMinutes`. **A `<name>` below is `.env.<name>`, written
 into the command literally.** (`loop env` still prints the same for a human.)
 
 **A non-zero exit halts the whole tick, not the command.** `loop tick`
@@ -321,8 +326,8 @@ gh issue view <N> --json state -q .state
 Still `OPEN` means the PR said only `Refs #N` (a `Closes #N` issue is already
 closed) — then, when `humanUser` is set, `gh issue edit <N> --add-assignee <humanUser>`.
 
-**Apply the stalls** — `.stalled[]`, `loop reap`'s verdicts: a claim sat ≥45
-minutes (three ticks), so its agent is dead.
+**Apply the stalls** — `.stalled[]`, `loop reap`'s verdicts: a claim sat ≥`<staleMinutes>`
+minutes (default 45, three ticks), so its agent is dead.
 
 | `kind` / `action` | Do |
 |---|---|
@@ -364,7 +369,7 @@ end.** Pass 3 only picks up what that Workflow didn't finish: a PR with no
 live pickup Workflow behind it — a dead agent, a session restart, a PR Pass 0
 adopted (no loop worktree ever existed for it), or one Pass 1 sent back after
 `CLEAN` went stale. The mechanics below are unchanged — same claims, same
-8-task cap — this pass just runs less often now that pickup carries fix
+`<maxTasksPerTick>` cap — this pass just runs less often now that pickup carries fix
 rounds itself.
 
 **Adopt posted verdicts** — `.verdicts[]`: a reviewer that posted and died
@@ -376,7 +381,7 @@ current head. `<claim>`/`<pass>` are `ai-reviewing-<arm>`/`ai-ok-<arm>`:
 - **`CHANGES`** — `gh pr edit <N> --add-label ai-changes --remove-label ai-review --remove-label <claim>`
 
 **Queue the missing reviewers** — `.reviewsToSpawn[]`. **Claim each as you
-queue it**, and only within the tick's 8-task cap, or a tick landing mid-review
+queue it**, and only within the tick's `<maxTasksPerTick>` cap, or a tick landing mid-review
 duplicates it:
 
 ```bash
@@ -546,13 +551,13 @@ prompt}`, substituting `.worktree` into:
 #### Launch the tick's Workflow
 
 Every review and fix task this tick goes into **one** `Workflow` call — none
-when there are no tasks, so an idle tick still spawns zero agents. **At most 8
-tasks per tick**, fixes first: stop claiming at 8, and leave the rest
+when there are no tasks, so an idle tick still spawns zero agents. **At most
+`<maxTasksPerTick>` tasks per tick** (default 8), fixes first: stop claiming there, and leave the rest
 unclaimed for the next tick, which lists them again. A claim with no task behind
 it would sit until `loop reap` times it out.
 
 ```
-Workflow({name: 'ai-loop-recover', args: {reviews: [{label, agentType, prompt}, …], fixes: [{label, prompt}, …], budgetTokens: <budgetTokens>}})
+Workflow({name: 'ai-loop-recover', args: {reviews: [{label, agentType, prompt}, …], fixes: [{label, prompt}, …], budgetTokens: <budgetTokens>, maxTasksPerTick: <maxTasksPerTick>}})
 ```
 
 The script is `workflows/ai-loop-recover.js` in this package, installed to
@@ -562,8 +567,8 @@ if `Workflow` reports no workflow by that name, run
 
 **No `Workflow` tool?** (Not every harness has one.) Spawn the same tasks as
 background `Agent` calls instead: one per review or fix task, same prompt, same
-`agentType` (fixers `general-purpose`), all in one message. The 8-task cap still
-holds, now in prose only. `budgetTokens` is **not** enforced on this path: the
+`agentType` (fixers `general-purpose`), all in one message. The `<maxTasksPerTick>`
+cap still holds, now in prose only. `budgetTokens` is **not** enforced on this path: the
 script enforced it, and there is no script here. Add one line to Pass 5's report:
 `Workflow tool missing: Pass 3 ran as N background agents, no token cap`.
 
@@ -575,10 +580,10 @@ Launch it and **do not wait** — go on to Pass 4. Notes, so it doesn't get
   result is a report, never the record: the session that launched it may be
   gone before it finishes, and the next tick reads only labels and markers.
 - **No retries, no `isolation`.** One agent per claim, so `loop reap`'s
-  45-minute rule still describes every claim. Fixers work in the `ai-*`
+  `<staleMinutes>` rule still describes every claim. Fixers work in the `ai-*`
   worktree named in their prompt, through `git -C`, never `EnterWorktree`.
-- **The script enforces its own caps (#41)** — the 8-task cap and
-  `budgetTokens` — so a task past either never spawns; it is `log()`ged and
+- **The script enforces its own caps (#41)** — the `<maxTasksPerTick>`
+  cap and `budgetTokens` — so a task past either never spawns; it is `log()`ged and
   its claim label sits until the next tick adopts it, same as a dead agent.
 - **The result is `{tasks: [{label, result}, …], outputTokensSpent}`**, not a bare
   array. When the completion notification arrives, print one line per task
@@ -592,7 +597,7 @@ Launch it and **do not wait** — go on to Pass 4. Notes, so it doesn't get
 reviews, and every fix round — so its PRs normally reach Pass 1 already
 passed, without Pass 3 ever touching them.**
 
-`.slots` is `6 − in flight` after cleanup and reaping; `0` → skip. `.pickups[]`
+`.slots` is `<maxInFlight> − in flight` after cleanup and reaping; `0` → skip. `.pickups[]`
 is every eligible issue in queue order — `ai-ready` (the hard gate), not a PR or
 `ai-wip`/`ai-blocked`/`holding`, authored by an `OWNER`/`MEMBER`/`COLLABORATOR`
 (the backstop), and not naming (in backticks) a file an open `ai-wip` issue
@@ -656,12 +661,13 @@ Every issue claimed this tick goes into **one** `Workflow` call — none when
 nothing was claimed. Per issue it runs the implementer, then both reviewers the
 moment its PR opens, then **runs the fix rounds itself** (#129): any `CHANGES`
 spawns a fixer on that PR's worktree (Pass 3's fix-task prompt) and re-runs both
-reviewers on the new head, up to 2 rounds. Both passing, or the 2nd round still
-`CHANGES`, stops it — the next tick's Pass 1 hands a pass over, and Pass 3's
-`action: block` takes the 3rd `ai-changes`:
+reviewers on the new head, up to `<maxFixRounds>` rounds (default 2). Both
+passing, or the last round still `CHANGES`, stops it — the next tick's Pass 1
+hands a pass over, and Pass 3's `action: block` takes `ai-changes` application
+number `<maxFixRounds> + 1`:
 
 ```
-Workflow({name: 'ai-loop-pickup', args: {repo: <ownerRepo>, agentUser: <agentUser>, humanUser: <humanUser>, namedReviewers, budgetTokens: <budgetTokens>, issues: [{number, title, slug, worktree}, …]}})
+Workflow({name: 'ai-loop-pickup', args: {repo: <ownerRepo>, agentUser: <agentUser>, humanUser: <humanUser>, namedReviewers, budgetTokens: <budgetTokens>, maxFixRounds: <maxFixRounds>, issues: [{number, title, slug, worktree}, …]}})
 ```
 
 `namedReviewers` is `true` only when **both** `code-reviewer` and
@@ -678,7 +684,7 @@ not wait** — go on to Pass 5.
 **No `Workflow` tool?** Take the implementer prompt from
 `workflows/ai-loop-pickup.js` (installed at `~/.claude/workflows/`), filled in
 per issue, and spawn implementers as background `Agent` calls **one at a time**,
-never more than `slots` (6 in flight). As each returns a PR, spawn its two
+never more than `slots` (`<maxInFlight>` in flight). As each returns a PR, spawn its two
 reviewers together, with the script's reviewer prompts and claim labels. Leave
 fix rounds to later ticks' Pass 3 on this path.
 `budgetTokens` is **not** enforced on this path; the script enforced it. Add
@@ -695,7 +701,7 @@ Notes, so it doesn't get "tidied" into breakage:
   which is also why they can run concurrently.
 - **Reviewers claim their arm first** (`ai-reviewing-*`), and the fixer claims
   `ai-fixing` and relabels on push, so a later tick's Pass 3 adopts their work
-  instead of spawning duplicates. They sit outside Pass 3's 8-task cap; `slots`
+  instead of spawning duplicates. They sit outside Pass 3's `<maxTasksPerTick>` cap; `slots`
   bounds them instead. Pass 3 stays the recovery path for a PR whose Workflow
   died or stopped early.
 - **An implementer that gives up** labels its issue `ai-blocked`, hands it to
@@ -703,7 +709,7 @@ Notes, so it doesn't get "tidied" into breakage:
 - **`budgetTokens` is enforced in the script (#41)**, same as Pass 3: an
   implementer, reviewer or fixer past the cap never spawns, just `log()`s a
   skip. A skipped implementer leaves its issue `ai-wip` with no PR — `loop reap`
-  treats it like a dead agent after 45 minutes. A skipped reviewer leaves the PR
+  treats it like a dead agent after `<staleMinutes>` minutes. A skipped reviewer leaves the PR
   `ai-review`, and a skipped fixer leaves it `ai-changes`; the next tick's
   Pass 3 claims either normally.
 - **The result is `{issues: [{issue, pr, reviews, fixRounds}], outputTokensSpent}`**,
@@ -812,17 +818,27 @@ Monitor tool is unavailable** (no schema, or the call is refused), run without
 it on the cron cadence below, and add one line to this pass's report:
 `Monitor tool missing: ticking on the cron cadence, not on change`.
 
-| Driver | `SUMMARY` | Cadence | `cron` | `DELAY` |
-|---|---|---|---|---|
-| a `loop watch` Monitor running (the default) — it wakes the session on change, so the job is only the fallback | anything | 30 minutes | `17,47 * * * *` | `1800` |
-| no Monitor | `idle` — a new `ai-ready` issue can wait half an hour | 30 minutes | `17,47 * * * *` | `1800` |
-| no Monitor | anything else — agents in flight, reviews pending, a PR waiting | 10 minutes | `4,14,24,34,44,54 * * * *` | `600` |
+| Driver | `SUMMARY` | Cadence |
+|---|---|---|
+| a `loop watch` Monitor running (the default) — it wakes the session on change, so the job is only the fallback | anything | idle: `<idleMinutes>` (default 30) |
+| no Monitor | `idle` — a new `ai-ready` issue can wait | idle: `<idleMinutes>` (default 30) |
+| no Monitor | anything else — agents in flight, reviews pending, a PR waiting | busy: `<busyMinutes>` (default 10) |
+
+Build `cron` and `DELAY` from the cadence's minutes (#158) — the offsets keep
+the job off `:00`; a value of 60 or more ticks hourly:
+
+```bash
+cron_every() { echo "$(seq $(( $2 % $1 )) "$1" 59 | paste -sd, -) * * * *"; }   # MINUTES OFFSET
+cron_every <idleMinutes> 17   # idle cron; default: 17,47 * * * *
+cron_every <busyMinutes> 4    # busy cron; default: 4,14,24,34,44,54 * * * *
+# DELAY is the cadence's minutes × 60: <idleMinutes> × 60 or <busyMinutes> × 60.
+```
 
 **On a halt, don't create or retime the job** — skip the `CronList` below
 entirely. Every `loop guard` halt holds for the life of the session: `GH_TOKEN`
 and `GH_CONFIG_DIR` are read at launch, and a bare clone or linked worktree as
 `root` is structural. The cause wants a relaunch or a repair, not another tick;
-a job created here would re-run `/ai-loop` six times an hour, halting the same
+a job created here would re-run `/ai-loop` every `<busyMinutes>` minutes, halting the same
 way each time. **Leave an existing job alone** — don't delete it either: it is
 the smaller change, and it keeps working if the halt clears in this session
 (say `core.bare` was repaired). Still notify and write the status file, with
@@ -844,8 +860,8 @@ above. Otherwise only the user stops it ("stop the loop" → `CronDelete`).
 
 Write the status file **last** — `SUMMARY`, `SUGGESTED`, when the next tick
 is due (empty when none), and `CHANGED`, the epoch line 1 last changed (`loop
-watch` keeps it the same way when it rewrites line 1). Its age is the liveness signal: ticks run at most 30
-minutes apart, so a file older than about 35 minutes means the loop has stopped,
+watch` keeps it the same way when it rewrites line 1). Its age is the liveness signal: ticks run at most
+`<idleMinutes>` apart (default 30), so a file older than about 35 minutes at the default means the loop has stopped,
 and a statusline should hide it past that. The third line is what lets a
 statusline say `next 9m` instead of leaving you to guess:
 
@@ -860,9 +876,9 @@ review, picked up, blocked — marking handoffs carrying `ai-notes`, and any
 `.errors` and `.warnings` (a stale installed skill or workflow names `fix
 claude-skills` — say it, never run it). Then print `$DIGEST`, unless `$SUGGESTED` is empty or equals
 `$PREV_SUGGESTED`. **End with exactly one line saying what happens next:**
-`Next tick: on change, or every 30m — say "stop the loop" to end it` with a
-watcher running; without one, `Next tick: every 10m — say "stop the loop" to
-end it` (or `every 30m`). On a
+`Next tick: on change, or every <idleMinutes>m — say "stop the loop" to end it` with a
+watcher running; without one, `Next tick: every <busyMinutes>m — say "stop the loop" to
+end it` (or `every <idleMinutes>m`). On a
 halt, name the fix instead: `Next tick: none — relaunch as <agentUser>, then
 /ai-loop` for an identity mismatch, or `Next tick: none — run /ai-loop from the
 main checkout` for a bare clone or linked worktree. After a quiet stop:
@@ -879,8 +895,9 @@ main checkout` for a bare clone or linked worktree. After a quiet stop:
 That is the whole entry point, and the only thing to type. The first tick
 implements the `ai-ready` queue and schedules the rest itself (Pass 5): it
 starts a `loop watch` Monitor that wakes the session on change, with a
-30-minute cron job as the fallback. Without the Monitor tool it ticks every
-10 minutes while work is in flight, every 30 when idle. The ticks after it
+cron job every `idleMinutes` (default 30) as the fallback. Without the Monitor
+tool it ticks every `busyMinutes` (default 10) while work is in flight, every
+`idleMinutes` when idle. The ticks after it
 carry the PRs through review, fix rounds and cleanup. Type `/ai-loop` again any
 time to tick now — say after merging a PR — without adding a second schedule.
 Don't wrap it in `/loop`.
@@ -904,7 +921,7 @@ handoff — a new `ai-ready` issue to claim, or a passed PR ready to hand over
 — since pickup's own Workflow already runs an issue's reviews and fix rounds
 without waiting on a poll. Nothing here polls CI with the model; that
 judgement happens inside a tick. On each line, run a tick. While it runs, Pass 5
-keeps the job at the 30-minute fallback cadence. Re-arm it when the Monitor
+keeps the job at the `<idleMinutes>` fallback cadence. Re-arm it when the Monitor
 expires at 30 minutes — unless no `/ai-loop` job exists (`CronList`): then the
 loop has stopped, quietly or by request, so let the watcher lapse. At the default that is 20 polls an hour, each a few
 GitHub API calls, against the 5,000/h limit.

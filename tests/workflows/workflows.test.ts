@@ -148,6 +148,17 @@ describe('ai-loop-recover', () => {
 		expect(logs.join()).toContain('8-task cap')
 	})
 
+	it('takes its task cap from args.maxTasksPerTick (#158)', async () => {
+		const reviews = Array.from({ length: 4 }, (_, n) => ({ label: `code:#${n}`, prompt: 'p' }))
+		const { spawned, logs } = await run(
+			'ai-loop-recover',
+			{ fixes: [], reviews, maxTasksPerTick: 2 },
+			() => ({ verdict: 'PASS' })
+		)
+		expect(spawned.map((s) => s.label)).toEqual(['code:#0', 'code:#1'])
+		expect(logs.join()).toContain('2-task cap')
+	})
+
 	it('stops queuing once the token budget runs out, and logs what it skipped', async () => {
 		const fixes = [
 			{ label: 'fix:#1', prompt: 'p' },
@@ -260,6 +271,18 @@ describe('ai-loop-pickup', () => {
 		expect(value).toMatchObject({
 			issues: [{ fixRounds: 2, reviews: [{ passed: false }, { passed: false }] }],
 		})
+	})
+
+	it('takes its round cap from args.maxFixRounds (#158)', async () => {
+		const { value, spawned } = await run('ai-loop-pickup', { ...one, maxFixRounds: 1 }, (label) =>
+			label === 'impl:#1'
+				? { pr: 10 }
+				: label.startsWith('fix')
+					? { pushed: true }
+					: { passed: false }
+		)
+		expect(spawned.filter((s) => s.phase === 'Fix').map((s) => s.label)).toEqual(['fix:#1:r1'])
+		expect(value).toMatchObject({ issues: [{ fixRounds: 1 }] })
 	})
 
 	it('skips the fixer past the token budget and logs it', async () => {

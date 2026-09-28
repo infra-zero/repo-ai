@@ -83,6 +83,12 @@ optional:
 | `pollSeconds` | integer | `180`; values below `60` are raised to `60` | `loop watch`, between polls. Each poll costs several GitHub API calls against the 5,000/h limit. |
 | `budgetTokens` | integer | `400000`; values below `1000` are ignored | `loop tick`'s `.env.budgetTokens`, passed to the `ai-loop-pickup` and `ai-loop-recover` Workflow scripts, which enforce it — an agent past the cap is skipped and `log()`ged, not spawned. It bounds **output tokens only** (the Workflow runtime's `budget.spent()`, reported as `outputTokensSpent`); the harness's per-run total, input and cache reads included, runs several times higher. |
 | `quietStopMinutes` | integer | `120`; `0` disables | `loop tick`'s `.env.quietStopMinutes`. A tick that finds the status summary unchanged this long stops the loop — see [Driving it](#driving-it). |
+| `maxInFlight` | integer | `6`; values below `1` are ignored | `loop tick`'s `.env.maxInFlight`; its pickup `slots` are this minus the issues already `ai-wip`. |
+| `maxFixRounds` | integer | `2`; values below `0` are ignored | `loop tick`'s `.env.maxFixRounds`, passed to the `ai-loop-pickup` Workflow script, which runs at most this many fix rounds per PR. `loop tick` blocks a PR on its `maxFixRounds + 1`th `ai-changes`. |
+| `maxTasksPerTick` | integer | `8`; values below `1` are ignored | `loop tick`'s `.env.maxTasksPerTick`, passed to the `ai-loop-recover` Workflow script, which runs at most this many review and fix tasks per tick and leaves the rest for the next. |
+| `staleMinutes` | integer | `45`; values below `1` are ignored | `loop tick`'s `.env.staleMinutes`, `loop reap` and `loop tick`. A claim label (`ai-wip`, `ai-reviewing-*`, `ai-fixing`) this old marks a dead agent. |
+| `busyMinutes` | integer | `10`; values below `1` are ignored | `loop tick`'s `.env.busyMinutes`. The skill's cron cadence while work is in flight and no `loop watch` Monitor runs. |
+| `idleMinutes` | integer | `30`; values below `1` are ignored | `loop tick`'s `.env.idleMinutes`. The skill's cron cadence when idle, and its fallback cadence under a `loop watch` Monitor. |
 | `autoMerge` | boolean | `false` | `loop tick`. Lets Pass 1 merge a fully-passed issue PR unattended — only on a repo whose publishing job also runs behind an environment with `required_reviewers`. `doctor` warns when it is on without that gate. |
 
 The schema is [`schemas/repo-ai.json`](https://rtorcato.github.io/repo-ai/repo-ai.json)
@@ -419,19 +425,21 @@ or merging the ready PRs in quick succession, avoids the ripple.
 
 ## Limits
 
-These exist because the loop runs unattended against a monthly usage cap.
+These exist because the loop runs unattended against a monthly usage cap. Each
+number below is a default; the [config table](#configuration) names the
+`.repo-ai.json` key that changes it.
 
-- **6 issues in flight**, counted from open `ai-wip` issues.
+- **6 issues in flight** (`maxInFlight`), counted from open `ai-wip` issues.
 - **Reviewers see the diff only** — `gh pr view`, `gh pr diff`, the issue body.
   No repo-wide exploration.
-- **2 fix rounds per PR.** On the third `ai-changes`, stop and mark
+- **2 fix rounds per PR** (`maxFixRounds`). On the third `ai-changes`, stop and mark
   `ai-blocked`. Reviewer↔implementer ping-pong is the one unbounded token sink.
   `ai-conflicts` rebases don't count — they aren't the PR's own churn.
-- **8 review and fix agents per tick**, in one Workflow; the rest wait for the
+- **8 review and fix agents per tick** (`maxTasksPerTick`), in one Workflow; the rest wait for the
   next tick.
 - **An idle tick spawns zero agents.**
 - **Stall reaping instead of timeouts.** Nothing can time an agent out from
-  outside, so a label that has sat 45 minutes without its expected transition is
+  outside, so a label that has sat 45 minutes (`staleMinutes`) without its expected transition is
   reaped — but only when no PR exists, since an agent that opened one has
   already handed off. Every reap comments *why*; a bare `ai-blocked` reads as a
   considered judgement when it was actually a timeout.
@@ -445,9 +453,9 @@ These exist because the loop runs unattended against a monthly usage cap.
 That's the only thing to type. The loop paces itself: the first tick starts a
 `loop watch` watcher that wakes the session only when the work list changes
 (see [Wake on change](#wake-on-change) below), and each tick keeps one recurring
-job in this session as a 30-minute fallback. Without Claude Code's Monitor tool
-the job does all the pacing instead, firing every 10 minutes while agents or
-reviews are in flight and every 30 when idle, and the tick says so.
+job in this session as a 30-minute (`idleMinutes`) fallback. Without Claude Code's Monitor tool
+the job does all the pacing instead, firing every 10 minutes (`busyMinutes`) while agents or
+reviews are in flight and every 30 (`idleMinutes`) when idle, and the tick says so.
 The job ends with the session and expires after 7 days. Say "stop the loop" to
 end it sooner. Don't wrap it in `/loop`.
 

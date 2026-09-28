@@ -38,6 +38,24 @@ function fakeGh(state: {
 }
 
 describe('runLoopReap', () => {
+	it('takes staleMinutes from the option, else .repo-ai.json, else 45 (#158)', async () => {
+		const root = join(newTmpDir(), 'repo')
+		const reap = (staleMinutes?: number) =>
+			runLoopReap({
+				root,
+				now: NOW,
+				staleMinutes,
+				gh: fakeGh({ wip: [1], prs: [], timeline: { 1: [['ai-wip', 50]] } }),
+			})
+		expect((await reap()).staleMinutes).toBe(45)
+		expect((await reap()).stalled).toHaveLength(1)
+		fs.outputJsonSync(join(root, '.repo-ai.json'), { staleMinutes: 60 })
+		expect((await reap()).stalled).toEqual([])
+		expect((await reap(30)).stalled).toHaveLength(1)
+		fs.outputJsonSync(join(root, '.repo-ai.json'), { staleMinutes: 0 })
+		expect((await reap()).staleMinutes).toBe(45)
+	})
+
 	it('applies the stalled-agent table', async () => {
 		const root = join(newTmpDir(), 'repo')
 		for (const slug of ['ai-1-dead', 'ai-9-orphan', 'ai-4-open']) {

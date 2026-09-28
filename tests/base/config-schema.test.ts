@@ -33,6 +33,8 @@ describe('validateConfig', () => {
 		expect(validateConfig({ pollSeconds: 120 })).toEqual([])
 		expect(validateConfig({ budgetTokens: 500 })).toEqual(['"budgetTokens" must be at least 1000'])
 		expect(validateConfig({ budgetTokens: 200_000 })).toEqual([])
+		expect(validateConfig({ maxFixRounds: 0, maxInFlight: 1, idleMinutes: 30 })).toEqual([])
+		expect(validateConfig({ maxInFlight: 0 })).toEqual(['"maxInFlight" must be at least 1'])
 		expect(validateConfig({ quietStopMinutes: 0 })).toEqual([])
 		expect(validateConfig({ quietStopMinutes: -1 })).toEqual([
 			'"quietStopMinutes" must be at least 0',

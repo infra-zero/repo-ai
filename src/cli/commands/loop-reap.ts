@@ -1,12 +1,14 @@
 import path from 'node:path'
 import chalk from 'chalk'
+import { limit, readConfig } from '../../base/config.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
 import { defaultWorktreeRoot, findLive } from './loop-guard.js'
 
 /**
  * `repo-tooling loop reap` — the ai-loop skill's Pass 2 stalled-agent
  * table, moved out of prose (#618). Nothing can time out an agent, so a label
- * that sat `STALE_MINUTES` past its last application (per the timeline) marks
+ * that sat `staleMinutes` (`.repo-ai.json`, default 45 — three ticks, generous:
+ * a live agent must never be reaped out from under itself) past its last application (per the timeline) marks
  * a dead one:
  *
  * - **implementer** — issue `ai-wip`, no PR for `ai-<N>-*` → `block`.
@@ -21,8 +23,6 @@ import { defaultWorktreeRoot, findLive } from './loop-guard.js'
  * Exit `1` when a gh query failed, so the report is incomplete.
  */
 
-/** Three ticks. Generous: a live agent must never be reaped out from under itself. */
-export const STALE_MINUTES = 45
 /** A claim applied this many times is not one more spawn away from working. */
 export const MAX_APPLICATIONS = 3
 
@@ -58,6 +58,8 @@ export interface LoopReapOptions {
 	root?: string
 	worktreeRoot?: string
 	json?: boolean
+	/** Else `.repo-ai.json`'s `staleMinutes`, else its default (#158). */
+	staleMinutes?: number
 	/** Test seams. */
 	gh?: GhExec
 	now?: Date
@@ -75,12 +77,12 @@ interface Pr {
  * have no unbounded mode, so these stay windows rather than true complete
  * sets (#163) — but "recent" really is the intent for the PR list:
  * implementer-stall detection only needs an ai-wip issue's own PR (opened
- * the same tick it was claimed, and MAX_IN_FLIGHT caps how many are ever in
+ * the same tick it was claimed, and `maxInFlight` caps how many are ever in
  * flight at once), and the orphan check only needs currently-open PRs, which
  * for this loop's scale never approaches this ceiling either. Raised well
  * past the old 200 anyway, for headroom on a repo with heavy non-loop PR
  * traffic too — and the ai-wip issue list is a genuine complete set, just
- * one MAX_IN_FLIGHT already keeps small.
+ * one `maxInFlight` already keeps small.
  */
 const LIST_CEILING = 1000
 
@@ -121,6 +123,7 @@ export async function runLoopReap(options: LoopReapOptions = {}): Promise<LoopRe
 		: defaultWorktreeRoot(root)
 	const gh: GhExec = options.gh ?? ((args, stdin) => realGhExec(args, stdin, root))
 	const now = (options.now ?? new Date()).getTime()
+	const staleMinutes = options.staleMinutes ?? limit(await readConfig(root), 'staleMinutes')
 	const errors: string[] = []
 	const stalled: ReapEntry[] = []
 
@@ -148,10 +151,10 @@ export async function runLoopReap(options: LoopReapOptions = {}): Promise<LoopRe
 		const last = times?.at(-1)
 		if (last === undefined) return null
 		const minutes = Math.floor((now - last) / 60_000)
-		return minutes >= STALE_MINUTES ? { minutes, applications: times?.length ?? 0 } : null
+		return minutes >= staleMinutes ? { minutes, applications: times?.length ?? 0 } : null
 	}
 
-	// Every ai-wip issue, not a page of them — MAX_IN_FLIGHT keeps this small
+	// Every ai-wip issue, not a page of them — `maxInFlight` keeps this small
 	// in steady state, but the read itself is a complete set (#163).
 	const wip = await list<{ number: number }>([
 		'issue',
@@ -248,7 +251,7 @@ export async function runLoopReap(options: LoopReapOptions = {}): Promise<LoopRe
 	return {
 		root,
 		worktreeRoot,
-		staleMinutes: STALE_MINUTES,
+		staleMinutes,
 		stalled,
 		errors,
 		exitCode: errors.length > 0 ? 1 : 0,
