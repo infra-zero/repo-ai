@@ -848,6 +848,24 @@ describe('runLoopTick', () => {
 		])
 	})
 
+	it('fixes an ai-conflicts PR that kept its pass, never handing it off (#217)', async () => {
+		const root = checkout(newTmpDir())
+		await fs.ensureDir(`${root}-worktrees/ai-1-rebase`)
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({
+				wip: [1],
+				prs: [pr(10, 'ai-1-rebase', ['ai-conflicts', 'ai-ok-code', 'ai-ok-sec'])],
+				merge: { 10: 'CLEAN' },
+			}),
+		})
+		expect(r.handoffs).toEqual([])
+		expect(r.fixRounds.map((f) => f.action)).toEqual(['spawn'])
+		expect(r.summary).toContain('1 agent')
+	})
+
 	it('spawns one combined reviewer for a docs-only PR (#53)', async () => {
 		const root = checkout(newTmpDir())
 		const r = await runLoopTick({
