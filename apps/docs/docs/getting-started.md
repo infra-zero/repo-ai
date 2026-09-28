@@ -153,8 +153,8 @@ Then, in Claude Code, in the repo:
 
 That's the whole entry point — never `/loop /ai-loop`. The first tick claims
 the issue, implements it in a git worktree, opens a PR, and has two agents
-review it. It then keeps itself going on a schedule (every 10 minutes while
-work is in flight, every 30 when idle) so you don't have to retype it. Watch
+review it. It then keeps itself going — a watcher wakes it when the queue
+changes, with a 30-minute fallback — so you don't have to retype it. Watch
 the first few ticks before trusting it on a real queue — see
 [the tick](./ai-loop.md#the-tick) for what each pass does.
 
