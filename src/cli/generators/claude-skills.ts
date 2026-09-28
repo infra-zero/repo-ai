@@ -21,12 +21,13 @@ import { type GitExec, isNewerVersion, resolveShippedVersion } from '../utils/ve
 export const SHIPPED_SKILLS = ['ai-loop', 'ai-issue', 'ai-loop-status']
 
 /**
- * Skills earlier releases shipped: `ai-issue-loop` became `ai-loop` (#56), and
- * `ai-workflow` (#87) and `ai-tick` (#89) were folded into it. A stale copy
- * would still answer its old slash command, so `fix claude-skills` removes one
- * it can prove is ours.
+ * Skills a release still needs to clean up a stale copy of: a stale copy would
+ * still answer its old slash command, so `fix claude-skills` removes one it can
+ * prove is ours. `ai-issue-loop` (#56), `ai-workflow` (#87) and `ai-tick` (#89)
+ * were all retired before v2 and anyone still on those installs has long since
+ * upgraded past them, so they no longer need an entry here.
  */
-export const RETIRED_SKILLS = ['ai-issue-loop', 'ai-workflow', 'ai-tick']
+export const RETIRED_SKILLS: string[] = []
 
 /** The primary skill — the default everywhere a single name is accepted. */
 export const SHIPPED_SKILL = 'ai-loop'

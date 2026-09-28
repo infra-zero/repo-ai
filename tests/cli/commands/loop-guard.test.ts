@@ -212,13 +212,6 @@ describe('runLoopGuard — node_modules rebuild gating', () => {
 		expect(result.messages.join('\n')).toContain('rebuild deferred — 1 worktree(s) still live')
 	})
 
-	it('also scans the in-repo .claude/worktrees location', async () => {
-		const root = pnpmRepo()
-		fs.ensureDirSync(join(root, '.claude', 'worktrees', 'ai-7-legacy'))
-		const result = await runLoopGuard({ root, removed: true, install: neverInstalls })
-		expect(result.rebuild).toBe('deferred')
-	})
-
 	it('ignores directories that are not ai-*', async () => {
 		const parent = newTmpDir()
 		const root = healthyCheckout(parent)

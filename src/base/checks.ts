@@ -120,8 +120,8 @@ export async function checkRequiredSkills(
 	skillsDir?: string
 ): Promise<CheckResult> {
 	const check = 'Required skills'
-	// ai-loop was ai-issue-loop before #56, and absorbed ai-workflow (#87) and
-	// ai-tick (#89); existing configs still name them.
+	// A config naming a skill this package has since folded into ai-loop (#56,
+	// #87, #89 — none current; see RETIRED_SKILLS) still resolves to it here.
 	names = [...new Set(names.map((name) => (RETIRED_SKILLS.includes(name) ? 'ai-loop' : name)))]
 	const hint =
 		'Run `npx @rtorcato/repo-ai fix claude-skills` yourself to install or refresh them — add `--force-skills` to overwrite a locally modified copy. It writes to `~/.claude`, outside this repo, so nothing runs it for you.'

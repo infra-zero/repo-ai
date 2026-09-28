@@ -59,15 +59,6 @@ describe('checkRequiredSkills (#533)', () => {
 		expect(r.hint).toContain('--force-skills')
 	})
 
-	it('accepts the pre-rename name ai-issue-loop as ai-loop (#56)', async () => {
-		const dir = newTmpDir()
-		const shipped = await readShippedSkill('ai-loop')
-		await install(dir, 'ai-loop', stampSkill(shipped.content, shipped.version))
-
-		const r = await checkRequiredSkills(['ai-issue-loop'], dir)
-		expect(r.status).toBe('ok')
-	})
-
 	it('names a skill this package does not ship instead of throwing on the missing asset', async () => {
 		const r = await checkRequiredSkills(['ai-loop', 'not-a-skill'], newTmpDir())
 		expect(r.status).toBe('optional-missing')
