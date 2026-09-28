@@ -83,8 +83,8 @@ export interface SendBack {
 export interface RerunFailed {
 	pr: number
 	issue: number | null
-	/** `gh run rerun <runId> --failed` — its first attempt failed; a second failure sends it back. */
-	runId: number
+	/** `gh run rerun <runId> --failed` for each — every failing run is on its first attempt; a second failure sends it back (#211). */
+	runIds: number[]
 }
 
 export interface FixRound {
@@ -468,10 +468,14 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 			if (failing.length > 0) {
 				// One free rerun per head SHA: a fresh commit is a brand-new run at
 				// attempt 1, so this needs no state beyond the run's own attempt count.
-				const runId = runIdFromLink(failing[0]?.link ?? '')
-				const attempt = runId !== null ? await runAttempt(gh, ownerRepo, runId) : null
-				if (runId !== null && attempt === 1) {
-					result.rerunFailed.push({ pr: pr.number, issue, runId })
+				// Every failing check's run must be on attempt 1, or the PR never converges
+				// to a send-back while one run stays red (#211).
+				const ids = failing.map((c) => runIdFromLink(c.link))
+				const runIds = [...new Set(ids.filter((id) => id !== null))]
+				let first = !ids.includes(null)
+				for (const id of runIds) first &&= (await runAttempt(gh, ownerRepo, id)) === 1
+				if (first) {
+					result.rerunFailed.push({ pr: pr.number, issue, runIds })
 				} else {
 					result.sendBacks.push({
 						pr: pr.number,
