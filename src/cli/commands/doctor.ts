@@ -39,12 +39,12 @@ export async function runDoctor(dir: string, skillsDir?: string): Promise<CheckR
 	]
 	const schemaCheck = await checkConfigSchema(dir)
 	if (schemaCheck) results.push(schemaCheck)
-	if (config.source === 'repo-tooling.json') {
+	if (config.source === 'none') {
 		results.push({
 			check: 'Loop config',
-			status: 'drift',
-			detail: `agentUser/requiredSkills still read from legacy .repo-tooling.json rules.aiLoop`,
-			hint: `Move them to ${CONFIG_FILE} — repo-ai's own config, not repo-tooling's`,
+			status: 'missing',
+			detail: `no ${CONFIG_FILE}`,
+			hint: 'Run `npx @rtorcato/repo-ai fix config` to create it',
 		})
 	}
 	// Gated on agentUser: that key is the "this repo runs the pipeline" signal.

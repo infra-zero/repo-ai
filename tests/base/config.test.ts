@@ -61,43 +61,10 @@ describe('readConfig', () => {
 		expect((await readConfig(dir)).humanUser).toBeUndefined()
 	})
 
-	it('falls back to .repo-tooling.json rules.aiLoop / rules.requiredSkills', async () => {
+	it('ignores .repo-tooling.json — no fallback (#159)', async () => {
 		const dir = newTmpDir()
 		fs.outputJsonSync(join(dir, '.repo-tooling.json'), {
 			rules: { aiLoop: { agentUser: 'legacy-bot' }, requiredSkills: ['ai-workflow'] },
-		})
-		expect(await readConfig(dir)).toEqual({
-			agentUser: 'legacy-bot',
-			requiredSkills: ['ai-workflow'],
-			source: 'repo-tooling.json',
-		})
-	})
-
-	it('accepts the flat pre-v4 aiLoop.agentUser fallback', async () => {
-		const dir = newTmpDir()
-		fs.outputJsonSync(join(dir, '.repo-tooling.json'), { aiLoop: { agentUser: 'flat-bot' } })
-		expect((await readConfig(dir)).agentUser).toBe('flat-bot')
-	})
-
-	it('prefers .repo-ai.json over .repo-tooling.json when both exist', async () => {
-		const dir = newTmpDir()
-		fs.outputJsonSync(join(dir, '.repo-ai.json'), { agentUser: 'new-bot' })
-		fs.outputJsonSync(join(dir, '.repo-tooling.json'), {
-			rules: { aiLoop: { agentUser: 'old-bot' } },
-		})
-		expect(await readConfig(dir)).toEqual({
-			agentUser: 'new-bot',
-			requiredSkills: undefined,
-			autoMerge: false,
-			source: 'repo-ai.json',
-		})
-	})
-
-	it('reports source "none" with neither file, or an empty rules block', async () => {
-		expect((await readConfig(newTmpDir())).source).toBe('none')
-		const dir = newTmpDir()
-		fs.outputJsonSync(join(dir, '.repo-tooling.json'), {
-			rules: { aiLoop: {}, requiredSkills: [] },
 		})
 		expect(await readConfig(dir)).toEqual({ source: 'none' })
 	})

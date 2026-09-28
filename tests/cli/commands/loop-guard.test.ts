@@ -298,7 +298,7 @@ describe('runLoopGuard — bot-identity preflight (#601)', () => {
 	const withAgent = (agentUser?: string): string => {
 		const root = healthyCheckout(newTmpDir())
 		if (agentUser !== undefined) {
-			fs.writeJsonSync(join(root, '.repo-tooling.json'), { rules: { aiLoop: { agentUser } } })
+			fs.writeJsonSync(join(root, '.repo-ai.json'), { agentUser })
 		}
 		return root
 	}
@@ -346,10 +346,12 @@ describe('runLoopGuard — bot-identity preflight (#601)', () => {
 		expect(result.exitCode).toBe(2)
 	})
 
-	it('reads the flat pre-v4 aiLoop key too, and nothing at all without a lockfile', async () => {
+	it('ignores .repo-tooling.json, and reads nothing at all without .repo-ai.json (#159)', async () => {
 		const root = healthyCheckout(newTmpDir())
-		fs.writeJsonSync(join(root, '.repo-tooling.json'), { aiLoop: { agentUser: 'some-bot' } })
-		expect(await configuredAgentUser(root)).toBe('some-bot')
+		fs.writeJsonSync(join(root, '.repo-tooling.json'), {
+			rules: { aiLoop: { agentUser: 'some-bot' } },
+		})
+		expect(await configuredAgentUser(root)).toBeUndefined()
 		expect(await configuredAgentUser(newTmpDir())).toBeUndefined()
 	})
 

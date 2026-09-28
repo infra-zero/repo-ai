@@ -46,7 +46,7 @@ export interface Fixer {
 export const FIXERS = {
 	config: {
 		description:
-			'Write $schema into .repo-ai.json, creating it (seeded from legacy .repo-tooling.json) when missing',
+			'Write $schema into .repo-ai.json, creating it when missing (migrating any old repo-tooling settings once)',
 		run: (dir) => writeConfigSchema(dir),
 	},
 	labels: {
@@ -58,8 +58,7 @@ export const FIXERS = {
 		run: (_dir, o) => installSkills(o),
 	},
 	'ai-loop-identity': {
-		description:
-			"Point this checkout's Claude sessions at a gh profile signed in as rules.aiLoop.agentUser",
+		description: "Point this checkout's Claude sessions at a gh profile signed in as agentUser",
 		run: (dir, o) => setupAgentIdentity(dir, { ghConfigDir: o.ghConfigDir, home: os.homedir() }),
 	},
 	statusline: {

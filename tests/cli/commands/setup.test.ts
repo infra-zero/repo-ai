@@ -15,8 +15,7 @@ const newTmpDir = useTmpDir()
 
 function repo(agentUser?: string): string {
 	const dir = newTmpDir()
-	if (agentUser)
-		fs.writeJsonSync(join(dir, '.repo-tooling.json'), { rules: { aiLoop: { agentUser } } })
+	if (agentUser) fs.writeJsonSync(join(dir, '.repo-ai.json'), { agentUser })
 	return dir
 }
 

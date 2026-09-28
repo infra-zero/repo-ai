@@ -55,10 +55,10 @@ The plugin carries the skills only. Pass 3 and Pass 4 run their Workflow scripts
 |---|---|
 | `setup [--yes] [--json]` | Onboard a repo: runs `fix config`, `fix claude-skills`, creates or repairs the loop labels, `fix ai-loop-identity` (with an agent user), and `fix statusline` — asking before each — then `doctor`. |
 | `doctor [--json]` | Audit the loop setup: label spec, `.repo-ai.json` against its schema, `agentUser`, installed skills, `requiredSkills`, and whether your statusline shows the loop status. Exits 1 only on `drift` / `missing`. |
-| `fix config` | Write `$schema` into `.repo-ai.json`. With no file, create one, seeded from the legacy `.repo-tooling.json` settings. |
+| `fix config` | Write `$schema` into `.repo-ai.json`. With no file, create one, migrating any old `.repo-tooling.json` settings once. |
 | `fix labels` | Repair loop label colours and descriptions with `gh label edit`. |
 | `fix claude-skills` | Install or update the skills, and the Workflow scripts they run by name (`workflows/*.js` → `~/.claude/workflows`). `--force-skills` overwrites a modified or newer copy. |
-| `fix ai-loop-identity` | Point this checkout's Claude sessions at a `gh` profile signed in as `rules.aiLoop.agentUser`. |
+| `fix ai-loop-identity` | Point this checkout's Claude sessions at a `gh` profile signed in as `agentUser`. |
 | `fix statusline` | Install the loop's status segment (`🤖 2 agents·1 to merge · next 9m`) to `~/.claude/ai-loop-statusline.sh`, replacing that file on every run (it is ours; don't edit it). Never touches an existing statusline: sets `statusLine` in `~/.claude/settings.json` only when you have none, otherwise prints the one line to add to your own script. Never prompts. |
 | `loop guard` | Repair a wrongly-bare main checkout, gate the `node_modules` rebuild, and assert the agent identity. |
 | `loop env` | Resolve a tick's variables (root, worktree root, owner/repo, agent and human users). |
@@ -68,7 +68,7 @@ The plugin carries the skills only. Pass 3 and Pass 4 run their Workflow scripts
 | `loop comment <pr>` / `loop verdict <pr>` | Upsert the decision comment, and read a reviewer's verdict marker. |
 | `loop tick` | Compute one tick's whole work list (guard, cleanup, reap, verdicts, pickups). Writes no GitHub state. |
 
-Every command takes `--json`. Configuration lives in the repo's `.repo-ai.json` (`agentUser`, `requiredSkills`) — falling back to the legacy `.repo-tooling.json` `rules.aiLoop` / `rules.requiredSkills` when that file doesn't exist.
+Every command takes `--json`. Configuration lives in the repo's `.repo-ai.json` (`agentUser`, `requiredSkills`). `doctor` reports it missing; `fix config` creates it.
 
 ## License
 

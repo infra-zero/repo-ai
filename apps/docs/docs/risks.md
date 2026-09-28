@@ -43,7 +43,7 @@ you run the loop on it.
 
 Everything the loop does on GitHub — comments, labels, branches, pushes, PRs —
 is done as the GitHub account it is configured with (your own `gh` login, or
-`rules.aiLoop.agentUser`). You are responsible for those actions under GitHub's
+`agentUser` in `.repo-ai.json`). You are responsible for those actions under GitHub's
 terms, and they count against that account's API rate limits.
 
 ## Prompt injection

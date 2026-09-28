@@ -7,9 +7,8 @@ description: Every repo-ai command — the loop mechanics, the doctor audit, and
 
 Every command takes `--json`. In JSON mode, diagnostics go to stderr and stdout
 carries only the result. Configuration lives in the consuming repo's
-`.repo-ai.json`: `agentUser` and `requiredSkills`. Falls back to the legacy
-`.repo-tooling.json` `rules.aiLoop.agentUser` / `rules.requiredSkills` when
-`.repo-ai.json` doesn't exist — `doctor` flags that as drift so it gets moved.
+`.repo-ai.json`: `agentUser` and `requiredSkills`. `doctor` reports it
+missing; `fix config` creates it.
 
 ## Setup
 
@@ -17,10 +16,10 @@ carries only the result. Configuration lives in the consuming repo's
 |---|---|
 | `setup [--yes] [--json]` | Onboard a repo: runs `fix config`, `fix claude-skills`, creates or repairs the loop labels, `fix ai-loop-identity` (with an agent user), and `fix statusline` — asking before each — then `doctor`. |
 | `doctor [--json]` | Audit the loop setup: label spec, `.repo-ai.json` against its schema, `agentUser`, installed skills, `requiredSkills`, and whether your statusline shows the loop status. Exits 1 only on `drift` / `missing`. |
-| `fix config` | Write `$schema` into `.repo-ai.json`. With no file, create one, seeded from the legacy `.repo-tooling.json` settings. |
+| `fix config` | Write `$schema` into `.repo-ai.json`. With no file, create one, migrating any old `.repo-tooling.json` settings once. |
 | `fix labels` | Repair loop label colours and descriptions with `gh label edit`. |
 | `fix claude-skills` | Install or update the skills into `~/.claude/skills` (or `--skills-dir <path>`), and the Workflow scripts they run by name into the sibling `workflows/` directory. `--force-skills` overwrites a modified or newer copy. |
-| `fix ai-loop-identity` | Point this checkout's Claude sessions at a `gh` profile signed in as `rules.aiLoop.agentUser`. |
+| `fix ai-loop-identity` | Point this checkout's Claude sessions at a `gh` profile signed in as `agentUser`. |
 | `fix statusline` | Install the loop's status segment (`🤖 2 agents·1 to merge · next 9m`) to `~/.claude/ai-loop-statusline.sh`, replacing that file on every run (it is ours; don't edit it). Never touches an existing statusline: sets `statusLine` in `~/.claude/settings.json` only when you have none, otherwise prints the one line to add to your own script. Never prompts. |
 
 **Moving over from repo-tooling?** Skills installed by `@rtorcato/repo-tooling`

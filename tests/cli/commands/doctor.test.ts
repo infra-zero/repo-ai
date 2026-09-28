@@ -12,14 +12,14 @@ import { useTmpDir } from '../../helpers/tmp-dir.js'
 const newTmpDir = useTmpDir()
 
 describe('runDoctor — loop config location', () => {
-	it('flags drift when agentUser/requiredSkills still live in .repo-tooling.json', async () => {
+	it('reports .repo-ai.json missing, even with a .repo-tooling.json (#159)', async () => {
 		const dir = newTmpDir()
 		fs.outputJsonSync(join(dir, '.repo-tooling.json'), {
 			rules: { aiLoop: { agentUser: 'legacy-bot' } },
 		})
 		const results = await runDoctor(dir)
 		expect(results).toContainEqual(
-			expect.objectContaining({ check: 'Loop config', status: 'drift' })
+			expect.objectContaining({ check: 'Loop config', status: 'missing' })
 		)
 	})
 
@@ -30,9 +30,9 @@ describe('runDoctor — loop config location', () => {
 		expect(results.find((r) => r.check === 'Loop config')).toBeUndefined()
 	})
 
-	it('says nothing about loop config with neither file', async () => {
+	it('reports loop config missing with neither file', async () => {
 		const results = await runDoctor(newTmpDir())
-		expect(results.find((r) => r.check === 'Loop config')).toBeUndefined()
+		expect(results.find((r) => r.check === 'Loop config')?.status).toBe('missing')
 	})
 })
 

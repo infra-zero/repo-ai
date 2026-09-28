@@ -96,7 +96,7 @@ export async function checkClaudeSkills(skillsDir?: string): Promise<CheckResult
 
 /**
  * The skills *this repo* declares it depends on — `requiredSkills` in
- * `.repo-ai.json` (#533, moved from `.repo-tooling.json` by #38). Where
+ * `.repo-ai.json` (#533, #38). Where
  * `checkClaudeSkills` above reports on the
  * package's whole skill set as a machine-level nicety, this one is the repo
  * asserting a dependency, so it names the skills the repo actually runs on and

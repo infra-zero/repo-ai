@@ -610,7 +610,6 @@ describe('isDocsOnly', () => {
 			'pnpm-lock.yaml',
 			'src/a.ts',
 			'.repo-ai.json',
-			'.repo-tooling.json',
 			'AGENTS.md',
 			'CLAUDE.md',
 			'packages/x/AGENTS.md',

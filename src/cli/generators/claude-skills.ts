@@ -51,7 +51,7 @@ export const VERSION_KEY = 'repo-ai-version'
  * With the hash, "installed content still matches what some release of this
  * package shipped" is a fact rather than an inference.
  *
- * It lives in the file instead of `.repo-tooling.json` because skills are
+ * It lives in the file instead of a repo's config because skills are
  * user-global — no one repo owns the record.
  */
 export const HASH_KEY = 'repo-ai-hash'
