@@ -11,6 +11,7 @@ import {
 	staleInstall,
 } from '../../../src/cli/commands/loop-tick.js'
 import {
+	PLUGIN_NAME,
 	readShippedSkill,
 	SHIPPED_SKILLS,
 	stampSkill,
@@ -67,6 +68,8 @@ interface World {
 	closedWip?: number[]
 	suggested?: { number: number; updatedAt: string; labels: { name: string }[] }[]
 	queue?: unknown[]
+	/** Overrides `queue`, spread across more than one `--slurp` page. */
+	queuePages?: unknown[][]
 	merge?: Record<number, string>
 	failing?: number[]
 	/** PRs whose required checks are still running. */
@@ -119,7 +122,7 @@ function fakeGh(w: World): GhExec {
 						: [],
 				})
 			if (b === 'repos/acme/widget/actions/runs/9/jobs?per_page=1') return ok({ total_count: 0 })
-			if (b?.startsWith('repos/acme/widget/issues?')) return ok(w.queue ?? [])
+			if (b?.startsWith('repos/acme/widget/issues?')) return ok(w.queuePages ?? [w.queue ?? []])
 			const timeline = b?.match(/issues\/(\d+)\/timeline/)
 			if (timeline) {
 				const n = Number(timeline[1])
@@ -377,6 +380,24 @@ describe('runLoopTick', () => {
 		expect(r.pickups.map((p) => p.number)).toEqual([51, 53, 50, 52])
 	})
 
+	it('reads the whole ai-ready queue across more than one page (#163)', async () => {
+		const root = checkout(newTmpDir())
+		const issue = (number: number) => ({
+			number,
+			title: `#${number}`,
+			body: '',
+			labels: [],
+			author_association: 'OWNER',
+		})
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({ queuePages: [[issue(60), issue(61)], [issue(62)]] }),
+		})
+		expect(r.pickups.map((p) => p.number)).toEqual([60, 61, 62])
+	})
+
 	it('drops a candidate naming a file an ai-wip issue already names (#120)', async () => {
 		const root = checkout(newTmpDir())
 		const issue = (number: number, body: string) => ({
@@ -564,6 +585,49 @@ describe('staleInstall (#116)', () => {
 		expect(r).toMatchObject({ idle: true, exitCode: 0, errors: [] })
 		expect(r.staleInstall).toContain('skill ai-loop')
 		expect(r.warnings).toEqual([expect.stringContaining('fix claude-skills')])
+	})
+})
+
+describe('staleInstall — plugin (#154)', () => {
+	/** A HOME with a plugin cache for `repo-ai@repo-ai`, one skill's content overridable. */
+	async function pluginHome(content: Partial<Record<string, string>> = {}): Promise<string> {
+		const dir = newTmpDir()
+		const installPath = join(dir, '.claude', 'plugins', 'cache', PLUGIN_NAME, PLUGIN_NAME, 'abc123')
+		for (const name of SHIPPED_SKILLS) {
+			const s = await readShippedSkill(name)
+			await fs.outputFile(join(installPath, 'skills', name, 'SKILL.md'), content[name] ?? s.content)
+		}
+		await fs.outputJson(join(dir, '.claude', 'plugins', 'installed_plugins.json'), {
+			version: 2,
+			plugins: { [`${PLUGIN_NAME}@${PLUGIN_NAME}`]: [{ scope: 'user', installPath }] },
+		})
+		return dir
+	}
+
+	it('names a plugin skill copy that differs from the package', async () => {
+		const stale = await staleInstall({ HOME: await pluginHome({ 'ai-loop': 'stale content\n' }) })
+		expect(stale).toEqual(['plugin skill ai-loop'])
+	})
+
+	it('is empty when the plugin copy matches the package', async () => {
+		expect(await staleInstall({ HOME: await pluginHome() })).toEqual([])
+	})
+
+	it('is empty with no plugin installed, or no HOME', async () => {
+		expect(await staleInstall({ HOME: newTmpDir() })).toEqual([])
+		expect(await staleInstall({})).toEqual([])
+	})
+
+	it('warns with the plugin-update hint, distinct from fix claude-skills', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			gh: fakeGh({}),
+			env: { HOME: await pluginHome({ 'ai-loop': 'stale content\n' }) },
+			now: NOW,
+		})
+		expect(r.staleInstall).toEqual(['plugin skill ai-loop'])
+		expect(r.warnings).toEqual([expect.stringContaining('/plugin update repo-ai@repo-ai')])
 	})
 })
 

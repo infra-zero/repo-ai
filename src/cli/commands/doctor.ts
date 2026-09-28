@@ -3,7 +3,12 @@ import path from 'node:path'
 import chalk from 'chalk'
 import fs from 'fs-extra'
 import { checkAgentUser } from '../../base/agent-user.js'
-import { checkClaudeSkills, checkRequiredSkills, checkWorkflows } from '../../base/checks.js'
+import {
+	checkClaudeSkills,
+	checkPluginSkills,
+	checkRequiredSkills,
+	checkWorkflows,
+} from '../../base/checks.js'
 import { ciRunWarning } from '../../base/ci-runs.js'
 import { CONFIG_FILE, readConfig } from '../../base/config.js'
 import { checkConfigSchema } from '../../base/config-schema.js'
@@ -27,6 +32,7 @@ export async function runDoctor(dir: string, skillsDir?: string): Promise<CheckR
 		await checkAutoMerge(dir, config.autoMerge === true),
 		await checkCiRuns(dir),
 		await checkClaudeSkills(skillsDir),
+		await checkPluginSkills(),
 		await checkWorkflows(skillsDir),
 		await checkStatusline(os.homedir()),
 	]

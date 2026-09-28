@@ -16,6 +16,24 @@ export type GhExec = (args: string[], stdin?: string) => Promise<GhResult>
 const GH_TIMEOUT_MS = 10_000
 
 /**
+ * `gh api <route> --paginate --slurp` — every page of a REST list endpoint,
+ * concatenated. `--slurp` wraps each page's array inside an outer array
+ * instead of printing them back to back (which plain `JSON.parse` can't
+ * split); a bare `--jq` would instead run once per page. Use this for any
+ * REST listing whose result is treated as a complete set — `gh label list`,
+ * `gh issue list` and friends cap at `--limit`, but `gh api` has no such cap.
+ */
+export async function ghPaginated<T>(gh: GhExec, route: string): Promise<T[] | null> {
+	const r = await gh(['api', route, '--paginate', '--slurp'])
+	if (!r.ok) return null
+	try {
+		return (JSON.parse(r.stdout) as T[][]).flat()
+	} catch {
+		return null
+	}
+}
+
+/**
  * Real `gh` runner — never rejects; a missing/failing gh resolves ok:false.
  * `cwd` scopes gh's repo resolution to the target dir so `-d/--directory` is
  * honored (gh otherwise resolves the remote from process.cwd()). Not annotated

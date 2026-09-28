@@ -1,6 +1,6 @@
 import path from 'node:path'
 import fs from 'fs-extra'
-import { type GhExec, realGhExec } from '../../base/gh.js'
+import { type GhExec, ghPaginated, realGhExec } from '../../base/gh.js'
 import { ghOut } from './loop-env.js'
 
 /**
@@ -57,17 +57,6 @@ function prNumber(pr: string | number): number | null {
 	return /^[1-9]\d*$/.test(s) ? Number(s) : null
 }
 
-/** `--paginate --slurp` yields one array per page; `--jq` would run per page. */
-async function slurp<T>(gh: GhExec, route: string): Promise<T[] | null> {
-	const r = await gh(['api', route, '--paginate', '--slurp'])
-	if (!r.ok) return null
-	try {
-		return (JSON.parse(r.stdout) as T[][]).flat()
-	} catch {
-		return null
-	}
-}
-
 interface GhItem {
 	id: number
 	user: { login: string } | null
@@ -107,7 +96,7 @@ export async function runLoopComment(
 	if (typeof target === 'string') return fail(target)
 	const { ownerRepo, me, gh } = target
 
-	const comments = await slurp<GhItem>(gh, `repos/${ownerRepo}/issues/${n}/comments`)
+	const comments = await ghPaginated<GhItem>(gh, `repos/${ownerRepo}/issues/${n}/comments`)
 	// A failed read must not fall through to "create" — that is the duplicate.
 	if (comments === null) return fail('could not list PR comments')
 	const existing = comments.find(
@@ -176,7 +165,7 @@ export async function runLoopVerdict(
 	if (!head) return fail('could not resolve the PR head commit')
 	// `issues/<N>/comments` would never see these — `gh pr review --comment`
 	// creates a review.
-	const reviews = await slurp<GhItem>(gh, `repos/${ownerRepo}/pulls/${n}/reviews`)
+	const reviews = await ghPaginated<GhItem>(gh, `repos/${ownerRepo}/pulls/${n}/reviews`)
 	if (reviews === null) return { ...fail('could not list PR reviews'), head }
 
 	const marker = new RegExp(`<!-- ai-issue-loop:verdict:${arm}:(PASS-NOTES|PASS|CHANGES) -->`)

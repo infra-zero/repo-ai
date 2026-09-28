@@ -31,6 +31,9 @@ export const RETIRED_SKILLS = ['ai-issue-loop', 'ai-workflow', 'ai-tick']
 /** The primary skill — the default everywhere a single name is accepted. */
 export const SHIPPED_SKILL = 'ai-loop'
 
+/** This plugin's own name, from `.claude-plugin/marketplace.json` (#154). */
+export const PLUGIN_NAME = 'repo-ai'
+
 /**
  * Stamped into the installed copy's frontmatter so a second repo pinned to an
  * older release can tell it would be a downgrade and skip. Without it two repos
@@ -349,6 +352,38 @@ export async function claudeSkillStatus(
 		contentState,
 		needsInstall: behind && contentState === 'pristine',
 	}
+}
+
+/**
+ * Where Claude Code's plugin manager cached this package's plugin (#132),
+ * across every marketplace alias and scope it was installed under.
+ * `~/.claude/plugins/installed_plugins.json` keys each install
+ * `<plugin>@<marketplace>`; a missing file, unreadable JSON or no matching
+ * key all read as "not installed via the plugin", same as a missing
+ * `~/.claude/skills`.
+ */
+export async function pluginInstallPaths(home: string = os.homedir()): Promise<string[]> {
+	const file = path.join(home, '.claude', 'plugins', 'installed_plugins.json')
+	const data = await fs.readJson(file).catch(() => null)
+	const paths = new Set<string>()
+	for (const [key, entries] of Object.entries<{ installPath?: string }[]>(data?.plugins ?? {})) {
+		if (key !== PLUGIN_NAME && !key.startsWith(`${PLUGIN_NAME}@`)) continue
+		for (const entry of entries) if (entry.installPath) paths.add(entry.installPath)
+	}
+	return [...paths]
+}
+
+/**
+ * Whether one plugin-cached copy of a shipped skill is behind what this
+ * package ships. The plugin is Claude Code's own unversioned git checkout
+ * (#132) — never stamped, and never a fork a human hand-edited — so unlike
+ * `claudeSkillStatus` there is nothing to protect: any mismatch is staleness.
+ */
+export async function pluginSkillStale(name: string, installPath: string): Promise<boolean> {
+	const shipped = await readShippedSkill(name)
+	const file = path.join(installPath, 'skills', name, 'SKILL.md')
+	if (!(await fs.pathExists(file))) return false
+	return (await fs.readFile(file, 'utf8')) !== shipped.content
 }
 
 /**
