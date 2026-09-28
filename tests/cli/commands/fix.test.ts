@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import fs from 'fs-extra'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FIXERS, type FixOptions, fixCommand } from '../../../src/cli/commands/fix.js'
-import { SHIPPED_SKILLS, stampSkill } from '../../../src/cli/generators/claude-skills.js'
+import { SHIPPED_SKILLS } from '../../../src/cli/generators/claude-skills.js'
 import {
 	SHIPPED_WORKFLOWS,
 	stampWorkflow,
@@ -140,33 +140,28 @@ describe('fixCommand', () => {
 			}
 		})
 
-		it('removes a pristine retired skill and a pristine retired workflow (#87)', async () => {
+		it('removes a pristine retired workflow (#87)', async () => {
 			const dir = newTmpDir()
 			const skillsDir = newTmpDir()
 			fs.outputFileSync(
-				join(skillsDir, 'ai-workflow', 'SKILL.md'),
-				stampSkill('---\nname: ai-workflow\n---\nbody\n', '1.0.0')
-			)
-			fs.outputFileSync(
-				join(workflowsDirFor(skillsDir), 'ai-workflow.js'),
+				join(workflowsDirFor(skillsDir), 'ai-loop-pass3.js'),
 				stampWorkflow('old script\n', '1.0.0')
 			)
 			await fixCommand('claude-skills', options(dir, { skillsDir, yes: true }))
-			expect(fs.existsSync(join(skillsDir, 'ai-workflow'))).toBe(false)
-			expect(fs.existsSync(join(workflowsDirFor(skillsDir), 'ai-workflow.js'))).toBe(false)
+			expect(fs.existsSync(join(workflowsDirFor(skillsDir), 'ai-loop-pass3.js'))).toBe(false)
 			const errors = errSpy.mock.calls.map((c) => c[0]).join('\n')
 			expect(errors).toContain('removed retired')
 		})
 
-		it('keeps a retired skill that was locally edited instead of removing it', async () => {
+		it('keeps a retired workflow that was locally edited instead of removing it', async () => {
 			const dir = newTmpDir()
 			const skillsDir = newTmpDir()
 			fs.outputFileSync(
-				join(skillsDir, 'ai-tick', 'SKILL.md'),
-				`${stampSkill('---\nname: ai-tick\n---\nbody\n', '1.0.0')}mine\n`
+				join(workflowsDirFor(skillsDir), 'ai-loop-pass3.js'),
+				`${stampWorkflow('old script\n', '1.0.0')}mine\n`
 			)
 			await fixCommand('claude-skills', options(dir, { skillsDir, yes: true }))
-			expect(fs.existsSync(join(skillsDir, 'ai-tick', 'SKILL.md'))).toBe(true)
+			expect(fs.existsSync(join(workflowsDirFor(skillsDir), 'ai-loop-pass3.js'))).toBe(true)
 			const errors = errSpy.mock.calls.map((c) => c[0]).join('\n')
 			expect(errors).toContain('modified or symlinked')
 		})

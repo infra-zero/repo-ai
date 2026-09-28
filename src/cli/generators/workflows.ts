@@ -22,10 +22,12 @@ import { type SkillContentState, VERSION_KEY, HASH_KEY } from './claude-skills.j
 export const SHIPPED_WORKFLOWS = ['ai-loop-pickup', 'ai-loop-recover']
 
 /**
- * Scripts earlier releases shipped — `ai-workflow` is `ai-loop-pickup` since
- * #87, and `ai-loop-pass3` is `ai-loop-recover` since #144.
+ * Scripts a release still needs to clean up a stale copy of. `ai-workflow`
+ * (folded into `ai-loop-pickup` by #87) was retired before v2 and no longer
+ * needs an entry; `ai-loop-pass3` was renamed to `ai-loop-recover` in the
+ * v2.0.0 release itself (#144), so v1 installs may still carry it.
  */
-export const RETIRED_WORKFLOWS = ['ai-workflow', 'ai-loop-pass3']
+export const RETIRED_WORKFLOWS = ['ai-loop-pass3']
 
 const STAMP_LINE = new RegExp(`^// (?:${VERSION_KEY}|${HASH_KEY}): .*\\n?`, 'gm')
 

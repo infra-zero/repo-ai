@@ -105,8 +105,6 @@ export interface LoopTickResult {
 	stripMergeReady: number[]
 	/** Pass 1 — flag only, never send back. */
 	dependabotCiRed: number[]
-	/** Pass 1 — legacy: assign the human. */
-	dependabotChanges: number[]
 	/** Pass 2 — worktrees removed; relabel each `issue`. */
 	cleaned: CleanupEntry[]
 	/** Pass 2 — `loop reap`'s verdicts, to apply. */
@@ -218,7 +216,6 @@ function empty(env: LoopEnv): LoopTickResult {
 		updateBranches: [],
 		stripMergeReady: [],
 		dependabotCiRed: [],
-		dependabotChanges: [],
 		cleaned: [],
 		stalled: [],
 		decay: [],
@@ -381,7 +378,6 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		if (pr.headRefName.startsWith('dependabot/')) {
 			const red = (pr.statusCheckRollup ?? []).some((c) => c.conclusion === 'FAILURE')
 			if (pr.autoMergeRequest && red) result.dependabotCiRed.push(pr.number)
-			if (has('ai-changes')) result.dependabotChanges.push(pr.number)
 			continue
 		}
 

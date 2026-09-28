@@ -54,18 +54,7 @@ describe('runLoopCleanup', () => {
 		for (const slug of ['ai-1-landed', 'ai-2-unlanded', 'ai-3-closed', 'ai-4-open', 'ai-5-nopr']) {
 			git(root, 'worktree', 'add', '-q', join(wt, slug), '-b', slug)
 		}
-		// Legacy root and legacy `worktree-` branch prefix.
-		git(
-			root,
-			'worktree',
-			'add',
-			'-q',
-			join(root, '.claude/worktrees/ai-6-legacy'),
-			'-b',
-			'worktree-ai-6-legacy'
-		)
 		squash(root, 'feat: landed (#11)')
-		squash(root, 'feat: legacy (#16)')
 
 		const result = await runLoopCleanup({
 			root,
@@ -74,7 +63,6 @@ describe('runLoopCleanup', () => {
 				'ai-2-unlanded': { number: 12, state: 'MERGED' },
 				'ai-3-closed': { number: 13, state: 'CLOSED' },
 				'ai-4-open': { number: 14, state: 'OPEN' },
-				'worktree-ai-6-legacy': { number: 16, state: 'MERGED' },
 			}),
 		})
 
@@ -87,17 +75,12 @@ describe('runLoopCleanup', () => {
 			'ai-3-closed': 'removed',
 			'ai-4-open': 'kept',
 			'ai-5-nopr': 'kept',
-			'ai-6-legacy': 'removed',
 		})
 		expect(result.removed).toBe(true)
 		expect(result.exitCode).toBe(0)
-		expect(result.worktrees.find((w) => w.pr === 16)).toMatchObject({
-			issue: 6,
-			branch: 'worktree-ai-6-legacy',
-		})
 		expect(fs.existsSync(join(wt, 'ai-1-landed'))).toBe(false)
 		expect(fs.existsSync(join(wt, 'ai-2-unlanded'))).toBe(true)
-		expect(git(root, 'branch', '--list', 'ai-1-landed', 'worktree-ai-6-legacy')).toBe('')
+		expect(git(root, 'branch', '--list', 'ai-1-landed')).toBe('')
 		expect(git(root, 'branch', '--list', 'ai-2-unlanded')).not.toBe('')
 	})
 
