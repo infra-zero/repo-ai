@@ -218,7 +218,7 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 
 	for (const u of tick.updateBranches) {
 		const ok = await run(1, 'update-branch', u.pr, ['pr', 'update-branch', String(u.pr)], true)
-		// A failed update is a conflict, really `DIRTY`: send it back for a rebase (#51).
+		// A failed update is a conflict, really `DIRTY`: send it back to merge the default branch in (#51).
 		if (!ok)
 			await sendBack({
 				pr: u.pr,
