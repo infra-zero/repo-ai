@@ -346,6 +346,30 @@ workspace package — into `.claude/settings.json` as
 Without it the loop still works: each worktree gets a real `pnpm install`
 instead, which costs a duplicate `node_modules` per issue.
 
+### Claude Code permissions
+
+Every tick shells out to `gh`, `git`, `pnpm` and `npx @rtorcato/repo-ai`.
+Without allow rules for them, each call prompts, or goes to the auto-mode
+classifier, which can block the tick. Add these to `permissions.allow` in
+`.claude/settings.json` (or `~/.claude/settings.json`, or
+`.claude/settings.local.json`):
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh:*)",
+      "Bash(git *)",
+      "Bash(pnpm:*)",
+      "Bash(npx @rtorcato/repo-ai *)"
+    ]
+  }
+}
+```
+
+On a repo with `agentUser` set, `doctor` reads all three files and warns once
+for each rule that is missing.
+
 ## The tick
 
 Passes run cheapest first, so a quiet repo exits fast.
