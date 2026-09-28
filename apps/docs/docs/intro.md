@@ -50,6 +50,9 @@ Workflow runs show in `/workflows`. If you edit the scripts in `workflows/`, loa
 
 ## Start here
 
+Follow [Getting started](./getting-started.md) for the full walkthrough, or the
+short version:
+
 1. Run `npx @rtorcato/repo-ai setup` — skills, labels, agent identity and statusline, asking before each.
 2. Check the repo meets the [prerequisites](./ai-loop.md#repo-prerequisites).
 3. File an issue with `/ai-issue`, then run `/ai-loop` in Claude Code.
