@@ -66,3 +66,35 @@ export async function ciRunWarning(gh: GhExec, nwo: string, now: number): Promis
 	}
 	return null
 }
+
+const RELEASE_STUCK_HOURS = 24
+
+/**
+ * `loop tick`/`doctor`'s release-approval probe (#146). A `release` job
+ * waiting on the `release` environment's approval pins the `main` push
+ * concurrency group: every later merge's run queues behind it and gets
+ * cancelled with zero jobs the moment a newer one lands, invisible because a
+ * cancelled run isn't a failing check. Reports a run only once it has sat
+ * `waiting` for over a day — the loop never approves or cancels it.
+ */
+export async function releaseStuckWarning(
+	gh: GhExec,
+	nwo: string,
+	now: number
+): Promise<string | null> {
+	const r = await gh(['api', `repos/${nwo}/actions/runs?event=push&branch=main&per_page=5`])
+	if (!r.ok) return null
+	let runs: RunApi[]
+	try {
+		runs = (JSON.parse(r.stdout).workflow_runs ?? []) as RunApi[]
+	} catch {
+		return null
+	}
+	const waiting = runs.find(
+		(run) => run.path?.endsWith(CI_WORKFLOW_SUFFIX) && run.status === 'waiting'
+	)
+	if (!waiting) return null
+	const hours = (now - Date.parse(waiting.created_at)) / 3_600_000
+	if (hours <= RELEASE_STUCK_HOURS) return null
+	return `release run ${waiting.id} waiting on approval for ${Math.round(hours)}h: ${waiting.html_url}`
+}
