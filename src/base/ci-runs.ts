@@ -11,9 +11,8 @@ import type { GhExec } from './gh.js'
  */
 
 const STUCK_MINUTES = 30
-// ponytail: the workflow file this tooling's own repos always use; add a
-// config key if a consuming repo ever names its CI workflow something else.
-const CI_WORKFLOW = 'ci.yml'
+/** The CI workflow file when `.repo-ai.json` sets no `ciWorkflow` (#201). */
+export const DEFAULT_CI_WORKFLOW = 'ci.yml'
 
 interface RunApi {
 	id: number
@@ -24,17 +23,22 @@ interface RunApi {
 }
 
 /**
- * The last 5 push runs of {@link CI_WORKFLOW} on `branch` (the repo's default
+ * The last 5 push runs of the CI `workflow` file on `branch` (the repo's default
  * branch, #179), newest first, or `null` on any gh/parse failure or an
  * unresolved branch. Workflow-scoped (#174): listing `actions/runs` and
  * filtering client-side let other push-to-main workflows (e.g. `docs.yml`)
  * crowd `ci.yml` runs out of the 5-run window.
  */
-async function ciRuns(gh: GhExec, nwo: string, branch: string): Promise<RunApi[] | null> {
+async function ciRuns(
+	gh: GhExec,
+	nwo: string,
+	branch: string,
+	workflow: string
+): Promise<RunApi[] | null> {
 	if (!branch) return null
 	const r = await gh([
 		'api',
-		`repos/${nwo}/actions/workflows/${CI_WORKFLOW}/runs?event=push&branch=${encodeURIComponent(branch)}&per_page=5`,
+		`repos/${nwo}/actions/workflows/${encodeURIComponent(workflow)}/runs?event=push&branch=${encodeURIComponent(branch)}&per_page=5`,
 	])
 	if (!r.ok) return null
 	try {
@@ -79,9 +83,10 @@ export async function ciRunWarning(
 	gh: GhExec,
 	nwo: string,
 	branch: string,
-	now: number
+	now: number,
+	workflow = DEFAULT_CI_WORKFLOW
 ): Promise<string | null> {
-	const runs = await ciRuns(gh, nwo, branch)
+	const runs = await ciRuns(gh, nwo, branch, workflow)
 	const [latest] = runs ?? []
 	if (!runs || !latest) return null
 
@@ -134,9 +139,10 @@ export async function releaseStuckWarning(
 	gh: GhExec,
 	nwo: string,
 	branch: string,
-	now: number
+	now: number,
+	workflow = DEFAULT_CI_WORKFLOW
 ): Promise<string | null> {
-	const waiting = (await ciRuns(gh, nwo, branch))?.find((run) => run.status === 'waiting')
+	const waiting = (await ciRuns(gh, nwo, branch, workflow))?.find((run) => run.status === 'waiting')
 	if (!waiting) return null
 	const hours = (now - Date.parse(waiting.created_at)) / 3_600_000
 	if (hours <= RELEASE_STUCK_HOURS) return null
@@ -156,9 +162,10 @@ export async function releaseStuckWarning(
 export async function releaseFailedWarning(
 	gh: GhExec,
 	nwo: string,
-	branch: string
+	branch: string,
+	workflow = DEFAULT_CI_WORKFLOW
 ): Promise<string | null> {
-	const runs = await ciRuns(gh, nwo, branch)
+	const runs = await ciRuns(gh, nwo, branch, workflow)
 	if (!runs) return null
 	for (const run of runs.filter((r) => r.status === 'completed')) {
 		const job = await releaseJob(gh, nwo, run.id)

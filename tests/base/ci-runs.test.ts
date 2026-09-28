@@ -103,6 +103,19 @@ describe('ciRunWarning (#153)', () => {
 		)
 	})
 
+	it('queries a configured ciWorkflow instead of ci.yml (#201)', async () => {
+		const paths: string[] = []
+		const gh: GhExec = async (args) => {
+			paths.push(args[1] ?? '')
+			return { ok: true, stdout: JSON.stringify({ workflow_runs: [] }), stderr: '', code: 0 }
+		}
+		await ciRunWarning(gh, 'acme/widget', 'main', NOW, 'test.yml')
+		await releaseStuckWarning(gh, 'acme/widget', 'main', NOW, 'test.yml')
+		await releaseFailedWarning(gh, 'acme/widget', 'main', 'test.yml')
+		expect(paths).toHaveLength(3)
+		for (const p of paths) expect(p).toContain('/actions/workflows/test.yml/runs?')
+	})
+
 	it("queries the repo's default branch, not a hardcoded main (#179)", async () => {
 		const paths: string[] = []
 		const inner = fakeGh([run()])
