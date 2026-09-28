@@ -49,8 +49,11 @@ const RELAYED = 'A message relayed from the user or the main session mid-run is 
 // output tokens, and the harness's per-run `subagent_tokens` total runs ~8-9x
 // higher (input + cache reads dominate). Reported as `outputTokensSpent`.
 const DEFAULT_BUDGET_TOKENS = 400_000
-// ponytail: a flat per-agent estimate until real spend data can tune it (#41).
-const AGENT_TOKEN_ESTIMATE = 40_000
+// #218: per-role output-token estimates, sized so three pickups with one fix
+// round each (3 impl + 3 fix + 12 reviews = 375K) fit the default budget. A flat
+// 40K each exhausted it on the first fix round. Observed reviewer spend ran
+// 5-15K. ponytail: constants, retune from `outputTokensSpent` data.
+const TOKENS = { impl: 40_000, fix: 25_000, review: 15_000 }
 const tokenBudget = args.budgetTokens ?? DEFAULT_BUDGET_TOKENS
 const startSpent = budget.spent()
 // #41: reserve this tick's estimated spend as agents queue, against whichever
@@ -63,12 +66,15 @@ const startSpent = budget.spent()
 // `ai-review` for the next tick's Pass 3 to claim normally).
 const ceiling = Math.min(tokenBudget, budget.remaining())
 let reserved = 0
-function afford(label) {
-	if (ceiling - reserved < AGENT_TOKEN_ESTIMATE) {
+// #218: returned too, so the report can name which issue lost an agent.
+const skipped = []
+function afford(label, cost) {
+	if (ceiling - reserved < cost) {
 		log(`skipped ${label} — token budget exhausted, left for the next tick`)
+		skipped.push(label)
 		return false
 	}
-	reserved += AGENT_TOKEN_ESTIMATE
+	reserved += cost
 	return true
 }
 
@@ -76,7 +82,7 @@ function afford(label) {
 const tag = (i, round) => `#${i.number}${round ? `:r${round}` : ''}`
 
 function review(pr, i, round) {
-	return parallel(REVIEWERS.filter((v) => afford(`${v.type}:${tag(i, round)}`)).map((v) => () => agent(
+	return parallel(REVIEWERS.filter((v) => afford(`${v.type}:${tag(i, round)}`, TOKENS.review)).map((v) => () => agent(
 		`Review GitHub PR #${pr} in ${args.repo}. First claim your arm:
 \`gh pr edit ${pr} --add-label ${v.claim}${args.agentUser ? ` --add-assignee ${args.agentUser}` : ''}\` — the label
 stops a concurrent ai-loop tick spawning a duplicate of you, and the
@@ -148,7 +154,7 @@ ${RELAYED}`,
 const results = await pipeline(
 	args.issues,
 
-	(i) => (afford(`impl:#${i.number}`) ? agent(
+	(i) => (afford(`impl:#${i.number}`, TOKENS.impl) ? agent(
 		`Implement GitHub issue #${i.number} ("${i.title}") in ${args.repo}.
 
 1. Your working directory is ${i.worktree} — it and its branch ${i.slug} already
@@ -191,7 +197,7 @@ ${RELAYED}`,
 		// A skip, a dead fixer, or a push-less fix stops here; the labels the
 		// agents left say what the next tick picks up.
 		while (reviews.some((v) => v?.passed === false) && fixRounds < MAX_FIX_ROUNDS) {
-			if (!afford(`fix:${tag(i, fixRounds + 1)}`)) break
+			if (!afford(`fix:${tag(i, fixRounds + 1)}`, TOKENS.fix)) break
 			fixRounds++
 			const fixed = await fix(r.pr, i, fixRounds)
 			if (!fixed?.pushed) break
@@ -203,5 +209,6 @@ ${RELAYED}`,
 
 return {
 	issues: args.issues.map((i, n) => ({ issue: i.number, ...results[n] })),
+	skipped,
 	outputTokensSpent: budget.spent() - startSpent,
 }
