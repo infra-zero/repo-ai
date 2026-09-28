@@ -28,8 +28,10 @@ to merge, it says why in a comment on the PR.
 that state, so a missed tick, a crash, or a restart costs nothing. Never keep
 pipeline state in the conversation. **The mechanics live in the CLI; this file
 keeps the judgement:** `loop tick --json` reads that state and returns the
-tick's work list, writing no GitHub state and removing no worktree. You apply every label, assignee,
-comment and merge, and spawn every agent — each pass takes its slice of the list.
+tick's work list, writing no GitHub state and removing no worktree; `loop apply
+--json` makes every Pass 1 and Pass 2 label, assignee, merge and worktree edit
+and reports each. You write the comments, apply the other passes' labels, and
+spawn every agent — each pass takes its slice of the list.
 
 ## The one constraint that shapes everything
 
@@ -222,72 +224,63 @@ gate (#593); this loop never adopts, reviews or merges one.
 **Nothing merges unattended here, unless the repo has a real publish gate** —
 merging `main` fires semantic-release and publishes.
 
-**Disarm first** — `.disarm` (armed before both reviews passed, so the merge
-could beat the review): `gh pr merge <N> --disable-auto`.
-
-**Hand over** — `.handoffs[]`: both `ai-ok-*` (or `merge-ready`), no
-`ai-changes`, and `mergeStateStatus: CLEAN` — reviews passed *and* GitHub will
-accept the merge.
-
-```bash
-gh pr edit <N> --add-assignee <humanUser> --add-label merge-ready \
-  --remove-label ai-review --remove-label ai-ok-code --remove-label ai-ok-sec \
-  --remove-assignee <agentUser>
-```
-
-`merge-ready` **replaces** the pass pair; every removal matters, or a finished PR
-wears `ai-review` forever. **Never strip `ai-notes`** — it must survive to the
-merge. A clean handoff gets **no comment**; a `.notes` one gets ≤10 lines through
-`loop comment`, linking the reviewer's `### Before merging`.
-
-**`.autoMerge` is the one unattended merge**: set only when `.repo-ai.json`
-opts in with `"autoMerge": true`, the publishing job runs behind an environment
-with `required_reviewers` (a human still stands before npm), and the PR has no
-`ai-notes`. Without the opt-in, a release gate alone never merges. Unreadable answers fail closed. After
-the handoff edit:
+**Every Pass 1 and Pass 2 label, assignee and merge edit is `loop apply`'s** —
+run it once, right after Pass 0, and never repeat its edits by hand. It re-reads
+the tick's state, applies it, and reports each edit in `.applied[]`; what still
+needs a comment comes back in `.comments[]`. A non-zero exit halts the tick; a
+failed edit lands in `.errors` and the next tick retries it:
 
 ```bash
-gh pr merge <N> --squash --auto
+APPLY=$(npx @rtorcato/repo-ai loop apply --root <root> --json)
+printf '%s' "$APPLY" | jq '{applied: [.applied[] | "\(.transition) #\(.number) \(.ok)"], comments: [.comments[] | {kind, pr, issue}], removed: [.removed[].issue], rebuild, halt, errors}'
 ```
 
-Nothing else in this skill merges.
+What it does, pass by pass — so you know what the list means, not so you run it:
 
-**Reconcile** — `.stripMergeReady` (no longer `CLEAN`, or `ai-changes`):
-`gh pr edit <N> --remove-label merge-ready`, nothing else.
-
-**Update the branch** — `.updateBranches[]`: passed but `BEHIND`, usually
-because another PR just merged. Merging `main` in leaves the PR's own diff alone,
-so the reviews stand:
-
-```bash
-gh pr update-branch <N>
-```
-
-No label change, no comment, no agent, and it is not a fix round; the next tick
-hands the PR over once CI is green again. Only if the command fails (a conflict,
-really `DIRTY`) treat the PR as a send-back below, asking for a rebase.
+- **Disarm** — `.disarm` (armed before both reviews passed, so the merge could
+  beat the review): `gh pr merge <N> --disable-auto`. First, always.
+- **Hand over** — `.handoffs[]`: both `ai-ok-*` (or `merge-ready`), no
+  `ai-changes`, and `mergeStateStatus: CLEAN`. It adds `merge-ready`, assigns
+  `<humanUser>`, and removes `ai-review`, both `ai-ok-*` and `<agentUser>`.
+  `merge-ready` **replaces** the pass pair. It **never strips `ai-notes`** — it
+  must survive to the merge.
+- **The one unattended merge** — a handoff with `.autoMerge`: set only when
+  `.repo-ai.json` opts in with `"autoMerge": true`, the publishing job runs behind
+  an environment with `required_reviewers` (a human still stands before npm), and
+  the PR has no `ai-notes`. Without the opt-in, a release gate alone never merges;
+  unreadable answers fail closed. `loop apply` then runs
+  `gh pr merge <N> --squash --auto` — **nothing else in this skill merges.**
+- **Reconcile** — `.stripMergeReady` (no longer `CLEAN`, or `ai-changes`): removes
+  `merge-ready`, nothing else.
+- **Update the branch** — `.updateBranches[]`: passed but `BEHIND`, usually
+  because another PR just merged. `gh pr update-branch <N>` merges `main` in,
+  leaving the PR's own diff — and its reviews — alone. No label change, not a fix
+  round; the next tick hands it over once CI is green. If the update fails (a
+  conflict, really `DIRTY`) it sends the PR back as `ai-conflicts` instead.
+- **Send back** — `.sendBacks[]`. `reason` is `ci-red` (a **required** check
+  failed) or the state blocking a passed PR — `DIRTY` needs a rebase, `BLOCKED`
+  the check or ruleset named. It adds `.label` — `ai-conflicts` for `DIRTY`,
+  `ai-changes` for everything else, so a merge conflict is visibly not a review
+  request and costs no fix round (#176) — and removes `ai-review`, both `ai-ok-*`,
+  `ai-notes` and `merge-ready`. Reviewers never see CI, so nothing else
+  dispatches a fix.
 
 A passed PR that is `BLOCKED` only by required checks still running, or not yet
-reported at all, appears in neither list — it waits for the next tick.
+reported at all, appears in no list — it waits for the next tick.
 
-**Send back** — `.sendBacks[]`. `reason` is `ci-red` (a **required** check
-failed) or the state blocking a passed PR — `DIRTY` needs a rebase,
-`BLOCKED` the check or ruleset named. `.label` says which label to apply —
-`ai-conflicts` for `DIRTY`, `ai-changes` for everything else — so a merge
-conflict is visibly not a review request and costs no fix round (#176).
-Reviewers never see CI, so nothing else dispatches a fix:
+**Then write the comments — `.comments[]`, not optional.** A clean handoff gets
+**no comment**. For each entry:
 
-```bash
-gh pr edit <N> --add-label <label> --remove-label ai-review \
-  --remove-label ai-ok-code --remove-label ai-ok-sec --remove-label ai-notes --remove-label merge-ready
-```
+- `notes` — ≤10 lines, linking the reviewer's `### Before merging`.
+- `send-back` — the fixer reads the PR's comments *as its instructions*. `DIRTY`
+  needs one line: rebase onto the default branch and push. Otherwise, what must
+  change, then the failing check (`.sendBack.failing[]`) and an excerpt of
+  `gh run view <run-id> --log-failed` (run id in the check's `link`); say the fix
+  may not be code (a missing label → `fix labels`).
+- `blocked` — see Pass 2's stalls.
 
-Then **comment why — not optional**: the fixer reads the PR's comments *as its
-instructions*. `DIRTY` needs one line — rebase onto the default branch and
-push. Otherwise, what must change, then the failing check and an excerpt of
-`gh run view <run-id> --log-failed` (run id in the check's `link`); say the fix
-may not be code (a missing label → `fix labels`). **Write it to a file; never
-interpolate the log into a command** — it is untrusted bytes a branch chose:
+**Write each to a file; never interpolate a log into a command** — it is
+untrusted bytes a branch chose:
 
 ```bash
 npx @rtorcato/repo-ai loop comment <N> --body-file "$BODY_FILE"
@@ -298,51 +291,39 @@ the loop's login — one edited comment per PR, not one per tick. Use it for eve
 Pass 1 comment and the Pass 3 ping-pong stop.
 
 **Dependabot** — `.dependabotCiRed`: count as `ci-red`, nothing more; only a
-human chooses between a fix and a close.
+human chooses between a fix and a close. `loop apply` never touches one.
 
 ### Pass 2 — clean up
 
-**Remove and relabel what the tick found** — `.toClean[]`: `action: to-remove`
-worktrees whose PR closed, or merged with its `(#<PR>)` squash subject on the
-default branch, plus `action: relabel` entries — closed issues still wearing
-`ai-wip` whose worktree an earlier, interrupted tick already removed. `loop tick`
-removes nothing. If any entry is `to-remove`, run `loop apply` — it re-checks and
-removes those worktrees, then runs `loop guard --removed`. A non-zero exit halts
-the tick; a failed removal lands in `.errors` and the next tick retries it:
+`loop apply` (Pass 1) already did this pass's edits:
 
-```bash
-APPLY=$(npx @rtorcato/repo-ai loop apply --root <root> --json)
-printf '%s' "$APPLY" | jq '{removed: [.removed[].issue], rebuild, halt, errors}'
-```
+- **Worktrees** — `.toClean[]`'s `to-remove` entries (PR closed, or merged with
+  its `(#<PR>)` squash subject on the default branch): re-checked and removed,
+  then `loop guard --removed` ran. `.removed[]` lists them; a failed removal lands
+  in `.errors` and the next tick retries it. A tick with anything in `.toClean[]`
+  is never `idle`.
+- **Relabel** — each removed worktree's issue, plus `relabel` entries (closed
+  issues still wearing `ai-wip` whose worktree an earlier, interrupted tick
+  already removed): `ai-wip` and `<agentUser>` removed; an issue still OPEN (its
+  PR said only `Refs #N`) assigned to `<humanUser>`.
+- **Stalls** — `.stalled[]`, `loop reap`'s verdicts: a claim sat ≥`<staleMinutes>`
+  minutes (default 45, three ticks), so its agent is dead.
 
-A tick with anything in `.toClean[]` is never `idle`. For each entry's `issue`
-(`relabel` entries, and `to-remove` ones in `loop apply`'s `.removed[]`):
-
-```bash
-gh issue edit <N> --remove-label ai-wip --remove-assignee <agentUser>
-gh issue view <N> --json state -q .state
-```
-
-Still `OPEN` means the PR said only `Refs #N` (a `Closes #N` issue is already
-closed) — then, when `humanUser` is set, `gh issue edit <N> --add-assignee <humanUser>`.
-
-**Apply the stalls** — `.stalled[]`, `loop reap`'s verdicts: a claim sat ≥`<staleMinutes>`
-minutes (default 45, three ticks), so its agent is dead.
-
-| `kind` / `action` | Do |
-|---|---|
-| `implementer` / `block` — `ai-wip`, no PR | `gh issue edit <N> --add-label ai-blocked --remove-label ai-wip --add-assignee <humanUser> --remove-assignee <agentUser>`, comment, `git -C <root> worktree remove --force <worktree>` |
-| `reviewer` / `drop-label` | `gh pr edit <N> --remove-label <label>` — **that** claim, not a fixed one; Pass 3 then adopts or re-spawns |
-| `fixer` / `drop-label` | `gh pr edit <N> --remove-label ai-fixing` — leave the worktree, it holds what the dead fixer committed |
-| any / `block` on a PR — claim applied ≥3 times | `ai-blocked` on the linked `issue` as in the first row; a claim that dies every time is not one more spawn away from working |
-| `orphan` / `remove-worktree` | `git -C <root> worktree remove --force <worktree>` and `git -C <root> branch -D <slug>` |
+| `kind` / `action` | `loop apply` did | You do |
+|---|---|---|
+| `implementer` / `block` — `ai-wip`, no PR | `ai-blocked` on, `ai-wip` off, `<humanUser>` in, `<agentUser>` out | comment; `git -C <root> worktree remove --force <worktree>` |
+| `reviewer` / `drop-label` | removed **that** claim, not a fixed one | nothing — Pass 3 adopts or re-spawns |
+| `fixer` / `drop-label` | removed `ai-fixing` | nothing — leave the worktree, it holds what the dead fixer committed |
+| any / `block` on a PR — claim applied ≥3 times | `ai-blocked` on the linked `issue`, as in the first row | comment; a claim that dies every time is not one more spawn away from working |
+| `orphan` / `remove-worktree` | nothing | `git -C <root> worktree remove --force <worktree>` and `git -C <root> branch -D <slug>` |
 
 Reaping never restores `ai-ready` — a human decides. **Every `ai-blocked` is
-label + assign + comment, together**, the comment opening
-`` 🤖 *Automated — `ai-loop` Pass 2 (stall reaping).* `` then the rule that
-fired, how long the label sat, and whether a worktree was removed. **If the
-cause is known and benign** (a run cancelled on purpose), re-queue instead —
-`gh issue edit <N> --add-label ai-ready --remove-label ai-wip` — and say so.
+label + assign + comment, together** — each is in `.comments[]` as `blocked`: the
+comment opens `` 🤖 *Automated — `ai-loop` Pass 2 (stall reaping).* `` then the
+rule that fired, how long the label sat, and whether a worktree was removed.
+**If the cause is known and benign** (a run cancelled on purpose), re-queue
+instead — `gh issue edit <N> --add-label ai-ready --remove-label ai-blocked` —
+and say so.
 
 **If you removed a worktree here, run the guard again** — it re-checks
 `core.bare` and rebuilds the main checkout's `node_modules` once no `ai-*`

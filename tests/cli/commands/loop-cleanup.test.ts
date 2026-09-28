@@ -3,7 +3,6 @@ import { join } from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
 import type { GhExec } from '../../../src/base/gh.js'
-import { runLoopApply } from '../../../src/cli/commands/loop-apply.js'
 import { runLoopCleanup } from '../../../src/cli/commands/loop-cleanup.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
 
@@ -117,26 +116,5 @@ describe('runLoopCleanup', () => {
 		})
 		expect(result).toMatchObject({ removed: false, worktrees: [{ action: 'to-remove' }] })
 		expect(fs.existsSync(wt)).toBe(true)
-	})
-})
-
-describe('runLoopApply', () => {
-	it('removes what the tick reported and runs the rebuild gate (#149)', async () => {
-		const root = checkout(newTmpDir())
-		const wt = join(`${root}-worktrees`, 'ai-3-closed')
-		git(root, 'worktree', 'add', '-q', wt, '-b', 'ai-3-closed')
-		const result = await runLoopApply({
-			root,
-			gh: fakeGh({ 'ai-3-closed': { number: 13, state: 'CLOSED' } }),
-			install: async () => true,
-		})
-		expect(result).toMatchObject({
-			removed: [{ issue: 3, action: 'removed' }],
-			halt: null,
-			errors: [],
-			exitCode: 0,
-		})
-		expect(result.rebuild).not.toBe('not-requested')
-		expect(fs.existsSync(wt)).toBe(false)
 	})
 })

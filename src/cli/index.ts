@@ -97,15 +97,16 @@ loop
 loop
 	.command('apply')
 	.description(
-		"✍️  Apply a tick's local writes: remove landed or closed ai-* worktrees, then rebuild"
+		"✍️  Apply a tick's label, assignee, merge and worktree transitions (Pass 1 and Pass 2)"
 	)
 	.option('--root <path>', 'Main checkout the loop branches worktrees from', process.cwd())
 	.option('--worktree-root <path>', 'Where ai-* worktrees live (default: <root>-worktrees)')
 	.option('--json', 'Emit machine-readable JSON output')
 	.addHelpText(
 		'after',
-		'\nRelabel each `removed[].issue`. A failed removal lands in `errors`.\n' +
-			"Exit 1 or 2 halts the tick (loop guard's codes).\n"
+		'\nReads the same state as `loop tick`, then applies it. Comments stay with the caller:\n' +
+			'`comments` lists each one owed. A failed edit lands in `errors`; the next apply retries it.\n' +
+			"Exit 1 or 2 halts the tick (loop tick's or loop guard's codes).\n"
 	)
 	.action(loopApplyCommand)
 
@@ -181,9 +182,8 @@ loop
 	.option('--json', 'Emit machine-readable JSON output')
 	.addHelpText(
 		'after',
-		'\nWrites no GitHub state and removes no worktree: the caller applies every label,\n' +
-			'comment and spawn. Worktrees whose PR landed or closed come back in `toClean`;\n' +
-			'`loop apply` removes them.\n' +
+		'\nWrites no GitHub state and removes no worktree: `loop apply` makes the Pass 1 and\n' +
+			'Pass 2 edits; the caller comments and spawns.\n' +
 			"Exit 1 or 2 halts the tick (loop guard's codes, or an unresolvable checkout).\n"
 	)
 	.action(loopTickCommand)
