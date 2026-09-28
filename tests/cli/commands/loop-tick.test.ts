@@ -11,6 +11,7 @@ import {
 	staleInstall,
 } from '../../../src/cli/commands/loop-tick.js'
 import {
+	PLUGIN_NAME,
 	readShippedSkill,
 	SHIPPED_SKILLS,
 	stampSkill,
@@ -540,6 +541,49 @@ describe('staleInstall (#116)', () => {
 		expect(r).toMatchObject({ idle: true, exitCode: 0, errors: [] })
 		expect(r.staleInstall).toContain('skill ai-loop')
 		expect(r.warnings).toEqual([expect.stringContaining('fix claude-skills')])
+	})
+})
+
+describe('staleInstall — plugin (#154)', () => {
+	/** A HOME with a plugin cache for `repo-ai@repo-ai`, one skill's content overridable. */
+	async function pluginHome(content: Partial<Record<string, string>> = {}): Promise<string> {
+		const dir = newTmpDir()
+		const installPath = join(dir, '.claude', 'plugins', 'cache', PLUGIN_NAME, PLUGIN_NAME, 'abc123')
+		for (const name of SHIPPED_SKILLS) {
+			const s = await readShippedSkill(name)
+			await fs.outputFile(join(installPath, 'skills', name, 'SKILL.md'), content[name] ?? s.content)
+		}
+		await fs.outputJson(join(dir, '.claude', 'plugins', 'installed_plugins.json'), {
+			version: 2,
+			plugins: { [`${PLUGIN_NAME}@${PLUGIN_NAME}`]: [{ scope: 'user', installPath }] },
+		})
+		return dir
+	}
+
+	it('names a plugin skill copy that differs from the package', async () => {
+		const stale = await staleInstall({ HOME: await pluginHome({ 'ai-loop': 'stale content\n' }) })
+		expect(stale).toEqual(['plugin skill ai-loop'])
+	})
+
+	it('is empty when the plugin copy matches the package', async () => {
+		expect(await staleInstall({ HOME: await pluginHome() })).toEqual([])
+	})
+
+	it('is empty with no plugin installed, or no HOME', async () => {
+		expect(await staleInstall({ HOME: newTmpDir() })).toEqual([])
+		expect(await staleInstall({})).toEqual([])
+	})
+
+	it('warns with the plugin-update hint, distinct from fix claude-skills', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			gh: fakeGh({}),
+			env: { HOME: await pluginHome({ 'ai-loop': 'stale content\n' }) },
+			now: NOW,
+		})
+		expect(r.staleInstall).toEqual(['plugin skill ai-loop'])
+		expect(r.warnings).toEqual([expect.stringContaining('/plugin update repo-ai@repo-ai')])
 	})
 })
 
