@@ -46,6 +46,7 @@ const ARMS: Arm[] = ['code', 'sec']
 export interface Handoff {
 	pr: number
 	issue: number | null
+	title: string
 	notes: boolean
 	/** The gated-repo arm: both reviews passed, no `ai-notes`, CLEAN, and `release` gates the publish. */
 	autoMerge: boolean
@@ -128,6 +129,7 @@ export interface LoopTickOptions {
 
 interface Pr {
 	number: number
+	title: string
 	headRefName: string
 	labels: { name: string }[]
 	autoMergeRequest: unknown
@@ -321,7 +323,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		'--limit',
 		'100',
 		'--json',
-		'number,headRefName,labels,autoMergeRequest,author,body,statusCheckRollup',
+		'number,title,headRefName,labels,autoMergeRequest,author,body,statusCheckRollup',
 	])
 	const wip = await json<{ number: number; body?: string }[]>([
 		'issue',
@@ -410,6 +412,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 				result.handoffs.push({
 					pr: pr.number,
 					issue,
+					title: pr.title,
 					notes,
 					autoMerge: autoMerge && !notes,
 				})
