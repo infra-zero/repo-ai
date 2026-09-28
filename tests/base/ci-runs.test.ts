@@ -12,6 +12,7 @@ const run = (
 		status: string
 		conclusion: string | null
 		created_at: string
+		head_sha: string
 	}> = {}
 ) => ({
 	id: 1,
@@ -19,6 +20,7 @@ const run = (
 	conclusion: 'success',
 	html_url: `https://github.com/acme/widget/actions/runs/${over.id ?? 1}`,
 	created_at: minutesAgo(5),
+	head_sha: 'aaaaaaa1111',
 	...over,
 })
 
@@ -167,9 +169,9 @@ describe('releaseStuckWarning (#146)', () => {
 			return { ok: false, stdout: '', stderr: 'unexpected', code: 1 }
 		}
 
-	it('warns when a run has sat waiting on approval past 24h', async () => {
+	it('warns when a run has sat waiting on approval past an hour', async () => {
 		const gh = runsGh([
-			run({ id: 9, status: 'waiting', conclusion: null, created_at: hoursAgo(25) }),
+			run({ id: 9, status: 'waiting', conclusion: null, created_at: hoursAgo(2) }),
 		])
 		const w = await releaseStuckWarning(gh, 'acme/widget', 'main', NOW)
 		expect(w).toContain('waiting on approval')
@@ -177,11 +179,23 @@ describe('releaseStuckWarning (#146)', () => {
 		expect(w).toContain('runs/9')
 	})
 
-	it('does not warn on a run still inside the day-long grace window', async () => {
+	it('does not warn on a run at the head still inside the hour grace window', async () => {
 		const gh = runsGh([
-			run({ id: 9, status: 'waiting', conclusion: null, created_at: hoursAgo(2) }),
+			run({ id: 9, status: 'waiting', conclusion: null, created_at: minutesAgo(30) }),
 		])
 		expect(await releaseStuckWarning(gh, 'acme/widget', 'main', NOW)).toBeNull()
+	})
+
+	it('warns at once when a newer push run sits behind the waiting one (#220)', async () => {
+		const gh = runsGh([
+			run({ id: 10, status: 'completed', conclusion: 'cancelled', head_sha: 'bbbbbbb2222' }),
+			run({ id: 9, status: 'waiting', conclusion: null, created_at: minutesAgo(10) }),
+		])
+		const w = await releaseStuckWarning(gh, 'acme/widget', 'main', NOW)
+		expect(w).toContain('aaaaaaa')
+		expect(w).toContain('bbbbbbb')
+		expect(w).toContain('cancel it')
+		expect(w).toContain('runs/9')
 	})
 
 	it('does not warn on a pending run', async () => {
