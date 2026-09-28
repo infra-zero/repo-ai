@@ -1,5 +1,6 @@
 import path from 'node:path'
 import chalk from 'chalk'
+import { resolveDefaultBranch } from '../../base/default-branch.js'
 import { type GitExec, realGitExec } from '../../base/git.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
 import { defaultWorktreeRoot, findLive } from './loop-guard.js'
@@ -11,9 +12,9 @@ import { defaultWorktreeRoot, findLive } from './loop-guard.js'
  *
  * - **closed-unmerged PR** → remove; the work was abandoned deliberately.
  * - **merged PR** → remove only once its `(#<PR>)` squash subject is on
- *   `origin/main`. A squash-merged branch always looks unmerged — its SHAs
- *   never land — so the subject is the only proof, and `--force` would
- *   otherwise delete unlanded work just as happily.
+ *   `origin/<default branch>`. A squash-merged branch always looks unmerged —
+ *   its SHAs never land — so the subject is the only proof, and `--force`
+ *   would otherwise delete unlanded work just as happily.
  * - **open PR, or none** → keep. Stall reaping stays in the skill.
  *
  * Issue relabelling stays in the skill too; each entry carries its `issue` so
@@ -48,6 +49,8 @@ export interface LoopCleanupOptions {
 	root?: string
 	worktreeRoot?: string
 	json?: boolean
+	/** Resolved once by a caller that already has it (`loop tick`); resolved here otherwise. */
+	defaultBranch?: string
 	/** Test seams. */
 	git?: GitExec
 	gh?: GhExec
@@ -106,17 +109,20 @@ export async function runLoopCleanup(options: LoopCleanupOptions = {}): Promise<
 		}
 		if (pr.state === 'MERGED') {
 			if (subjects === null) {
-				// Best-effort: a failed fetch leaves origin/main stale, which can
-				// only keep a worktree, never remove one wrongly.
+				const defaultBranch = options.defaultBranch ?? (await resolveDefaultBranch(git, gh))
+				// Best-effort: a failed fetch leaves the default branch stale, which
+				// can only keep a worktree, never remove one wrongly.
 				await git(['fetch', '--prune', '--no-write-fetch-head', 'origin'])
-				// Whether #N ever landed on main is a complete-set question (#163) —
-				// a windowed log falsely "kept" a worktree whose squash had scrolled
+				// Whether #N ever landed is a complete-set question (#163) — a
+				// windowed log falsely "kept" a worktree whose squash had scrolled
 				// out of the window, a leak with no other trigger to catch it.
-				const log = await git(['log', 'origin/main', '--format=%s'])
+				const log = defaultBranch
+					? await git(['log', `origin/${defaultBranch}`, '--format=%s'])
+					: null
 				subjects = log ? log.split('\n') : []
 			}
 			if (!subjects.some((s) => s.trimEnd().endsWith(`(#${pr.number})`))) {
-				entry.reason = `squash for #${pr.number} not on origin/main`
+				entry.reason = `squash for #${pr.number} not landed`
 				continue
 			}
 		}
@@ -127,7 +133,7 @@ export async function runLoopCleanup(options: LoopCleanupOptions = {}): Promise<
 		}
 		if (branch) await git(['branch', '-D', branch])
 		entry.action = 'removed'
-		entry.reason = pr.state === 'MERGED' ? `#${pr.number} landed on main` : `#${pr.number} closed`
+		entry.reason = pr.state === 'MERGED' ? `#${pr.number} landed` : `#${pr.number} closed`
 	}
 
 	return {
