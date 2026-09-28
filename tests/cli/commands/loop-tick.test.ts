@@ -49,9 +49,10 @@ const pr = (
 	number: number,
 	head: string,
 	labels: string[],
-	extra: Partial<{ autoMergeRequest: unknown; author: string; body: string }> = {}
+	extra: Partial<{ autoMergeRequest: unknown; author: string; body: string; title: string }> = {}
 ) => ({
 	number,
+	title: extra.title ?? `pr-${number}`,
 	headRefName: head,
 	labels: labels.map((name) => ({ name })),
 	autoMergeRequest: extra.autoMergeRequest ?? null,
@@ -243,7 +244,9 @@ describe('runLoopTick', () => {
 
 		expect(r.exitCode).toBe(0)
 		expect(r.errors).toEqual([])
-		expect(r.handoffs).toEqual([{ pr: 10, issue: 1, notes: true, autoMerge: false }])
+		expect(r.handoffs).toEqual([
+			{ pr: 10, issue: 1, title: 'pr-10', notes: true, autoMerge: false },
+		])
 		expect(r.updateBranches).toEqual([{ pr: 11, issue: 2 }])
 		expect(r.sendBacks).toEqual([
 			{ pr: 12, issue: 3, reason: 'ci-red', failing: [{ name: 'test', link: 'l' }] },
@@ -295,17 +298,19 @@ describe('runLoopTick', () => {
 
 		it('release-gated without the opt-in: no autoMerge', async () => {
 			expect(await tick(false, true)).toEqual([
-				{ pr: 10, issue: 1, notes: false, autoMerge: false },
+				{ pr: 10, issue: 1, title: 'pr-10', notes: false, autoMerge: false },
 			])
 		})
 
 		it('release-gated with the opt-in: autoMerge', async () => {
-			expect(await tick(true, true)).toEqual([{ pr: 10, issue: 1, notes: false, autoMerge: true }])
+			expect(await tick(true, true)).toEqual([
+				{ pr: 10, issue: 1, title: 'pr-10', notes: false, autoMerge: true },
+			])
 		})
 
 		it('opt-in but not release-gated: no autoMerge', async () => {
 			expect(await tick(true, false)).toEqual([
-				{ pr: 10, issue: 1, notes: false, autoMerge: false },
+				{ pr: 10, issue: 1, title: 'pr-10', notes: false, autoMerge: false },
 			])
 		})
 	})
