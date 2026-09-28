@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { ciRunWarning } from '../../src/base/ci-runs.js'
+import { ciRunWarning, releaseStuckWarning } from '../../src/base/ci-runs.js'
 import type { GhExec, GhResult } from '../../src/base/gh.js'
 
 const NOW = Date.parse('2026-06-01T12:00:00Z')
 const minutesAgo = (m: number) => new Date(NOW - m * 60_000).toISOString()
+const hoursAgo = (h: number) => new Date(NOW - h * 3_600_000).toISOString()
 
 const run = (
 	over: Partial<{
@@ -123,5 +124,65 @@ describe('ciRunWarning (#153)', () => {
 			return { ok: false, stdout: '', stderr: 'rate limited', code: 1 }
 		}
 		expect(await ciRunWarning(gh, 'acme/widget', NOW)).toBeNull()
+	})
+})
+
+describe('releaseStuckWarning (#146)', () => {
+	const runsGh =
+		(runs: ReturnType<typeof run>[]): GhExec =>
+		async (args): Promise<GhResult> => {
+			const path = args[1] ?? ''
+			if (path.includes('/actions/runs?'))
+				return { ok: true, stdout: JSON.stringify({ workflow_runs: runs }), stderr: '', code: 0 }
+			return { ok: false, stdout: '', stderr: 'unexpected', code: 1 }
+		}
+
+	it('warns when a run has sat waiting on approval past 24h', async () => {
+		const gh = runsGh([
+			run({ id: 9, status: 'waiting', conclusion: null, created_at: hoursAgo(25) }),
+		])
+		const w = await releaseStuckWarning(gh, 'acme/widget', NOW)
+		expect(w).toContain('waiting on approval')
+		expect(w).toContain('9')
+		expect(w).toContain('runs/9')
+	})
+
+	it('does not warn on a run still inside the day-long grace window', async () => {
+		const gh = runsGh([
+			run({ id: 9, status: 'waiting', conclusion: null, created_at: hoursAgo(2) }),
+		])
+		expect(await releaseStuckWarning(gh, 'acme/widget', NOW)).toBeNull()
+	})
+
+	it('does not warn on a pending run', async () => {
+		const gh = runsGh([
+			run({ id: 9, status: 'in_progress', conclusion: null, created_at: hoursAgo(25) }),
+		])
+		expect(await releaseStuckWarning(gh, 'acme/widget', NOW)).toBeNull()
+	})
+
+	it('does not warn on a completed run', async () => {
+		const gh = runsGh([
+			run({ id: 9, status: 'completed', conclusion: 'success', created_at: hoursAgo(25) }),
+		])
+		expect(await releaseStuckWarning(gh, 'acme/widget', NOW)).toBeNull()
+	})
+
+	it('ignores runs from other workflows', async () => {
+		const gh = runsGh([
+			run({
+				id: 9,
+				status: 'waiting',
+				conclusion: null,
+				created_at: hoursAgo(25),
+				path: '.github/workflows/deploy.yml',
+			}),
+		])
+		expect(await releaseStuckWarning(gh, 'acme/widget', NOW)).toBeNull()
+	})
+
+	it('fails open when gh cannot list runs', async () => {
+		const gh: GhExec = async () => ({ ok: false, stdout: '', stderr: 'offline', code: 1 })
+		expect(await releaseStuckWarning(gh, 'acme/widget', NOW)).toBeNull()
 	})
 })
