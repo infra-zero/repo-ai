@@ -77,7 +77,7 @@ export interface SendBack {
 	issue: number | null
 	/** `ci-red`, or the `mergeStateStatus` that blocks the handoff. */
 	reason: 'ci-red' | 'DIRTY' | 'BLOCKED'
-	/** `ai-conflicts` for a `DIRTY` rebase (#176); `ai-changes` for everything else — the label the send-back applies. */
+	/** `ai-conflicts` for a `DIRTY` merge of the default branch (#176, #216); `ai-changes` for everything else — the label the send-back applies. */
 	label: 'ai-changes' | 'ai-conflicts'
 	/** Failing required checks, for the comment. */
 	failing: { name: string; link: string }[]
@@ -559,7 +559,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 					pr: pr.number,
 					issue,
 					reason: s as SendBack['reason'],
-					// DIRTY wants a rebase, not a fix — it costs no review round (#176).
+					// DIRTY wants the default branch merged in, not a fix — it costs no review round (#176).
 					label: s === 'DIRTY' ? 'ai-conflicts' : 'ai-changes',
 					failing: [],
 				})
@@ -589,7 +589,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		}
 
 		if ((has('ai-changes') || has('ai-conflicts')) && !has('ai-fixing')) {
-			// Only `ai-changes` applications spend the round cap — a rebase-only
+			// Only `ai-changes` applications spend the round cap — a conflict-only
 			// `ai-conflicts` round is free (#176).
 			const times = await labelApplications(gh, pr.number, 'ai-changes')
 			if (typeof times === 'string') {
