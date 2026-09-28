@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
 import type { GhExec } from '../../../src/base/gh.js'
-import { runLoopApply } from '../../../src/cli/commands/loop-apply.js'
+import { pickupSlug, runLoopApply } from '../../../src/cli/commands/loop-apply.js'
 import type { LoopEnv } from '../../../src/cli/commands/loop-env.js'
 import { emptyTick, type LoopTickResult } from '../../../src/cli/commands/loop-tick.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
@@ -37,6 +37,7 @@ function tick(root: string, work: Partial<LoopTickResult>, users = true): LoopTi
 		agentUser: users ? 'agent-bot' : '',
 		humanUser: users ? 'human' : '',
 		me: 'agent-bot',
+		maxTasksPerTick: 8,
 		warnings: [],
 	} as unknown as LoopEnv
 	return { ...emptyTick(env), ...work }
@@ -283,5 +284,142 @@ describe('runLoopApply transitions (#147)', () => {
 		expect(r.rebuild).not.toBe('not-requested')
 		expect(fs.existsSync(wt)).toBe(false)
 		expect(fake.calls).toEqual([['issue', 'edit', '3', '--remove-label', 'ai-wip']])
+	})
+})
+
+describe('runLoopApply claims (#148)', () => {
+	const fix = (pr: number, action: 'spawn' | 'block') => ({
+		pr,
+		issue: pr - 100,
+		worktree: action === 'spawn' ? '/wt' : null,
+		applications: action === 'spawn' ? 1 : 3,
+		action,
+		reason: 'r',
+	})
+
+	it('claims fixes first, then reviews, within maxTasksPerTick', async () => {
+		const root = checkout(newTmpDir())
+		const fake = fakeGh()
+		const t = tick(root, {
+			fixRounds: [fix(101, 'spawn')],
+			reviewsToSpawn: [
+				{ pr: 102, issue: 2, arm: 'both' },
+				{ pr: 103, issue: 3, arm: 'code' },
+			],
+		})
+		t.env.maxTasksPerTick = 2
+		const r = await runLoopApply({ tick: t, gh: fake.gh })
+		expect(fake.calls).toEqual([
+			['pr', 'edit', '101', '--add-label', 'ai-fixing', '--add-assignee', 'agent-bot'],
+			[
+				'pr',
+				'edit',
+				'102',
+				'--add-label',
+				'ai-reviewing-code',
+				'--add-label',
+				'ai-reviewing-sec',
+				'--add-assignee',
+				'agent-bot',
+			],
+		])
+		expect(r.claimed.fixes.map((f) => f.pr)).toEqual([101])
+		expect(r.claimed.reviews.map((x) => x.pr)).toEqual([102])
+	})
+
+	it('blocks a round-capped fix round outside the cap and owes the comment', async () => {
+		const root = checkout(newTmpDir())
+		const fake = fakeGh()
+		const t = tick(root, { fixRounds: [fix(104, 'block')] })
+		t.env.maxTasksPerTick = 0
+		const r = await runLoopApply({ tick: t, gh: fake.gh })
+		expect(fake.calls).toEqual([
+			[
+				'issue',
+				'edit',
+				'4',
+				'--add-label',
+				'ai-blocked',
+				'--remove-label',
+				'ai-wip',
+				'--add-assignee',
+				'human',
+				'--remove-assignee',
+				'agent-bot',
+			],
+			[
+				'pr',
+				'edit',
+				'104',
+				'--remove-label',
+				'ai-review',
+				'--add-assignee',
+				'human',
+				'--remove-assignee',
+				'agent-bot',
+			],
+		])
+		expect(r.comments).toMatchObject([{ kind: 'round-cap', pr: 104 }])
+		expect(r.claimed.fixes).toEqual([])
+	})
+
+	it('claims pickups up to slots, skipping one sharing a file, and adds each worktree', async () => {
+		const root = checkout(newTmpDir())
+		const fake = fakeGh()
+		const pickups = [
+			{ number: 21, title: 'feat(x): add the widget', body: 'touch `src/a.ts`' },
+			{ number: 22, title: 'fix: other', body: 'also `lib/a.ts`' },
+			{ number: 23, title: 'fix: third', body: '' },
+			{ number: 24, title: 'fix: fourth', body: '' },
+		]
+		const r = await runLoopApply({ tick: tick(root, { pickups, slots: 2 }), gh: fake.gh })
+		const claim = (n: number) => [
+			'issue',
+			'edit',
+			String(n),
+			'--add-label',
+			'ai-wip',
+			'--remove-label',
+			'ai-ready',
+			'--add-assignee',
+			'agent-bot',
+		]
+		expect(fake.calls).toEqual([claim(21), claim(23)])
+		expect(r.claimed.pickups).toMatchObject([
+			{ number: 21, slug: 'ai-21-add-widget' },
+			{ number: 23, slug: 'ai-23-third' },
+		])
+		for (const p of r.claimed.pickups) expect(fs.existsSync(p.worktree)).toBe(true)
+		expect(r.errors).toEqual([])
+	})
+
+	it('returns the issue to ai-ready when its worktree fails', async () => {
+		const root = checkout(newTmpDir())
+		git(root, 'branch', 'ai-25-taken')
+		const fake = fakeGh()
+		const r = await runLoopApply({
+			tick: tick(root, { pickups: [{ number: 25, title: 'taken', body: '' }], slots: 1 }),
+			gh: fake.gh,
+		})
+		expect(fake.calls[1]).toEqual([
+			'issue',
+			'edit',
+			'25',
+			'--add-label',
+			'ai-ready',
+			'--remove-label',
+			'ai-wip',
+			'--remove-assignee',
+			'agent-bot',
+		])
+		expect(r.claimed.pickups).toEqual([])
+		expect(r.errors).toHaveLength(1)
+	})
+
+	it('slugs a title into up to four kebab words', () => {
+		expect(pickupSlug(9, 'feat(loop)!: Loop apply takes the review, fix and pickup claims')).toBe(
+			'ai-9-loop-apply-takes-review'
+		)
+		expect(pickupSlug(9, '!!!')).toBe('ai-9-issue')
 	})
 })
