@@ -5,6 +5,7 @@ import {
 	checkAutoMerge,
 	checkCiRuns,
 	checkHumanUser,
+	checkReleaseFailed,
 	checkReleaseStuck,
 	runDoctor,
 } from '../../../src/cli/commands/doctor.js'
@@ -201,6 +202,61 @@ describe('checkReleaseStuck (#146)', () => {
 		const dir = newTmpDir()
 		fs.ensureDirSync(join(dir, '.git'))
 		const r = await checkReleaseStuck(dir, async () => ({
+			ok: false,
+			stdout: '',
+			stderr: '',
+			code: 1,
+		}))
+		expect(r.status).toBe('ok')
+	})
+})
+
+describe('checkReleaseFailed (#204)', () => {
+	it('skips outside a git repository', async () => {
+		const r = await checkReleaseFailed(newTmpDir())
+		expect(r).toMatchObject({ status: 'ok', detail: expect.stringMatching(/not a git repository/) })
+	})
+
+	it('flags the newest completed run with a failed release job', async () => {
+		const dir = newTmpDir()
+		fs.ensureDirSync(join(dir, '.git'))
+		const r = await checkReleaseFailed(dir, async (args) => {
+			if (args[0] === 'repo') return { ok: true, stdout: 'acme/widget main\n', stderr: '', code: 0 }
+			if (args[1]?.includes('/actions/workflows/ci.yml/runs?'))
+				return {
+					ok: true,
+					stdout: JSON.stringify({
+						workflow_runs: [
+							{
+								id: 9,
+								status: 'completed',
+								conclusion: 'failure',
+								html_url: 'https://github.com/acme/widget/actions/runs/9',
+								created_at: new Date().toISOString(),
+								path: '.github/workflows/ci.yml',
+							},
+						],
+					}),
+					stderr: '',
+					code: 0,
+				}
+			if (args[1]?.includes('/actions/runs/9/jobs'))
+				return {
+					ok: true,
+					stdout: JSON.stringify({ jobs: [{ name: 'release', conclusion: 'failure' }] }),
+					stderr: '',
+					code: 0,
+				}
+			return { ok: false, stdout: '', stderr: 'unexpected', code: 1 }
+		})
+		expect(r.status).toBe('drift')
+		expect(r.detail).toContain('runs/9')
+	})
+
+	it('is ok when the repo cannot be resolved', async () => {
+		const dir = newTmpDir()
+		fs.ensureDirSync(join(dir, '.git'))
+		const r = await checkReleaseFailed(dir, async () => ({
 			ok: false,
 			stdout: '',
 			stderr: '',

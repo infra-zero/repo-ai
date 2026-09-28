@@ -90,6 +90,8 @@ interface World {
 	ciCancelled?: boolean
 	/** A main push run of ci.yml has sat waiting on `release` approval past 24h (#146). */
 	releaseWaiting?: boolean
+	/** The newest completed main push run's `release` job failed (#204). */
+	releaseFailed?: boolean
 }
 
 function fakeGh(w: World): GhExec {
@@ -135,9 +137,22 @@ function fakeGh(w: World): GhExec {
 										path: '.github/workflows/ci.yml',
 									},
 								]
-							: [],
+							: w.releaseFailed
+								? [
+										{
+											id: 9,
+											status: 'completed',
+											conclusion: 'failure',
+											html_url: 'https://github.com/acme/widget/actions/runs/9',
+											created_at: NOW.toISOString(),
+											path: '.github/workflows/ci.yml',
+										},
+									]
+								: [],
 				})
 			if (b === 'repos/acme/widget/actions/runs/9/jobs?per_page=1') return ok({ total_count: 0 })
+			if (b === 'repos/acme/widget/actions/runs/9/jobs?per_page=100')
+				return ok({ jobs: w.releaseFailed ? [{ name: 'release', conclusion: 'failure' }] : [] })
 			if (b?.startsWith('repos/acme/widget/issues?')) return ok(w.queuePages ?? [w.queue ?? []])
 			const timeline = b?.match(/issues\/(\d+)\/timeline/)
 			if (timeline) {
@@ -234,6 +249,24 @@ describe('runLoopTick', () => {
 			now: NOW,
 		})
 		expect(r.summary).toContain('⚠release-stuck')
+	})
+
+	it('warns when the newest completed run has a failed release job (#204)', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({ root, gh: fakeGh({ releaseFailed: true }), env: {}, now: NOW })
+		expect(r.releaseFailed).toBe(true)
+		expect(r.warnings).toContainEqual(expect.stringContaining('release failed'))
+	})
+
+	it('adds ⚠release-failed to a non-idle summary (#204)', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			gh: fakeGh({ closedWip: [1], releaseFailed: true }),
+			env: {},
+			now: NOW,
+		})
+		expect(r.summary).toContain('⚠release-failed')
 	})
 
 	it('reports a closed issue still labelled ai-wip, and is not idle (#23)', async () => {
