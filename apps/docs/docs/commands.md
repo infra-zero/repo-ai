@@ -32,12 +32,13 @@ The skills call these; you rarely need them directly.
 
 | Command | What it does |
 |---|---|
-| `loop tick` | Compute one tick's whole work list (guard, cleanup, reap, verdicts, pickups). Writes no GitHub state. |
+| `loop tick` | Compute one tick's whole work list (guard, cleanup, reap, verdicts, pickups). Read-only: writes no GitHub state and removes no worktree — `loop apply` does that. |
 | `loop watch` | Poll `loop tick`'s work list every `pollSeconds` and print a line only when it changes: `HH:MM  <summary>  review #78 · pickup #39 …`. An `agentUser` mismatch warns on stderr instead of halting. Runs until killed. |
 | `loop guard` | Repair a wrongly-bare main checkout, gate the `node_modules` rebuild, and assert the agent identity. |
 | `loop env` | Resolve a tick's variables (root, worktree root, owner/repo, agent and human users). |
 | `loop worktree add <slug>` | Create an `ai-*` worktree off `origin/main` and link its dependencies. |
 | `loop cleanup` | Remove `ai-*` worktrees whose PR has landed or closed. |
+| `loop apply` | Apply a tick's local writes: remove the worktrees `loop tick` listed in `toClean`, then run the `node_modules` rebuild gate. |
 | `loop reap` | Report agents stalled past 45 minutes and what to do about each. |
 | `loop comment <pr>` | Upsert the loop's one decision-marker comment on a PR. |
 | `loop verdict <pr>` | Read a reviewer's verdict marker for the PR's current head. |

@@ -490,7 +490,7 @@ something to do. Nothing here polls CI with the model; that judgement happens
 inside a tick.
 
 ```
-15:42  4 agents·1 on CI  review #78 · fix #69 · update #74 · handoff #74 · pickup #39 #41 · cleaned #62 · stalled #55
+15:42  4 agents·1 on CI  review #78 · fix #69 · update #74 · handoff #74 · pickup #39 #41 · clean #62 · stalled #55
 ```
 
 The line never carries an issue or PR body. `--json` prints the full structured

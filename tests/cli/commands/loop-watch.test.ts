@@ -16,7 +16,7 @@ const tick = (extra: Partial<LoopTickResult> = {}) =>
 		summary: 'idle',
 		slots: 6,
 		...Object.fromEntries(
-			['adopt', 'disarm', 'handoffs', 'sendBacks', 'stripMergeReady', 'cleaned', 'stalled']
+			['adopt', 'disarm', 'handoffs', 'sendBacks', 'stripMergeReady', 'toClean', 'stalled']
 				.concat(['decay', 'verdicts', 'reviewsToSpawn', 'fixRounds', 'pickups', 'updateBranches'])
 				.map((k) => [k, []])
 		),
@@ -59,13 +59,13 @@ describe('runLoopWatch', () => {
 	it('wakes only on a gain, not a loss (#183)', async () => {
 		const handoff7 = { pr: 7, issue: 3, notes: false, autoMerge: false }
 		const handoff9 = { pr: 9, issue: 5, notes: false, autoMerge: false }
-		const cleaned153 = {
+		const clean153 = {
 			path: '/worktrees/153',
 			issue: 153,
 			branch: 'fix/153',
 			pr: null,
 			prState: null,
-			action: 'removed' as const,
+			action: 'to-remove' as const,
 		}
 		const oneHandoff = tick({ summary: '1ready', handoffs: [handoff7] })
 
@@ -74,16 +74,16 @@ describe('runLoopWatch', () => {
 			'09:05  1ready  handoff #7',
 		])
 
-		// An unchanged handoff next to a shrinking `cleaned` prints nothing (the
-		// reported bug: removing a leftover ai-wip label shrank `cleaned` while an
+		// An unchanged handoff next to a shrinking `toClean` prints nothing (the
+		// reported bug: removing a leftover ai-wip label shrank `toClean` while an
 		// already merge-ready PR kept re-appearing in `handoffs`).
 		const withCleaned = tick({
 			summary: '1ready·1cln',
 			handoffs: [handoff7],
-			cleaned: [cleaned153],
+			toClean: [clean153],
 		})
 		expect((await watch([withCleaned, oneHandoff])).lines).toEqual([
-			'09:05  1ready·1cln  handoff #7 · cleaned #153',
+			'09:05  1ready·1cln  handoff #7 · clean #153',
 		])
 
 		// A new handoff alongside the unchanged one still prints.

@@ -3,6 +3,7 @@
 import { Command } from 'commander'
 import { doctorCommand } from './commands/doctor.js'
 import { FIXERS, fixCommand } from './commands/fix.js'
+import { loopApplyCommand } from './commands/loop-apply.js'
 import { loopCleanupCommand } from './commands/loop-cleanup.js'
 import { loopEnvCommand } from './commands/loop-env.js'
 import { loopGuardCommand } from './commands/loop-guard.js'
@@ -90,6 +91,21 @@ loop
 	.action(loopEnvCommand)
 
 loop
+	.command('apply')
+	.description(
+		"✍️  Apply a tick's local writes: remove landed or closed ai-* worktrees, then rebuild"
+	)
+	.option('--root <path>', 'Main checkout the loop branches worktrees from', process.cwd())
+	.option('--worktree-root <path>', 'Where ai-* worktrees live (default: <root>-worktrees)')
+	.option('--json', 'Emit machine-readable JSON output')
+	.addHelpText(
+		'after',
+		'\nRelabel each `removed[].issue`. A failed removal lands in `errors`.\n' +
+			"Exit 1 or 2 halts the tick (loop guard's codes).\n"
+	)
+	.action(loopApplyCommand)
+
+loop
 	.command('cleanup')
 	.description('🧹 Remove ai-* worktrees whose PR landed on main or was closed')
 	.option('--root <path>', 'Main checkout the loop branches worktrees from', process.cwd())
@@ -161,9 +177,9 @@ loop
 	.option('--json', 'Emit machine-readable JSON output')
 	.addHelpText(
 		'after',
-		'\nWrites no GitHub state: the caller applies every label, comment and spawn.\n' +
-			'It does act locally: it removes ai-* worktrees whose PR landed or closed, so it\n' +
-			'is not a dry run. Their issues come back in `cleaned`, for the caller to relabel.\n' +
+		'\nWrites no GitHub state and removes no worktree: the caller applies every label,\n' +
+			'comment and spawn. Worktrees whose PR landed or closed come back in `toClean`;\n' +
+			'`loop apply` removes them.\n' +
 			"Exit 1 or 2 halts the tick (loop guard's codes, or an unresolvable checkout).\n"
 	)
 	.action(loopTickCommand)
@@ -178,7 +194,7 @@ loop
 		'\nPolls every `pollSeconds` from .repo-ai.json (default 180, floor 60) until killed.\n' +
 			'Prints one line when the actionable work list changes, and a halt once until it\n' +
 			'clears. Failed polls go to stderr and are skipped. Like `loop tick`, it removes\n' +
-			'ai-* worktrees whose PR landed or closed, and reports them in `cleaned`.\n'
+			'nothing: worktrees whose PR landed or closed come back in `toClean`.\n'
 	)
 	.action(loopWatchCommand)
 
