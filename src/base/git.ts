@@ -1,4 +1,5 @@
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
+import path from 'node:path'
 
 /** `git` runner copied from @rtorcato/repo-tooling (src/base/git-identity.ts), not shared. */
 
@@ -87,3 +88,29 @@ export const realGitExec = (
 		child.on('close', (code) => done(code === 0 ? stdout.trim() : null))
 		child.on('error', () => done(null))
 	})
+
+/**
+ * The main checkout that `dir` belongs to — via `--git-common-dir`, so it is
+ * right from inside a linked worktree too. Falls back to `dir` when it is not a
+ * repository, and leaves the verdict to the command. The default for every
+ * `loop` command's `--root`, so callers need not pass one (#150).
+ */
+export function mainCheckout(dir: string = process.cwd()): string {
+	try {
+		const common = execFileSync(
+			'git',
+			['rev-parse', '--path-format=absolute', '--git-common-dir'],
+			{
+				cwd: dir,
+				env: repoScopedEnv(),
+				stdio: ['ignore', 'pipe', 'ignore'],
+				timeout: GIT_TIMEOUT_MS,
+			}
+		)
+			.toString()
+			.trim()
+		return common ? path.resolve(common, '..') : dir
+	} catch {
+		return dir
+	}
+}

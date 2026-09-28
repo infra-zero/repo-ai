@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander'
+import { mainCheckout } from '../base/git.js'
 import { doctorCommand } from './commands/doctor.js'
 import { FIXERS, fixCommand } from './commands/fix.js'
 import { loopApplyCommand } from './commands/loop-apply.js'
@@ -16,6 +17,9 @@ import { setupCommand } from './commands/setup.js'
 import { getToolVersion } from './utils/version.js'
 
 const program = new Command()
+
+// The main checkout containing cwd, so `--root` is never required — even from a worktree (#150).
+const ROOT = mainCheckout()
 
 program
 	.name('repo-ai')
@@ -61,7 +65,7 @@ const loop = program.command('loop').description('🔁 ai-loop mechanics as test
 loop
 	.command('guard')
 	.description('🛡️  Repair a wrongly-bare main checkout and gate the node_modules rebuild')
-	.option('--root <path>', 'Main checkout the loop branches worktrees from', process.cwd())
+	.option('--root <path>', 'Main checkout the loop branches worktrees from', ROOT)
 	.option('--worktree-root <path>', 'Where ai-* worktrees live (default: <root>-worktrees)')
 	.option('--removed', 'A worktree was removed this tick — consider rebuilding node_modules')
 	.option('--json', 'Emit machine-readable JSON output')
@@ -108,7 +112,7 @@ loop
 loop
 	.command('cleanup')
 	.description('🧹 Remove ai-* worktrees whose PR landed on main or was closed')
-	.option('--root <path>', 'Main checkout the loop branches worktrees from', process.cwd())
+	.option('--root <path>', 'Main checkout the loop branches worktrees from', ROOT)
 	.option('--worktree-root <path>', 'Where ai-* worktrees live (default: <root>-worktrees)')
 	.option('--json', 'Emit machine-readable JSON output')
 	.addHelpText(
@@ -125,7 +129,7 @@ loop
 	.description(
 		"🌱 Create ai-<issue>-<slug> off the repo's default branch, link its deps, assert none are missing"
 	)
-	.option('--root <path>', 'Main checkout to branch the worktree from', process.cwd())
+	.option('--root <path>', 'Main checkout to branch the worktree from', ROOT)
 	.option('--worktree-root <path>', 'Where ai-* worktrees live (default: <root>-worktrees)')
 	.option('--base <ref>', "Ref to branch from (default: origin/<the repo's default branch>)")
 	.option('--json', 'Emit machine-readable JSON output')
@@ -139,7 +143,7 @@ loop
 loop
 	.command('reap')
 	.description('🪦 Report agents stalled past 45 minutes and what to do about each')
-	.option('--root <path>', 'Main checkout the loop branches worktrees from', process.cwd())
+	.option('--root <path>', 'Main checkout the loop branches worktrees from', ROOT)
 	.option('--worktree-root <path>', 'Where ai-* worktrees live (default: <root>-worktrees)')
 	.option('--json', 'Emit machine-readable JSON output')
 	.addHelpText(

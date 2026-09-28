@@ -12,13 +12,14 @@ import { type GhExec, realGhExec } from '../../base/gh.js'
 import { configuredAgentUser, defaultWorktreeRoot } from './loop-guard.js'
 
 /**
- * `repo-tooling loop env` — the ai-loop skill's Pass 0 variables,
- * resolved once (#615). The skill used to derive each in its own bash snippet
+ * `repo-ai loop env` — the loop's values, resolved once (#615). `loop tick`
+ * carries them as `.env`, which is where the skill reads them (#150); this
+ * command prints them for a human. The skill used to derive each in its own bash snippet
  * and re-ran `gh api user` in four places; the semantics below are those
  * snippets', unchanged.
  *
- * Every field is a string and empty means "none" — the skill's
- * `${VAR:+--flag}` expansions depend on exactly that.
+ * An empty string means "none" — the skill drops an assignee flag whose
+ * user is empty.
  */
 export interface LoopEnv {
 	/** Main checkout — via `--git-common-dir`, so correct from inside a worktree. */

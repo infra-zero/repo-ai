@@ -77,18 +77,18 @@ optional:
 | Key | Type | Default | Read by |
 |---|---|---|---|
 | `$schema` | string | none | Your editor, for completion and validation. `fix config` and `setup` write it. |
-| `agentUser` | string | none: the loop runs as whoever `gh` is signed in as | `loop guard`, which halts a tick running as anyone else; `loop env`; `fix ai-loop-identity`; `doctor`. |
-| `humanUser` | string | the repo owner's login, when it is a user; empty on an organisation-owned repo | `loop env` (as `HUMAN_USER`), which the skill assigns merge-ready PRs, `ai-blocked` issues and declined issues to. `doctor` warns when an organisation-owned repo leaves it unset. |
+| `agentUser` | string | none: the loop runs as whoever `gh` is signed in as | `loop guard`, which halts a tick running as anyone else; `loop tick`'s `.env`; `fix ai-loop-identity`; `doctor`. |
+| `humanUser` | string | the repo owner's login, when it is a user; empty on an organisation-owned repo | `loop tick`'s `.env.humanUser`, which the skill assigns merge-ready PRs, `ai-blocked` issues and declined issues to. `doctor` warns when an organisation-owned repo leaves it unset. |
 | `requiredSkills` | string[] | `[]`: no check | `doctor`, which reports any listed skill that is not installed. Checked only when `agentUser` is set. |
 | `pollSeconds` | integer | `180`; values below `60` are raised to `60` | `loop watch`, between polls. Each poll costs several GitHub API calls against the 5,000/h limit. |
-| `budgetTokens` | integer | `400000`; values below `1000` are ignored | `loop env` (as `BUDGET_TOKENS`), passed to the `ai-loop-pickup` and `ai-loop-recover` Workflow scripts, which enforce it — an agent past the cap is skipped and `log()`ged, not spawned. It bounds **output tokens only** (the Workflow runtime's `budget.spent()`, reported as `outputTokensSpent`); the harness's per-run total, input and cache reads included, runs several times higher. |
-| `quietStopMinutes` | integer | `120`; `0` disables | `loop env` (as `QUIET_STOP_MINUTES`). A tick that finds the status summary unchanged this long stops the loop — see [Driving it](#driving-it). |
-| `maxInFlight` | integer | `6`; values below `1` are ignored | `loop env` (as `MAX_IN_FLIGHT`) and `loop tick`, whose pickup `slots` are this minus the issues already `ai-wip`. |
-| `maxFixRounds` | integer | `2`; values below `0` are ignored | `loop env` (as `MAX_FIX_ROUNDS`), passed to the `ai-loop-pickup` Workflow script, which runs at most this many fix rounds per PR. `loop tick` blocks a PR on its `maxFixRounds + 1`th `ai-changes`. |
-| `maxTasksPerTick` | integer | `8`; values below `1` are ignored | `loop env` (as `MAX_TASKS_PER_TICK`), passed to the `ai-loop-recover` Workflow script, which runs at most this many review and fix tasks per tick and leaves the rest for the next. |
-| `staleMinutes` | integer | `45`; values below `1` are ignored | `loop env` (as `STALE_MINUTES`), `loop reap` and `loop tick`. A claim label (`ai-wip`, `ai-reviewing-*`, `ai-fixing`) this old marks a dead agent. |
-| `busyMinutes` | integer | `10`; values below `1` are ignored | `loop env` (as `BUSY_MINUTES`). The skill's cron cadence while work is in flight and no `loop watch` Monitor runs. |
-| `idleMinutes` | integer | `30`; values below `1` are ignored | `loop env` (as `IDLE_MINUTES`). The skill's cron cadence when idle, and its fallback cadence under a `loop watch` Monitor. |
+| `budgetTokens` | integer | `400000`; values below `1000` are ignored | `loop tick`'s `.env.budgetTokens`, passed to the `ai-loop-pickup` and `ai-loop-recover` Workflow scripts, which enforce it — an agent past the cap is skipped and `log()`ged, not spawned. It bounds **output tokens only** (the Workflow runtime's `budget.spent()`, reported as `outputTokensSpent`); the harness's per-run total, input and cache reads included, runs several times higher. |
+| `quietStopMinutes` | integer | `120`; `0` disables | `loop tick`'s `.env.quietStopMinutes`. A tick that finds the status summary unchanged this long stops the loop — see [Driving it](#driving-it). |
+| `maxInFlight` | integer | `6`; values below `1` are ignored | `loop tick`'s `.env.maxInFlight`; its pickup `slots` are this minus the issues already `ai-wip`. |
+| `maxFixRounds` | integer | `2`; values below `0` are ignored | `loop tick`'s `.env.maxFixRounds`, passed to the `ai-loop-pickup` Workflow script, which runs at most this many fix rounds per PR. `loop tick` blocks a PR on its `maxFixRounds + 1`th `ai-changes`. |
+| `maxTasksPerTick` | integer | `8`; values below `1` are ignored | `loop tick`'s `.env.maxTasksPerTick`, passed to the `ai-loop-recover` Workflow script, which runs at most this many review and fix tasks per tick and leaves the rest for the next. |
+| `staleMinutes` | integer | `45`; values below `1` are ignored | `loop tick`'s `.env.staleMinutes`, `loop reap` and `loop tick`. A claim label (`ai-wip`, `ai-reviewing-*`, `ai-fixing`) this old marks a dead agent. |
+| `busyMinutes` | integer | `10`; values below `1` are ignored | `loop tick`'s `.env.busyMinutes`. The skill's cron cadence while work is in flight and no `loop watch` Monitor runs. |
+| `idleMinutes` | integer | `30`; values below `1` are ignored | `loop tick`'s `.env.idleMinutes`. The skill's cron cadence when idle, and its fallback cadence under a `loop watch` Monitor. |
 | `autoMerge` | boolean | `false` | `loop tick`. Lets Pass 1 merge a fully-passed issue PR unattended — only on a repo whose publishing job also runs behind an environment with `required_reviewers`. `doctor` warns when it is on without that gate. |
 
 The schema is [`schemas/repo-ai.json`](https://rtorcato.github.io/repo-ai/repo-ai.json)
