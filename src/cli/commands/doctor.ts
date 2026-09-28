@@ -9,6 +9,7 @@ import {
 	checkRequiredSkills,
 	checkWorkflows,
 } from '../../base/checks.js'
+import { ciRunWarning } from '../../base/ci-runs.js'
 import { CONFIG_FILE, readConfig } from '../../base/config.js'
 import { checkConfigSchema } from '../../base/config-schema.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
@@ -30,6 +31,7 @@ export async function runDoctor(dir: string, skillsDir?: string): Promise<CheckR
 		await checkAgentUser(dir, config.agentUser),
 		await checkHumanUser(dir, config.humanUser),
 		await checkAutoMerge(dir, config.autoMerge === true),
+		await checkCiRuns(dir),
 		await checkClaudeSkills(skillsDir),
 		await checkPluginSkills(),
 		await checkWorkflows(skillsDir),
@@ -119,6 +121,26 @@ export async function checkAutoMerge(
 				detail: 'autoMerge is on but the repo is not release-gated — loop tick will never merge',
 				hint: 'Put the publishing job behind an environment with required_reviewers, or drop autoMerge',
 			}
+}
+
+/** Surfaces #153's symptom: `main` push runs stuck pending or cancelled with no jobs. */
+export async function checkCiRuns(
+	dir: string,
+	exec?: GhExec,
+	now = Date.now()
+): Promise<CheckResult> {
+	const check = 'CI runs'
+	// No .git → never spawn gh (keeps tmp-dir doctor runs offline).
+	if (!(await fs.pathExists(path.join(dir, '.git')))) {
+		return { check, status: 'ok', detail: 'skipped — not a git repository' }
+	}
+	const gh: GhExec = exec ?? ((args, stdin) => realGhExec(args, stdin, dir))
+	const nwo = await ghOut(gh, ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'])
+	if (!nwo) return { check, status: 'ok', detail: 'skipped — could not resolve the GitHub repo' }
+	const warning = await ciRunWarning(gh, nwo, now)
+	return warning
+		? { check, status: 'drift', detail: warning }
+		: { check, status: 'ok', detail: 'main push runs look healthy' }
 }
 
 const ICON: Record<CheckResult['status'], string> = {
