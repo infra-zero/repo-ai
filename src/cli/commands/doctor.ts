@@ -3,6 +3,7 @@ import path from 'node:path'
 import chalk from 'chalk'
 import fs from 'fs-extra'
 import { checkAgentUser } from '../../base/agent-user.js'
+import { checkAllowRules } from '../../base/allow-rules.js'
 import {
 	checkClaudeSkills,
 	checkPluginSkills,
@@ -40,12 +41,12 @@ export async function runDoctor(dir: string, skillsDir?: string): Promise<CheckR
 	]
 	const schemaCheck = await checkConfigSchema(dir)
 	if (schemaCheck) results.push(schemaCheck)
-	if (config.source === 'repo-tooling.json') {
+	if (config.source === 'none') {
 		results.push({
 			check: 'Loop config',
-			status: 'drift',
-			detail: `agentUser/requiredSkills still read from legacy .repo-tooling.json rules.aiLoop`,
-			hint: `Move them to ${CONFIG_FILE} — repo-ai's own config, not repo-tooling's`,
+			status: 'missing',
+			detail: `no ${CONFIG_FILE}`,
+			hint: 'Run `npx @rtorcato/repo-ai fix config` to create it',
 		})
 	}
 	// Gated on agentUser: that key is the "this repo runs the pipeline" signal.
@@ -53,6 +54,7 @@ export async function runDoctor(dir: string, skillsDir?: string): Promise<CheckR
 	if (config.agentUser && required.length > 0) {
 		results.push(await checkRequiredSkills(required, skillsDir))
 	}
+	if (config.agentUser) results.push(...(await checkAllowRules(dir, os.homedir())))
 	return results
 }
 

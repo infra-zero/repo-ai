@@ -70,16 +70,17 @@ describe('writeConfigSchema', () => {
 		expect(await writeConfigSchema(dir)).toEqual([])
 	})
 
-	it('creates the file seeded from legacy .repo-tooling.json', async () => {
+	it('creates the file, migrating .repo-tooling.json settings and leaving it alone', async () => {
 		const dir = newTmpDir()
-		fs.outputJsonSync(join(dir, '.repo-tooling.json'), {
-			rules: { aiLoop: { agentUser: 'legacy-bot' } },
-		})
+		const old = { rules: { aiLoop: { agentUser: 'legacy-bot' }, requiredSkills: ['ai-loop'] } }
+		fs.outputJsonSync(join(dir, '.repo-tooling.json'), old)
 		await writeConfigSchema(dir)
 		expect(fs.readJsonSync(join(dir, '.repo-ai.json'))).toEqual({
 			$schema: SCHEMA_URL,
 			agentUser: 'legacy-bot',
+			requiredSkills: ['ai-loop'],
 		})
+		expect(fs.readJsonSync(join(dir, '.repo-tooling.json'))).toEqual(old)
 	})
 
 	it('refuses to overwrite a file that is not a JSON object', async () => {

@@ -20,7 +20,7 @@ import { symlinkDirectories } from './loop-worktree.js'
  * 2. **`node_modules` rebuild gating.** Removing a worktree can destroy the
  *    main checkout's `node_modules/.bin`, because a pnpm run from inside a
  *    worktree anchors the main checkout's shims at the worktree path.
- * 3. **Bot-identity preflight.** A repo declaring `rules.aiLoop.agentUser`
+ * 3. **Bot-identity preflight.** A repo declaring `agentUser`
  *    means the tick to run as that account. Nothing checked who `gh` actually
  *    authenticates as, so an unconfigured machine ran the whole tick as the
  *    owner — commits, PRs, reviews — and the split only surfaced in `git log`
@@ -86,7 +86,7 @@ export function classifyRoot(insideWorkTree: string | null, gitEntry: GitEntry):
  */
 export type IdentityVerdict = 'not-configured' | 'match' | 'mismatch'
 
-/** `.repo-ai.json`'s `agentUser`, falling back to `.repo-tooling.json` (see `base/config.ts`). */
+/** `.repo-ai.json`'s `agentUser`. */
 export async function configuredAgentUser(root: string): Promise<string | undefined> {
 	return (await readConfig(root)).agentUser
 }
@@ -104,8 +104,7 @@ export async function checkAgentIdentity(
 	if (!configured) {
 		return {
 			verdict: 'not-configured',
-			message:
-				'no agentUser configured (.repo-ai.json, or legacy rules.aiLoop.agentUser) — identity check skipped',
+			message: 'no agentUser configured in .repo-ai.json — identity check skipped',
 		}
 	}
 	const r = await gh(['api', 'user', '--jq', '.login'])

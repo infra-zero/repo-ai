@@ -25,7 +25,7 @@ export interface LoopEnv {
 	ownerRepo: string
 	/** The repo's default branch (`main`, `master`, …), never `origin/`-prefixed. Empty when unresolvable. */
 	defaultBranch: string
-	/** `AI_LOOP_AGENT`, else `rules.aiLoop.agentUser`; empty unless assignable. */
+	/** `AI_LOOP_AGENT`, else `.repo-ai.json`'s `agentUser`; empty unless assignable. */
 	agentUser: string
 	/** `humanUser`, else the repo owner when it is a User; empty for an organisation with no `humanUser` set (#162). */
 	humanUser: string
