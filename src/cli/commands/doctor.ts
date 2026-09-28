@@ -28,6 +28,7 @@ export async function runDoctor(dir: string, skillsDir?: string): Promise<CheckR
 	const results = [
 		await checkLoopLabels(dir),
 		await checkAgentUser(dir, config.agentUser),
+		await checkHumanUser(dir, config.humanUser),
 		await checkAutoMerge(dir, config.autoMerge === true),
 		await checkClaudeSkills(skillsDir),
 		await checkPluginSkills(),
@@ -50,6 +51,40 @@ export async function runDoctor(dir: string, skillsDir?: string): Promise<CheckR
 		results.push(await checkRequiredSkills(required, skillsDir))
 	}
 	return results
+}
+
+/**
+ * `humanUser` defaults to the repo owner (`loop env`'s `HUMAN_USER`), which is
+ * empty for an organisation — so an org repo with no override leaves
+ * merge-ready PRs, `ai-blocked` and declined issues with no assignee (#162).
+ */
+export async function checkHumanUser(
+	dir: string,
+	humanUser: string | undefined,
+	exec?: GhExec
+): Promise<CheckResult> {
+	const check = 'Human user'
+	if (humanUser) {
+		return { check, status: 'ok', detail: `humanUser set to "${humanUser}"` }
+	}
+	if (!(await fs.pathExists(path.join(dir, '.git')))) {
+		return { check, status: 'ok', detail: 'skipped — not a git repository' }
+	}
+	const gh: GhExec = exec ?? ((args, stdin) => realGhExec(args, stdin, dir))
+	const r = await gh(['api', 'repos/{owner}/{repo}', '--jq', '.owner.type'])
+	if (!r.ok) {
+		return { check, status: 'ok', detail: 'skipped — could not verify the repo owner' }
+	}
+	if (r.stdout.trim() !== 'Organization') {
+		return { check, status: 'ok', detail: 'not applicable — repo owner is a user' }
+	}
+	return {
+		check,
+		status: 'drift',
+		detail:
+			'organisation-owned repo with no humanUser — merge-ready PRs and ai-blocked/declined issues get no assignee',
+		hint: 'Add "humanUser": "<your-login>" to .repo-ai.json',
+	}
 }
 
 /** `loop tick` merges unattended only with the opt-in *and* a release gate (#142). */

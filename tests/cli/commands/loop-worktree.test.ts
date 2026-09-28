@@ -91,4 +91,32 @@ describe('runLoopWorktreeAdd', () => {
 		expect(r.exitCode).toBe(1)
 		expect(r.messages[0]).toMatch(/not a ref/)
 	})
+
+	it('resolves the default branch itself when no --base is given', async () => {
+		const tmp = newTmpDir()
+		const origin = join(tmp, 'origin.git')
+		git(tmp, 'init', '-q', '--bare', '-b', 'trunk', origin)
+		const root = join(tmp, 'repo')
+		git(tmp, 'clone', '-q', origin, root)
+		git(root, 'config', 'user.email', 'test@example.com')
+		git(root, 'config', 'user.name', 'Test')
+		git(root, 'commit', '-q', '--allow-empty', '-m', 'init')
+		git(root, 'push', '-q', 'origin', 'trunk')
+		// The bare origin is empty at clone time, so `clone` never set origin/HEAD on its own.
+		git(root, 'remote', 'set-head', 'origin', '--auto')
+
+		const r = await runLoopWorktreeAdd('ai-7-add-thing', { root: fs.realpathSync(root) })
+		expect(r.exitCode).toBe(0)
+		expect(git(r.worktree, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('ai-7-add-thing')
+	})
+
+	it('reports failure when no --base is given and the default branch cannot be resolved', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopWorktreeAdd('ai-7-add-thing', {
+			root,
+			gh: async () => ({ ok: false, stdout: '', stderr: 'no repo' }),
+		})
+		expect(r.exitCode).toBe(1)
+		expect(r.messages[0]).toMatch(/could not resolve the default branch/)
+	})
 })

@@ -14,6 +14,10 @@
       "type": "string",
       "description": "GitHub login the loop must run as. `loop guard` halts a tick authenticated as anyone else; unset, the loop runs as whoever `gh` is signed in as."
     },
+    "humanUser": {
+      "type": "string",
+      "description": "GitHub login to assign merge-ready PRs, ai-blocked issues and declined issues to. Defaults to the repo owner when it is a user; an organisation-owned repo has no such owner, so set this or those handoffs get no assignee."
+    },
     "requiredSkills": {
       "type": "array",
       "items": { "type": "string" },

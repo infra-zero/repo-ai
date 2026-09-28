@@ -272,10 +272,10 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		return result
 	}
 
-	// Best-effort: Pass 4 branches worktrees off origin/main.
+	// Best-effort: Pass 4 branches worktrees off the default branch.
 	await git(['fetch', '--prune', '--no-write-fetch-head', 'origin'])
 
-	const cleanup = await runLoopCleanup(seams)
+	const cleanup = await runLoopCleanup({ ...seams, defaultBranch: env.defaultBranch })
 	result.cleaned = cleanup.worktrees.filter((w) => w.action === 'removed')
 	for (const w of cleanup.worktrees.filter((w) => w.action === 'remove-failed'))
 		errors.push(`could not remove ${w.path}`)

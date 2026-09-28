@@ -155,7 +155,7 @@ in Pass 2.
 From the main checkout or any worktree of it:
 
 ```bash
-eval "$(npx @rtorcato/repo-ai loop env)"   # ROOT WT_ROOT OWNER_REPO AGENT_USER HUMAN_USER ME BUDGET_TOKENS QUIET_STOP_MINUTES
+eval "$(npx @rtorcato/repo-ai loop env)"   # ROOT WT_ROOT OWNER_REPO DEFAULT_BRANCH AGENT_USER HUMAN_USER ME BUDGET_TOKENS QUIET_STOP_MINUTES
 TICK=$(npx @rtorcato/repo-ai loop tick --json --root "$ROOT"); TICK_EXIT=$?
 printf '%s' "$TICK" | jq '{halt, idle, summary, errors, warnings}'
 ```
@@ -300,7 +300,7 @@ fi
 ### Pass 2 — clean up
 
 **Relabel what the tick cleaned** — `.cleaned[]`: worktrees it removed because
-the PR closed, or merged with its `(#<PR>)` squash subject on `origin/main`, plus
+the PR closed, or merged with its `(#<PR>)` squash subject on the default branch, plus
 `action: relabel` entries — closed issues still wearing `ai-wip` whose worktree
 an earlier, interrupted tick already removed. It already ran `loop guard
 --removed`. A tick with anything here is never `idle`. For each entry's `issue`:
@@ -631,7 +631,7 @@ kebab words from the title:
 npx @rtorcato/repo-ai loop worktree add "ai-<N>-<slug>" --root "$ROOT" --json
 ```
 
-It branches off `origin/main` under `WT_ROOT` and symlinks every
+It branches off the repo's default branch under `WT_ROOT` and symlinks every
 `worktree.symlinkDirectories` entry. **Exit 1 → do not implement it**: return the
 issue (`gh issue edit <N> --add-label ai-ready --remove-label ai-wip`).
 `needsInstall: true` means nothing was linked, so `(cd "$WT_ROOT/ai-<N>-<slug>" &&

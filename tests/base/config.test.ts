@@ -53,6 +53,14 @@ describe('readConfig', () => {
 		expect((await readConfig(dir)).autoMerge).toBe(false)
 	})
 
+	it('reads humanUser, trimmed, and ignores a blank one (#162)', async () => {
+		const dir = newTmpDir()
+		fs.outputJsonSync(join(dir, '.repo-ai.json'), { humanUser: ' acme-owner ' })
+		expect((await readConfig(dir)).humanUser).toBe('acme-owner')
+		fs.outputJsonSync(join(dir, '.repo-ai.json'), { humanUser: '  ' })
+		expect((await readConfig(dir)).humanUser).toBeUndefined()
+	})
+
 	it('falls back to .repo-tooling.json rules.aiLoop / rules.requiredSkills', async () => {
 		const dir = newTmpDir()
 		fs.outputJsonSync(join(dir, '.repo-tooling.json'), {
