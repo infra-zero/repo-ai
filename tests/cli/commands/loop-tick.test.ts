@@ -240,7 +240,38 @@ describe('runLoopTick', () => {
 		const root = checkout(newTmpDir())
 		const r = await runLoopTick({ root, gh: fakeGh({ closedWip: [1] }), env: {}, now: NOW })
 		expect(r.idle).toBe(false)
-		expect(r.cleaned).toEqual([expect.objectContaining({ issue: 1, action: 'relabel', path: '' })])
+		expect(r.toClean).toEqual([expect.objectContaining({ issue: 1, action: 'relabel', path: '' })])
+	})
+
+	it('reports a closed PR worktree in toClean without removing it (#149)', async () => {
+		const root = checkout(newTmpDir())
+		const wt = `${root}-worktrees/ai-7-done`
+		git(root, 'worktree', 'add', '-q', wt, '-b', 'ai-7-done')
+		const calls: string[][] = []
+		const world = fakeGh({})
+		const gh: GhExec = async (args, stdin) =>
+			args.includes('ai-7-done')
+				? { ok: true, stdout: JSON.stringify([{ number: 70, state: 'CLOSED' }]), stderr: '' }
+				: world(args, stdin)
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh,
+			git: async (args) => {
+				calls.push(args)
+				try {
+					return git(root, ...args)
+				} catch {
+					return null
+				}
+			},
+		})
+		expect(r.toClean).toEqual([
+			expect.objectContaining({ issue: 7, pr: 70, action: 'to-remove', path: wt }),
+		])
+		expect(fs.existsSync(wt)).toBe(true)
+		expect(calls.filter(([a, b]) => a === 'worktree' || (a === 'branch' && b === '-D'))).toEqual([])
 	})
 
 	it('turns label state into one work list', async () => {

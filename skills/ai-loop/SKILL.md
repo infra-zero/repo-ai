@@ -28,7 +28,7 @@ to merge, it says why in a comment on the PR.
 that state, so a missed tick, a crash, or a restart costs nothing. Never keep
 pipeline state in the conversation. **The mechanics live in the CLI; this file
 keeps the judgement:** `loop tick --json` reads that state and returns the
-tick's work list, writing no GitHub state. You apply every label, assignee,
+tick's work list, writing no GitHub state and removing no worktree. You apply every label, assignee,
 comment and merge, and spawn every agent — each pass takes its slice of the list.
 
 ## The one constraint that shapes everything
@@ -297,11 +297,21 @@ human chooses between a fix and a close.
 
 ### Pass 2 — clean up
 
-**Relabel what the tick cleaned** — `.cleaned[]`: worktrees it removed because
-the PR closed, or merged with its `(#<PR>)` squash subject on the default branch, plus
-`action: relabel` entries — closed issues still wearing `ai-wip` whose worktree
-an earlier, interrupted tick already removed. It already ran `loop guard
---removed`. A tick with anything here is never `idle`. For each entry's `issue`:
+**Remove and relabel what the tick found** — `.toClean[]`: `action: to-remove`
+worktrees whose PR closed, or merged with its `(#<PR>)` squash subject on the
+default branch, plus `action: relabel` entries — closed issues still wearing
+`ai-wip` whose worktree an earlier, interrupted tick already removed. `loop tick`
+removes nothing. If any entry is `to-remove`, run `loop apply` — it re-checks and
+removes those worktrees, then runs `loop guard --removed`. A non-zero exit halts
+the tick; a failed removal lands in `.errors` and the next tick retries it:
+
+```bash
+APPLY=$(npx @rtorcato/repo-ai loop apply --root "$ROOT" --json)
+printf '%s' "$APPLY" | jq '{removed: [.removed[].issue], rebuild, halt, errors}'
+```
+
+A tick with anything in `.toClean[]` is never `idle`. For each entry's `issue`
+(`relabel` entries, and `to-remove` ones in `loop apply`'s `.removed[]`):
 
 ```bash
 gh issue edit <N> --remove-label ai-wip --remove-assignee <agentUser>
@@ -337,7 +347,7 @@ worktree is live. A non-zero exit halts the tick; read `.rebuild`:
 npx @rtorcato/repo-ai loop guard --removed --json
 ```
 
-A `deferred` or `rebuild-failed` rebuild (from here or the tick's `.rebuild`)
+A `deferred` or `rebuild-failed` rebuild (from here or `loop apply`'s `.rebuild`)
 carries into Pass 5 as `⚠rebuild`.
 
 **Decay the triage queue** — `.decay[]`: `ai-suggested` untouched 30 days, never
