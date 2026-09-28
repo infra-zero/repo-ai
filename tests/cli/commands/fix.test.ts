@@ -113,7 +113,7 @@ describe('fixCommand', () => {
 			const dir = newTmpDir()
 			await fixCommand('ai-loop-identity', options(dir))
 			expect(errSpy.mock.calls[0]?.[0]).toContain('nothing to do')
-			expect(fs.existsSync(join(dir, '.claude'))).toBe(false)
+			expect(fs.existsSync(join(mockHome.current, '.claude'))).toBe(false)
 		})
 	})
 
