@@ -12,7 +12,6 @@ const run = (
 		status: string
 		conclusion: string | null
 		created_at: string
-		path: string
 	}> = {}
 ) => ({
 	id: 1,
@@ -20,7 +19,6 @@ const run = (
 	conclusion: 'success',
 	html_url: `https://github.com/acme/widget/actions/runs/${over.id ?? 1}`,
 	created_at: minutesAgo(5),
-	path: '.github/workflows/ci.yml',
 	...over,
 })
 
@@ -29,7 +27,7 @@ function fakeGh(runs: ReturnType<typeof run>[], jobs: Record<number, number> = {
 	return async (args): Promise<GhResult> => {
 		const ok = (v: unknown) => ({ ok: true, stdout: JSON.stringify(v), stderr: '', code: 0 })
 		const path = args[1] ?? ''
-		if (path.includes('/actions/runs?')) return ok({ workflow_runs: runs })
+		if (path.includes('/actions/workflows/ci.yml/runs?')) return ok({ workflow_runs: runs })
 		const jobsMatch = path.match(/\/actions\/runs\/(\d+)\/jobs/)
 		if (jobsMatch) return ok({ total_count: jobs[Number(jobsMatch[1])] ?? 0 })
 		return { ok: false, stdout: '', stderr: 'unexpected', code: 1 }
@@ -92,16 +90,17 @@ describe('ciRunWarning (#153)', () => {
 		expect(await ciRunWarning(gh, 'acme/widget', NOW)).toBeNull()
 	})
 
-	it('ignores runs from other workflows', async () => {
-		const gh = fakeGh([
-			run({
-				id: 9,
-				status: 'completed',
-				conclusion: 'cancelled',
-				path: '.github/workflows/deploy.yml',
-			}),
-		])
-		expect(await ciRunWarning(gh, 'acme/widget', NOW)).toBeNull()
+	it('asks for ci.yml runs only, so other push workflows cannot dilute the window (#174)', async () => {
+		const paths: string[] = []
+		const inner = fakeGh([run()])
+		const gh: GhExec = async (args) => {
+			paths.push(args[1] ?? '')
+			return inner(args)
+		}
+		await ciRunWarning(gh, 'acme/widget', NOW)
+		expect(paths[0]).toBe(
+			'repos/acme/widget/actions/workflows/ci.yml/runs?event=push&branch=main&per_page=5'
+		)
 	})
 
 	it('fails open when gh cannot list runs', async () => {
@@ -112,7 +111,7 @@ describe('ciRunWarning (#153)', () => {
 	it('fails open when the jobs count is unreadable', async () => {
 		const gh: GhExec = async (args) => {
 			const path = args[1] ?? ''
-			if (path.includes('/actions/runs?'))
+			if (path.includes('/actions/workflows/ci.yml/runs?'))
 				return {
 					ok: true,
 					stdout: JSON.stringify({
@@ -132,7 +131,7 @@ describe('releaseStuckWarning (#146)', () => {
 		(runs: ReturnType<typeof run>[]): GhExec =>
 		async (args): Promise<GhResult> => {
 			const path = args[1] ?? ''
-			if (path.includes('/actions/runs?'))
+			if (path.includes('/actions/workflows/ci.yml/runs?'))
 				return { ok: true, stdout: JSON.stringify({ workflow_runs: runs }), stderr: '', code: 0 }
 			return { ok: false, stdout: '', stderr: 'unexpected', code: 1 }
 		}
@@ -164,19 +163,6 @@ describe('releaseStuckWarning (#146)', () => {
 	it('does not warn on a completed run', async () => {
 		const gh = runsGh([
 			run({ id: 9, status: 'completed', conclusion: 'success', created_at: hoursAgo(25) }),
-		])
-		expect(await releaseStuckWarning(gh, 'acme/widget', NOW)).toBeNull()
-	})
-
-	it('ignores runs from other workflows', async () => {
-		const gh = runsGh([
-			run({
-				id: 9,
-				status: 'waiting',
-				conclusion: null,
-				created_at: hoursAgo(25),
-				path: '.github/workflows/deploy.yml',
-			}),
 		])
 		expect(await releaseStuckWarning(gh, 'acme/widget', NOW)).toBeNull()
 	})
