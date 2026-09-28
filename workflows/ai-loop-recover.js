@@ -32,8 +32,9 @@ const withRelayed = (p) => (p.includes(RELAYED) ? p : `${p}\n\n${RELAYED}`)
 // output tokens, and the harness's per-run `subagent_tokens` total runs ~8-9x
 // higher (input + cache reads dominate). Reported as `outputTokensSpent`.
 const DEFAULT_BUDGET_TOKENS = 400_000
-// ponytail: a flat per-agent estimate until real spend data can tune it (#41).
-const AGENT_TOKEN_ESTIMATE = 40_000
+// #218: per-role output-token estimates, matching ai-loop-pickup.js.
+// ponytail: constants, retune from `outputTokensSpent` data.
+const TOKENS = { Fix: 25_000, Review: 15_000 }
 const tokenBudget = args.budgetTokens ?? DEFAULT_BUDGET_TOKENS
 
 const all = [
@@ -60,11 +61,11 @@ const ceiling = Math.min(tokenBudget, budget.remaining())
 let reserved = 0
 const queued = []
 for (const t of capped) {
-	if (ceiling - reserved < AGENT_TOKEN_ESTIMATE) {
+	if (ceiling - reserved < TOKENS[t.phase]) {
 		log(`skipped ${t.label} — token budget exhausted, left labelled for the next tick`)
 		continue
 	}
-	reserved += AGENT_TOKEN_ESTIMATE
+	reserved += TOKENS[t.phase]
 	queued.push(t)
 }
 
