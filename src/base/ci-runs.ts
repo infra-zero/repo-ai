@@ -55,6 +55,25 @@ async function jobCount(gh: GhExec, nwo: string, runId: number): Promise<number>
 	}
 }
 
+interface JobApi {
+	name: string
+	conclusion: string | null
+}
+
+const RELEASE_JOB_NAME = 'release'
+
+/** The run's `release` job, or `null` if it has none or the jobs list is unreadable. */
+async function releaseJob(gh: GhExec, nwo: string, runId: number): Promise<JobApi | null> {
+	const r = await gh(['api', `repos/${nwo}/actions/runs/${runId}/jobs?per_page=100`])
+	if (!r.ok) return null
+	try {
+		const jobs = (JSON.parse(r.stdout).jobs ?? []) as JobApi[]
+		return jobs.find((j) => j.name === RELEASE_JOB_NAME) ?? null
+	} catch {
+		return null
+	}
+}
+
 /** `null` on any gh/parse failure or a healthy history — never the reason to halt. */
 export async function ciRunWarning(
 	gh: GhExec,
@@ -122,4 +141,29 @@ export async function releaseStuckWarning(
 	const hours = (now - Date.parse(waiting.created_at)) / 3_600_000
 	if (hours <= RELEASE_STUCK_HOURS) return null
 	return `release run ${waiting.id} waiting on approval for ${Math.round(hours)}h: ${waiting.html_url}`
+}
+
+/**
+ * `loop tick`/`doctor`'s release-failure probe (#204). A failed `release`
+ * job — semantic-release error, npm auth, bad token — isn't a failing check
+ * on the merge that triggered it and nothing re-runs it, so nothing publishes
+ * while the loop keeps handing PRs over. Walks the last 5 push runs, newest
+ * first, for the first completed one that ran a `release` job at all, and
+ * reports it only while that job's conclusion is `failure` — a later run
+ * whose `release` job succeeds goes quiet again. Read-only: never re-runs,
+ * approves or cancels.
+ */
+export async function releaseFailedWarning(
+	gh: GhExec,
+	nwo: string,
+	branch: string
+): Promise<string | null> {
+	const runs = await ciRuns(gh, nwo, branch)
+	if (!runs) return null
+	for (const run of runs.filter((r) => r.status === 'completed')) {
+		const job = await releaseJob(gh, nwo, run.id)
+		if (!job) continue
+		return job.conclusion === 'failure' ? `release failed: ${run.html_url}` : null
+	}
+	return null
 }
