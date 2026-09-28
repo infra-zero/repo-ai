@@ -111,7 +111,7 @@ function fakeGh(w: World): GhExec {
 						: [],
 				})
 			if (b === 'repos/acme/widget/assignees/agent-bot') return ok('')
-			if (b?.startsWith('repos/acme/widget/actions/runs?'))
+			if (b?.startsWith('repos/acme/widget/actions/workflows/ci.yml/runs?'))
 				return ok({
 					workflow_runs: w.ciCancelled
 						? [
