@@ -209,7 +209,7 @@ const SHARED_DOCS = new Set(['skill.md', 'ai-loop.md', 'readme.md', 'commands.md
 
 const issueOf = (head: string) => Number(head.match(/^(?:worktree-)?ai-(\d+)-/)?.[1]) || null
 
-function empty(env: LoopEnv): LoopTickResult {
+export function emptyTick(env: LoopEnv): LoopTickResult {
 	return {
 		env,
 		halt: null,
@@ -242,7 +242,7 @@ function empty(env: LoopEnv): LoopTickResult {
 export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTickResult> {
 	const dir = path.resolve(options.root ?? process.cwd())
 	const env = await resolveLoopEnv({ dir, git: options.git, gh: options.gh, env: options.env })
-	const result = empty(env)
+	const result = emptyTick(env)
 	if (!env.root || !env.ownerRepo) {
 		result.halt = env.warnings.join('; ') || 'could not resolve the checkout'
 		result.exitCode = 1

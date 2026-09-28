@@ -64,7 +64,7 @@ The plugin carries the skills only. Pass 3 and Pass 4 run their Workflow scripts
 | `loop env` | Print a tick's values (root, worktree root, owner/repo, agent and human users) for a human; the skill reads them from `loop tick --json`. |
 | `loop worktree add <slug>` | Create an `ai-*` worktree off `origin/main` and link its dependencies. |
 | `loop cleanup` | Remove `ai-*` worktrees whose PR has landed or closed. |
-| `loop apply` | Apply a tick's local writes: remove the worktrees `loop tick` listed in `toClean`, then run the `node_modules` rebuild gate. |
+| `loop apply` | Apply a tick's deterministic writes: Pass 1's disarm, handoff, send-back, `merge-ready` strip and branch update; Pass 2's worktree removal (then the `node_modules` rebuild gate), `ai-wip` relabel and the label side of each stall. Its only merge is an `autoMerge` handoff. Reports every edit, and in `comments` each comment the caller still owes. |
 | `loop reap` | Report agents stalled past 45 minutes and what to do about each. |
 | `loop comment <pr>` / `loop verdict <pr>` | Upsert the decision comment, and read a reviewer's verdict marker. |
 | `loop tick` | Compute one tick's whole work list (guard, cleanup, reap, verdicts, pickups). Read-only: writes no GitHub state and removes no worktree — `loop apply` does that. |
