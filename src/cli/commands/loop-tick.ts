@@ -69,6 +69,8 @@ export interface SendBack {
 	issue: number | null
 	/** `ci-red`, or the `mergeStateStatus` that blocks the handoff. */
 	reason: 'ci-red' | 'DIRTY' | 'BLOCKED'
+	/** `ai-conflicts` for a `DIRTY` rebase (#176); `ai-changes` for everything else — the label the send-back applies. */
+	label: 'ai-changes' | 'ai-conflicts'
 	/** Failing required checks, for the comment. */
 	failing: { name: string; link: string }[]
 }
@@ -396,7 +398,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 
 		// CI red is a send-back, except mid-review or when one is already out.
 		let pending = false
-		if (!claimed && !has('ai-changes')) {
+		if (!claimed && !has('ai-changes') && !has('ai-conflicts')) {
 			const r = await gh([
 				'pr',
 				'checks',
@@ -414,14 +416,20 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 				.filter((c) => c.state === 'FAILURE')
 				.map(({ name, link }) => ({ name, link }))
 			if (failing.length > 0) {
-				result.sendBacks.push({ pr: pr.number, issue, reason: 'ci-red', failing })
+				result.sendBacks.push({
+					pr: pr.number,
+					issue,
+					reason: 'ci-red',
+					label: 'ai-changes',
+					failing,
+				})
 				continue
 			}
 			// No required check reported yet (e.g. `verify` that `needs:` other jobs) is pending too (#112).
 			pending = checks.length === 0 || checks.some((c) => c.bucket === 'pending')
 		}
 
-		if (has('ai-changes')) {
+		if (has('ai-changes') || has('ai-conflicts')) {
 			if (has('merge-ready')) result.stripMergeReady.push(pr.number)
 		} else if (passed) {
 			const view = await json<{ mergeStateStatus: string }>([
@@ -450,6 +458,8 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 					pr: pr.number,
 					issue,
 					reason: s as SendBack['reason'],
+					// DIRTY wants a rebase, not a fix — it costs no review round (#176).
+					label: s === 'DIRTY' ? 'ai-conflicts' : 'ai-changes',
 					failing: [],
 				})
 			} else if (s !== 'UNKNOWN' && has('merge-ready')) {
@@ -477,7 +487,9 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 				for (const arm of spawn) result.reviewsToSpawn.push({ pr: pr.number, issue, arm })
 		}
 
-		if (has('ai-changes') && !has('ai-fixing')) {
+		if ((has('ai-changes') || has('ai-conflicts')) && !has('ai-fixing')) {
+			// Only `ai-changes` applications spend the round cap — a rebase-only
+			// `ai-conflicts` round is free (#176).
 			const times = await labelApplications(gh, pr.number, 'ai-changes')
 			if (typeof times === 'string') {
 				errors.push(times)

@@ -124,6 +124,22 @@ describe('runLoopReap', () => {
 		expect(result.stalled[0]?.minutes).toBe(60)
 	})
 
+	it('reaps a stalled fixer on an ai-conflicts rebase, same as ai-changes (#176)', async () => {
+		const root = join(newTmpDir(), 'repo')
+		const result = await runLoopReap({
+			root,
+			now: NOW,
+			gh: fakeGh({
+				wip: [1],
+				prs: [pr(20, 'ai-1-rebase', ['ai-fixing', 'ai-conflicts'])],
+				timeline: { 20: [['ai-fixing', 46]] },
+			}),
+		})
+		expect(result.stalled).toEqual([
+			expect.objectContaining({ kind: 'fixer', issue: 1, pr: 20, label: 'ai-fixing' }),
+		])
+	})
+
 	it('reaps nothing and exits 1 when a list query fails', async () => {
 		const result = await runLoopReap({
 			root: newTmpDir(),

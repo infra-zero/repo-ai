@@ -46,6 +46,11 @@ export const LOOP_LABELS: readonly LabelSpec[] = [
 	{ name: 'ai-ok-sec', color: '0e8a16', description: 'security-expert passed' },
 	{ name: 'ai-changes', color: 'd93f0b', description: 'Reviewer requested changes' },
 	{
+		name: 'ai-conflicts',
+		color: 'e99695',
+		description: 'Branch conflicts with the default branch — needs a rebase',
+	},
+	{
 		name: 'ai-fixing',
 		color: '006b75',
 		description: 'Fix-round implementer claimed and running',
