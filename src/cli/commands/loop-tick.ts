@@ -203,7 +203,14 @@ export function namedFiles(body: string): string[] {
 		.map((m) => (m[1] ?? '').split('/').pop() ?? '')
 		.filter((f) => /^[\w.-]*[\w-]\.[a-z]{1,5}$/i.test(f))
 		.map((f) => f.toLowerCase())
+		.filter((f) => !SHARED_DOCS.has(f))
 }
+
+/**
+ * Docs nearly every issue touches in passing. Counting them serialised the whole
+ * queue; a markdown conflict comes back as `ai-conflicts`, off the round cap (#185).
+ */
+const SHARED_DOCS = new Set(['skill.md', 'ai-loop.md', 'readme.md', 'commands.md'])
 
 const issueOf = (head: string) => Number(head.match(/^(?:worktree-)?ai-(\d+)-/)?.[1]) || null
 

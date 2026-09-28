@@ -593,7 +593,10 @@ take direction.
 
 **Drop a candidate overlapping a file with one already picked** (#594), generated
 files like `AGENTS.md` included — a heuristic from the paths each body names. It
-is **waiting its turn, not declined**: leave `ai-ready`, post nothing.
+is **waiting its turn, not declined**: leave `ai-ready`, post nothing. Shared
+docs nearly every issue touches — `SKILL.md`, `ai-loop.md`, `README.md`,
+`commands.md` — don't count: a markdown conflict comes back as `ai-conflicts`,
+off the round cap (#185).
 
 **Declining is a visible act — comment, never just skip**, and drop `ai-ready` in
 the same breath (not `ai-blocked`, which means *an agent tried and got stuck*).
