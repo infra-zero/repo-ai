@@ -114,6 +114,8 @@ export interface LoopTickResult {
 	/** `both` — a docs-only PR: one reviewer with both lenses, posting both markers (#53). */
 	reviewsToSpawn: { pr: number; issue: number | null; arm: Arm | 'both' }[]
 	fixRounds: FixRound[]
+	/** Agents running now, from claim labels (#167). */
+	liveAgents: number
 	/** Pass 4 — free slots, and every eligible issue in queue order. */
 	slots: number
 	pickups: { number: number; title: string; body: string }[]
@@ -228,6 +230,7 @@ export function emptyTick(env: LoopEnv): LoopTickResult {
 		verdicts: [],
 		reviewsToSpawn: [],
 		fixRounds: [],
+		liveAgents: 0,
 		slots: 0,
 		pickups: [],
 		summary: '',
@@ -372,7 +375,8 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	])
 	result.releaseGated = await releaseGated(gh, ownerRepo, root)
 	// Both keys: the repo's explicit opt-in and a human gate before the registry (#142).
-	const autoMerge = (await readConfig(root)).autoMerge === true && result.releaseGated
+	const config = await readConfig(root)
+	const autoMerge = config.autoMerge === true && result.releaseGated
 
 	for (const pr of prs ?? []) {
 		const labels = new Set(pr.labels.map((l) => l.name))
@@ -573,6 +577,8 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 			!p.headRefName.startsWith('dependabot/') &&
 			p.labels.some((l) => l.name === 'merge-ready' || l.name.startsWith('ai-'))
 	)
+	result.liveAgents = liveAgents(loopPrs, wip ?? [], freed, result.stalled)
+	if (config.maxAgents !== undefined) capAgents(result, config.maxAgents)
 	result.idle =
 		errors.length === 0 &&
 		loopPrs.length === 0 &&
@@ -588,6 +594,35 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		].every((l) => l.length === 0)
 	result.summary = summarize(result, turns(result, loopPrs, wip ?? [], freed))
 	return result
+}
+
+/** Claim labels are the shared counter across Workflows (#167); reaped claims are not live. */
+export function liveAgents(
+	loopPrs: Pr[],
+	wip: { number: number }[],
+	freed: Set<number | null>,
+	stalled: ReapEntry[]
+): number {
+	const dead = new Set(stalled.filter((s) => s.pr !== null).map((s) => `${s.pr}:${s.label}`))
+	const withPr = new Set(loopPrs.map((p) => issueOf(p.headRefName)))
+	const claims = loopPrs.flatMap((p) =>
+		p.labels
+			.map((l) => l.name)
+			.filter((l) => ['ai-reviewing-code', 'ai-reviewing-sec', 'ai-fixing'].includes(l))
+			.filter((l) => !dead.has(`${p.number}:${l}`))
+	)
+	return claims.length + wip.filter((i) => !freed.has(i.number) && !withPr.has(i.number)).length
+}
+
+/** Trim new spawns so live + new stays within `maxAgents`: fixes, then reviews, then pickups (#167). */
+export function capAgents(r: LoopTickResult, maxAgents: number): void {
+	let room = Math.max(0, maxAgents - r.liveAgents)
+	// A `block` spawns nothing, so it always stays.
+	r.fixRounds = r.fixRounds.filter((f) => f.action === 'block' || room-- > 0)
+	room = Math.max(0, room)
+	r.reviewsToSpawn = r.reviewsToSpawn.slice(0, room)
+	room -= r.reviewsToSpawn.length
+	r.slots = Math.min(r.slots, room)
 }
 
 export interface Turns {

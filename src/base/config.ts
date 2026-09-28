@@ -34,6 +34,8 @@ export interface RepoAiConfig {
 	busyMinutes?: number
 	/** `/ai-loop` job cadence when idle (#158). */
 	idleMinutes?: number
+	/** Live agents across every Workflow, counted from claim labels; unset means no cap (#167). */
+	maxAgents?: number
 	source: ConfigSource
 }
 
@@ -97,6 +99,7 @@ export async function readConfig(dir: string): Promise<RepoAiConfig> {
 			budgetTokens: asAtLeast(own.budgetTokens, MIN_BUDGET_TOKENS),
 			quietStopMinutes: asAtLeast(own.quietStopMinutes, 0),
 			autoMerge: own.autoMerge === true,
+			maxAgents: asAtLeast(own.maxAgents, 1),
 			...Object.fromEntries(
 				Object.entries(LIMITS).map(([k, { min }]) => [k, asAtLeast(own[k], min)])
 			),

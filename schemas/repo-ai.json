@@ -83,6 +83,11 @@
       "minimum": 1,
       "default": 30,
       "description": "Minutes between /ai-loop cron ticks when idle, and the fallback cadence under a `loop watch` Monitor. Values below 1 are ignored."
+    },
+    "maxAgents": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Agents running at once across every Workflow, counted from claim labels: an open ai-wip issue with no PR yet, each ai-reviewing-* claim, each ai-fixing claim. `loop tick` trims fix rounds, then reviews, then pickup slots so live plus new stays at or under it. Unset means no cap. Values below 1 are ignored."
     }
   }
 }
