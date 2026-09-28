@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ciRunWarning, releaseStuckWarning } from '../../src/base/ci-runs.js'
+import { ciRunWarning, releaseFailedWarning, releaseStuckWarning } from '../../src/base/ci-runs.js'
 import type { GhExec, GhResult } from '../../src/base/gh.js'
 
 const NOW = Date.parse('2026-06-01T12:00:00Z')
@@ -188,5 +188,69 @@ describe('releaseStuckWarning (#146)', () => {
 	it('fails open when gh cannot list runs', async () => {
 		const gh: GhExec = async () => ({ ok: false, stdout: '', stderr: 'offline', code: 1 })
 		expect(await releaseStuckWarning(gh, 'acme/widget', 'main', NOW)).toBeNull()
+	})
+})
+
+describe('releaseFailedWarning (#204)', () => {
+	/** `runs`: the `workflow_runs` list. `jobs`: run id → [{name, conclusion}]. */
+	function fakeGh(
+		runs: ReturnType<typeof run>[],
+		jobs: Record<number, { name: string; conclusion: string | null }[]> = {}
+	): GhExec {
+		return async (args): Promise<GhResult> => {
+			const ok = (v: unknown) => ({ ok: true, stdout: JSON.stringify(v), stderr: '', code: 0 })
+			const path = args[1] ?? ''
+			if (path.includes('/actions/workflows/ci.yml/runs?')) return ok({ workflow_runs: runs })
+			const jobsMatch = path.match(/\/actions\/runs\/(\d+)\/jobs/)
+			if (jobsMatch) return ok({ jobs: jobs[Number(jobsMatch[1])] ?? [] })
+			return { ok: false, stdout: '', stderr: 'unexpected', code: 1 }
+		}
+	}
+
+	it('warns when the newest completed run has a failed release job', async () => {
+		const gh = fakeGh([run({ id: 9, conclusion: 'failure' })], {
+			9: [{ name: 'release', conclusion: 'failure' }],
+		})
+		const w = await releaseFailedWarning(gh, 'acme/widget', 'main')
+		expect(w).toContain('release failed')
+		expect(w).toContain('runs/9')
+	})
+
+	it('goes quiet once a newer run’s release job succeeds', async () => {
+		const gh = fakeGh(
+			[run({ id: 10, conclusion: 'success' }), run({ id: 9, conclusion: 'failure' })],
+			{
+				10: [{ name: 'release', conclusion: 'success' }],
+				9: [{ name: 'release', conclusion: 'failure' }],
+			}
+		)
+		expect(await releaseFailedWarning(gh, 'acme/widget', 'main')).toBeNull()
+	})
+
+	it('does not warn when no run has a release job at all', async () => {
+		const gh = fakeGh([run({ id: 9, conclusion: 'success' })], {
+			9: [{ name: 'ci', conclusion: 'success' }],
+		})
+		expect(await releaseFailedWarning(gh, 'acme/widget', 'main')).toBeNull()
+	})
+
+	it('fails open when gh cannot list runs', async () => {
+		const gh: GhExec = async () => ({ ok: false, stdout: '', stderr: 'offline', code: 1 })
+		expect(await releaseFailedWarning(gh, 'acme/widget', 'main')).toBeNull()
+	})
+
+	it('fails open when the jobs list is unreadable', async () => {
+		const gh: GhExec = async (args) => {
+			const path = args[1] ?? ''
+			if (path.includes('/actions/workflows/ci.yml/runs?'))
+				return {
+					ok: true,
+					stdout: JSON.stringify({ workflow_runs: [run({ id: 9, conclusion: 'failure' })] }),
+					stderr: '',
+					code: 0,
+				}
+			return { ok: false, stdout: '', stderr: 'rate limited', code: 1 }
+		}
+		expect(await releaseFailedWarning(gh, 'acme/widget', 'main')).toBeNull()
 	})
 })

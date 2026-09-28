@@ -90,7 +90,9 @@ plausibly touches a rule it states.
 Judge ${v.lens}.
 
 Post the verdict — never --approve, it errors on your own PR:
-\`gh pr review ${pr} --comment --body-file <file you Write first>\`.
+\`gh pr review ${pr} --comment --body-file <dir>/review-${pr}-${v.arm}.md\`, where <dir>
+is your scratchpad directory or \`$TMPDIR\` — Write the body there first. The
+name is per PR and arm so a concurrent reviewer never overwrites your body.
 The body MUST begin with a hidden verdict marker, then the header, then a blank
 line — every agent authenticates as the repo owner:
 

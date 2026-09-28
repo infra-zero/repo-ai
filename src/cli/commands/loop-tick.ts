@@ -3,7 +3,7 @@ import chalk from 'chalk'
 import fs from 'fs-extra'
 import { type GitExec, realGitExec } from '../../base/git.js'
 import { type GhExec, ghPaginated, realGhExec } from '../../base/gh.js'
-import { ciRunWarning, releaseStuckWarning } from '../../base/ci-runs.js'
+import { ciRunWarning, releaseFailedWarning, releaseStuckWarning } from '../../base/ci-runs.js'
 import { readConfig } from '../../base/config.js'
 import { releaseGated } from '../../base/release-gate.js'
 import { securityAlertWarning } from '../../base/security-alerts.js'
@@ -132,6 +132,8 @@ export interface LoopTickResult {
 	warnings: string[]
 	/** #146: a release run has waited on `release` environment approval for over a day. */
 	releaseStuck: boolean
+	/** #204: the newest completed run's `release` job failed — nothing published. */
+	releaseFailed: boolean
 	exitCode: 0 | 1 | 2
 }
 
@@ -239,6 +241,7 @@ export function emptyTick(env: LoopEnv): LoopTickResult {
 		staleInstall: [],
 		warnings: [],
 		releaseStuck: false,
+		releaseFailed: false,
 		exitCode: 0,
 	}
 }
@@ -285,6 +288,12 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	// #203: high/critical only — moderate/low are doctor's business, not a tick warning.
 	const securityWarning = await securityAlertWarning(gh, ownerRepo, false)
 	if (securityWarning) result.warnings.push(securityWarning)
+	// #204: same reasoning — a failed release job is silent otherwise, and nothing publishes.
+	const releaseFailedMsg = await releaseFailedWarning(gh, ownerRepo, env.defaultBranch)
+	if (releaseFailedMsg) {
+		result.warnings.push(releaseFailedMsg)
+		result.releaseFailed = true
+	}
 
 	const guard = await runLoopGuard({ ...seams, install: options.install })
 	if (guard.exitCode !== 0) {
@@ -715,6 +724,7 @@ export function summarize(r: LoopTickResult, t: Turns): string {
 		[blocked, `⚠${blocked}blocked`],
 		[ciRed, `⚠${ciRed}ci-red`],
 		[r.releaseStuck, '⚠release-stuck'],
+		[r.releaseFailed, '⚠release-failed'],
 		[t.agents, `${t.agents} agent${t.agents === 1 ? '' : 's'}`],
 		[t.ci, `${t.ci} on CI`],
 		[merge, `${merge} to merge`],

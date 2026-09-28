@@ -10,7 +10,7 @@ import {
 	checkRequiredSkills,
 	checkWorkflows,
 } from '../../base/checks.js'
-import { ciRunWarning, releaseStuckWarning } from '../../base/ci-runs.js'
+import { ciRunWarning, releaseFailedWarning, releaseStuckWarning } from '../../base/ci-runs.js'
 import { CONFIG_FILE, readConfig } from '../../base/config.js'
 import { checkConfigSchema } from '../../base/config-schema.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
@@ -35,6 +35,7 @@ export async function runDoctor(dir: string, skillsDir?: string): Promise<CheckR
 		await checkAutoMerge(dir, config.autoMerge === true),
 		await checkCiRuns(dir),
 		await checkReleaseStuck(dir),
+		await checkReleaseFailed(dir),
 		await checkSecurityAlerts(dir),
 		await checkClaudeSkills(skillsDir),
 		await checkPluginSkills(),
@@ -184,6 +185,24 @@ export async function checkReleaseStuck(
 	return warning
 		? { check, status: 'drift', detail: warning }
 		: { check, status: 'ok', detail: 'no release run stuck waiting on approval' }
+}
+
+/** Surfaces #204's symptom: the last `release` job failed and nothing published. */
+export async function checkReleaseFailed(dir: string, exec?: GhExec): Promise<CheckResult> {
+	const check = 'Release run'
+	// No .git → never spawn gh (keeps tmp-dir doctor runs offline).
+	if (!(await fs.pathExists(path.join(dir, '.git')))) {
+		return { check, status: 'ok', detail: 'skipped — not a git repository' }
+	}
+	const gh: GhExec = exec ?? ((args, stdin) => realGhExec(args, stdin, dir))
+	const [nwo, branch] = await repoAndDefaultBranch(gh)
+	if (!nwo || !branch) {
+		return { check, status: 'ok', detail: 'skipped — could not resolve the GitHub repo' }
+	}
+	const warning = await releaseFailedWarning(gh, nwo, branch)
+	return warning
+		? { check, status: 'drift', detail: warning }
+		: { check, status: 'ok', detail: 'no failed release run' }
 }
 
 /** #203: open high/critical Dependabot alerts, invisible otherwise. Moderate/low fold into the count here, not in the tick warning. */
