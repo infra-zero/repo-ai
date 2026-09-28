@@ -17,7 +17,7 @@ import { type CleanupEntry, runLoopCleanup } from './loop-cleanup.js'
 import { type LoopEnv, resolveLoopEnv } from './loop-env.js'
 import { type InstallExec, runLoopGuard } from './loop-guard.js'
 import { runLoopVerdict, type Verdict } from './loop-marker.js'
-import { labelApplications, MAX_APPLICATIONS, type ReapEntry, runLoopReap } from './loop-reap.js'
+import { labelApplications, type ReapEntry, runLoopReap } from './loop-reap.js'
 
 /**
  * `repo-tooling loop tick` — one ai-loop tick's mechanics as one work
@@ -37,8 +37,6 @@ import { labelApplications, MAX_APPLICATIONS, type ReapEntry, runLoopReap } from
  * summary leads with `⚠error`.
  */
 
-/** Issues in flight at once. */
-export const MAX_IN_FLIGHT = 6
 /** `ai-suggested` issues untouched this long are closed. */
 export const DECAY_DAYS = 30
 /**
@@ -295,7 +293,12 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	result.toClean = cleanup.worktrees.filter((w) => w.action === 'to-remove')
 	const live = guard.live
 
-	const reap = await runLoopReap({ root, gh: options.gh, now: options.now })
+	const reap = await runLoopReap({
+		root,
+		gh: options.gh,
+		now: options.now,
+		staleMinutes: env.staleMinutes,
+	})
 	result.stalled = reap.stalled
 	errors.push(...reap.errors)
 
@@ -499,7 +502,8 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 			}
 			const slug = pr.headRefName.replace(/^worktree-/, '')
 			const worktree = live.find((d) => path.basename(d) === slug) ?? null
-			const atCap = times.length >= MAX_APPLICATIONS
+			// The round-cap block fires at `maxFixRounds + 1` applications (#158).
+			const atCap = times.length > env.maxFixRounds
 			result.fixRounds.push({
 				pr: pr.number,
 				issue,
@@ -562,7 +566,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		...result.stalled.filter((s) => s.kind === 'implementer').map((s) => s.issue),
 	])
 	const inFlight = (wip ?? []).filter((i) => !freed.has(i.number)).length
-	result.slots = wip ? Math.max(0, MAX_IN_FLIGHT - inFlight) : 0
+	result.slots = wip ? Math.max(0, env.maxInFlight - inFlight) : 0
 
 	const loopPrs = (prs ?? []).filter(
 		(p) =>

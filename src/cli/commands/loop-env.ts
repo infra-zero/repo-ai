@@ -1,6 +1,11 @@
 import path from 'node:path'
 import { LOGIN } from '../../base/agent-user.js'
-import { DEFAULT_BUDGET_TOKENS, DEFAULT_QUIET_STOP_MINUTES, readConfig } from '../../base/config.js'
+import {
+	DEFAULT_BUDGET_TOKENS,
+	DEFAULT_QUIET_STOP_MINUTES,
+	limit,
+	readConfig,
+} from '../../base/config.js'
 import { resolveDefaultBranch } from '../../base/default-branch.js'
 import { type GitExec, realGitExec } from '../../base/git.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
@@ -34,6 +39,13 @@ export interface LoopEnv {
 	budgetTokens: number
 	/** `quietStopMinutes`, else {@link DEFAULT_QUIET_STOP_MINUTES}; `0` disables Pass 5's cutoff (#124). */
 	quietStopMinutes: number
+	/** The loop's limits (#158): each the configured value, else today's default (`LIMITS`). */
+	maxInFlight: number
+	maxFixRounds: number
+	maxTasksPerTick: number
+	staleMinutes: number
+	busyMinutes: number
+	idleMinutes: number
 	warnings: string[]
 }
 
@@ -114,6 +126,12 @@ export async function resolveLoopEnv(options: LoopEnvOptions = {}): Promise<Loop
 		me,
 		budgetTokens,
 		quietStopMinutes,
+		maxInFlight: limit(config, 'maxInFlight'),
+		maxFixRounds: limit(config, 'maxFixRounds'),
+		maxTasksPerTick: limit(config, 'maxTasksPerTick'),
+		staleMinutes: limit(config, 'staleMinutes'),
+		busyMinutes: limit(config, 'busyMinutes'),
+		idleMinutes: limit(config, 'idleMinutes'),
 		warnings,
 	}
 }
@@ -128,6 +146,12 @@ const VARS: [string, keyof Omit<LoopEnv, 'warnings'>][] = [
 	['ME', 'me'],
 	['BUDGET_TOKENS', 'budgetTokens'],
 	['QUIET_STOP_MINUTES', 'quietStopMinutes'],
+	['MAX_IN_FLIGHT', 'maxInFlight'],
+	['MAX_FIX_ROUNDS', 'maxFixRounds'],
+	['MAX_TASKS_PER_TICK', 'maxTasksPerTick'],
+	['STALE_MINUTES', 'staleMinutes'],
+	['BUSY_MINUTES', 'busyMinutes'],
+	['IDLE_MINUTES', 'idleMinutes'],
 ]
 
 /** `KEY='value'` lines, single-quoted so `eval "$(… loop env)"` is safe. */

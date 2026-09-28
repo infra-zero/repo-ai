@@ -100,6 +100,40 @@ describe('resolveLoopEnv', () => {
 		)
 	})
 
+	it('exports each loop limit: default, override, and invalid fallback (#158)', async () => {
+		const root = checkout(newTmpDir())
+		const limits = async () => {
+			const e = await resolveLoopEnv({ dir: root, gh: fakeGh().gh, env: {} })
+			return [
+				e.maxInFlight,
+				e.maxFixRounds,
+				e.maxTasksPerTick,
+				e.staleMinutes,
+				e.busyMinutes,
+				e.idleMinutes,
+			]
+		}
+		expect(await limits()).toEqual([6, 2, 8, 45, 10, 30])
+		fs.writeJsonSync(join(root, '.repo-ai.json'), {
+			maxInFlight: 3,
+			maxFixRounds: 0,
+			maxTasksPerTick: 4,
+			staleMinutes: 90,
+			busyMinutes: 5,
+			idleMinutes: 60,
+		})
+		expect(await limits()).toEqual([3, 0, 4, 90, 5, 60])
+		fs.writeJsonSync(join(root, '.repo-ai.json'), {
+			maxInFlight: 0,
+			maxFixRounds: -1,
+			maxTasksPerTick: '4',
+			staleMinutes: 0,
+			busyMinutes: null,
+			idleMinutes: 0,
+		})
+		expect(await limits()).toEqual([6, 2, 8, 45, 10, 30])
+	})
+
 	it('defaults QUIET_STOP_MINUTES to 120, and reads a configured 0', async () => {
 		const root = checkout(newTmpDir())
 		expect((await resolveLoopEnv({ dir: root, gh: fakeGh().gh, env: {} })).quietStopMinutes).toBe(
@@ -181,6 +215,12 @@ describe('toShell', () => {
 			me: '$(id)',
 			budgetTokens: 400_000,
 			quietStopMinutes: 120,
+			maxInFlight: 6,
+			maxFixRounds: 2,
+			maxTasksPerTick: 8,
+			staleMinutes: 45,
+			busyMinutes: 10,
+			idleMinutes: 30,
 			warnings: [],
 		})
 		expect(out).toContain(`ROOT='/a'\\''b'`)
@@ -189,5 +229,7 @@ describe('toShell', () => {
 		expect(out).toContain(`AGENT_USER=''`)
 		expect(out).toContain(`BUDGET_TOKENS='400000'`)
 		expect(out).toContain(`QUIET_STOP_MINUTES='120'`)
+		expect(out).toContain(`MAX_FIX_ROUNDS='2'`)
+		expect(out).toContain(`IDLE_MINUTES='30'`)
 	})
 })

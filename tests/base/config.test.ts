@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
-import { readConfig } from '../../src/base/config.js'
+import { LIMITS, limit, readConfig } from '../../src/base/config.js'
 import { useTmpDir } from '../helpers/tmp-dir.js'
 
 const newTmpDir = useTmpDir()
@@ -36,6 +36,22 @@ describe('readConfig', () => {
 		fs.outputJsonSync(join(dir, '.repo-ai.json'), { budgetTokens: 10 })
 		expect((await readConfig(dir)).budgetTokens).toBeUndefined()
 	})
+
+	it.each(Object.entries(LIMITS) as [keyof typeof LIMITS, { default: number; min: number }][])(
+		'%s: default, override, and invalid fallback (#158)',
+		async (key, { default: def, min }) => {
+			const dir = newTmpDir()
+			fs.outputJsonSync(join(dir, '.repo-ai.json'), {})
+			expect(limit(await readConfig(dir), key)).toBe(def)
+			expect(limit(null, key)).toBe(def)
+			fs.outputJsonSync(join(dir, '.repo-ai.json'), { [key]: min + 7 })
+			expect(limit(await readConfig(dir), key)).toBe(min + 7)
+			for (const bad of [min - 1, 'x', null, Number.NaN]) {
+				fs.outputJsonSync(join(dir, '.repo-ai.json'), { [key]: bad })
+				expect(limit(await readConfig(dir), key)).toBe(def)
+			}
+		}
+	)
 
 	it('reads quietStopMinutes, keeping 0 and ignoring a negative value', async () => {
 		const dir = newTmpDir()

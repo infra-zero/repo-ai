@@ -32,8 +32,8 @@ const FIXED = {
 	required: ['pushed', 'summary'],
 }
 
-/** #129: matches the loop's cap — the 3rd `ai-changes` is Pass 3's `action: block`, not a 3rd fixer. */
-const MAX_FIX_ROUNDS = 2
+/** #129: matches the loop's cap — the (maxFixRounds + 1)th `ai-changes` is Pass 3's `action: block`, not another fixer. #158: `args.maxFixRounds` overrides. */
+const MAX_FIX_ROUNDS = args.maxFixRounds ?? 2
 
 const REVIEWERS = [
 	{ type: 'code-reviewer', arm: 'code', pass: 'ai-ok-code', claim: 'ai-reviewing-code', lens: 'correctness, obvious bugs, and adherence to the repo\'s stated conventions' },
