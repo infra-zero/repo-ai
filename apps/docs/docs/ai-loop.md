@@ -92,10 +92,9 @@ rather than silently ignoring it. It also reports a wrong type, and a file that
 is not valid JSON.
 
 `npx @rtorcato/repo-ai fix config` adds `$schema` to an existing file. With no
-file, it creates one, copying over any `agentUser` / `requiredSkills` still
-held in the legacy `.repo-tooling.json` (`rules.aiLoop.agentUser`,
-`rules.requiredSkills`). Without `.repo-ai.json` the loop falls back to that
-legacy location, and `doctor` flags it as drift.
+file, it creates one, copying over any `agentUser` / `requiredSkills` once
+from an old `.repo-tooling.json`, which it leaves untouched. Nothing else reads
+`.repo-tooling.json`; without `.repo-ai.json`, `doctor` reports it missing.
 
 ## The one constraint
 
@@ -135,8 +134,7 @@ GH_CONFIG_DIR=~/.config/gh-bot gh pr review 42 --approve           # runs as the
 Complete the device flow in a private window logged in as the bot — your default
 browser will authorise *you* instead, leaving two profiles holding one identity.
 
-When `.repo-ai.json` declares `agentUser` (or the legacy `.repo-tooling.json`
-`rules.aiLoop.agentUser`), `loop guard` halts any tick not running as that
+When `.repo-ai.json` declares `agentUser`, `loop guard` halts any tick not running as that
 account. `npx @rtorcato/repo-ai fix ai-loop-identity`
 wires a checkout to it: it checks that `~/.config/gh-<agentUser>` (or
 `--gh-config-dir <path>`) is signed in as the agent, then merges
@@ -348,6 +346,30 @@ workspace package — into `.claude/settings.json` as
 Without it the loop still works: each worktree gets a real `pnpm install`
 instead, which costs a duplicate `node_modules` per issue.
 
+### Claude Code permissions
+
+Every tick shells out to `gh`, `git`, `pnpm` and `npx @rtorcato/repo-ai`.
+Without allow rules for them, each call prompts, or goes to the auto-mode
+classifier, which can block the tick. Add these to `permissions.allow` in
+`.claude/settings.json` (or `~/.claude/settings.json`, or
+`.claude/settings.local.json`):
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh:*)",
+      "Bash(git *)",
+      "Bash(pnpm:*)",
+      "Bash(npx @rtorcato/repo-ai *)"
+    ]
+  }
+}
+```
+
+On a repo with `agentUser` set, `doctor` reads all three files and warns once
+for each rule that is missing.
+
 ## The tick
 
 Passes run cheapest first, so a quiet repo exits fast.
@@ -420,9 +442,12 @@ These exist because the loop runs unattended against a monthly usage cap.
 /ai-loop
 ```
 
-That's the only thing to type. The loop paces itself: each tick keeps one
-recurring job in this session, firing every 10 minutes while agents or reviews
-are in flight and every 30 when idle, so a quiet repo costs two ticks an hour.
+That's the only thing to type. The loop paces itself: the first tick starts a
+`loop watch` watcher that wakes the session only when the work list changes
+(see [Wake on change](#wake-on-change) below), and each tick keeps one recurring
+job in this session as a 30-minute fallback. Without Claude Code's Monitor tool
+the job does all the pacing instead, firing every 10 minutes while agents or
+reviews are in flight and every 30 when idle, and the tick says so.
 The job ends with the session and expires after 7 days. Say "stop the loop" to
 end it sooner. Don't wrap it in `/loop`.
 
@@ -452,8 +477,9 @@ reports the same.
 or labelling an issue `ai-ready`. It reuses the running schedule rather than
 adding a second one.
 
-**Wake on change instead.** A tick is a full LLM turn, so ticking faster costs
-more tokens. `loop watch` polls without the LLM: every `pollSeconds` it computes
+<a id="wake-on-change"></a>
+**Wake on change — the default driver (#156).** A tick is a full LLM turn, so
+ticking on a timer costs tokens even when nothing changed. `loop watch` polls without the LLM: every `pollSeconds` it computes
 the tick's work list and prints one line only when the actionable part changes:
 the local time, the tick summary, then each non-empty category by PR or issue
 number. Mostly that means waking the tick for pickup and handoff — a new
@@ -469,9 +495,13 @@ inside a tick.
 
 The line never carries an issue or PR body. `--json` prints the full structured
 work list instead.
-The skill runs it through Claude Code's Monitor tool, where each line wakes the
-session for a tick, and re-arms it when the Monitor expires at 30 minutes. While
-a watcher runs, the fallback wakeup is always 30 minutes.
+`/ai-loop` starts it on the first tick through Claude Code's Monitor tool,
+where each line wakes the session for a tick, and re-arms it when the Monitor
+expires at 30 minutes. While a watcher runs the cron job is only the fallback,
+always 30 minutes, so an unchanged queue produces no ticks until then. If the
+Monitor tool is unavailable, the loop falls back to the 10/30-minute cron
+cadence and the tick report says `Monitor tool missing`. To run the watcher by
+hand:
 
 ```bash
 npx @rtorcato/repo-ai loop watch

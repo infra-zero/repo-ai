@@ -164,7 +164,7 @@ printf '%s' "$TICK" | jq '{halt, idle, summary, errors, warnings}'
 runs `loop guard` first: it repairs a main checkout gone `core.bare = true`
 (which turns every worktree commit into a whole-repo deletion), refuses a bare
 clone or linked worktree, and proves `gh` authenticates as a declared
-`rules.aiLoop.agentUser`. `halt` says which. Run **no further passes** — report
+`agentUser`. `halt` says which. Run **no further passes** — report
 via Pass 5 and stop. An identity mismatch wants `fix ai-loop-identity`.
 
 **`OWNER_REPO` comes from the working directory's remote — never from
@@ -174,7 +174,7 @@ current repo only. GitHub only — on a GitLab remote, bail in one line. **Use
 nothing, silently. Worktrees live in `WT_ROOT`, a sibling of the repo, never
 under `$ROOT/.claude/`, which most repos' tooling excludes.
 
-`AGENT_USER` (`rules.aiLoop.agentUser`, empty unless assignable) and
+`AGENT_USER` (`.repo-ai.json` `agentUser`, empty unless assignable) and
 `HUMAN_USER` (the repo owner if a user, empty on an organisation) are always
 spelled `${AGENT_USER:+--add-assignee} ${AGENT_USER:+"$AGENT_USER"}` — **flag and
 value in separate expansions**; zsh does not word-split the packed form (#624).
@@ -796,11 +796,29 @@ own next tick, so the user never types `/loop`. **Never call `ScheduleWakeup`**
 — it only works under `/loop`. Instead, keep exactly **one** session-scoped
 recurring `CronCreate` job whose prompt is `/ai-loop`:
 
-| `SUMMARY` | Cadence | `cron` | `DELAY` |
-|---|---|---|---|
-| `idle` — a new `ai-ready` issue can wait half an hour | 30 minutes | `17,47 * * * *` | `1800` |
-| anything else — agents in flight, reviews pending, a PR waiting | 10 minutes | `4,14,24,34,44,54 * * * *` | `600` |
-| anything, with a `loop watch` Monitor running — it wakes the session on change, so the job is only the fallback | 30 minutes | `17,47 * * * *` | `1800` |
+**Start the watcher first (#156).** `loop watch` is the default driver: it
+wakes the session only when the work list changes, so an unchanged queue costs
+no ticks. Unless this is a halt or a quiet stop, and no `loop watch` Monitor is
+already running in this session, start one with the **Monitor** tool (load its
+schema with `ToolSearch` `select:Monitor` if it is deferred):
+
+```
+Monitor({command: "npx @rtorcato/repo-ai loop watch --root \"$ROOT\"",
+         description: "ai-loop: work list changed", timeout_ms: 1800000})
+```
+
+Each line it prints wakes the session: run a tick. When its expiry notice
+arrives, start it again the same way — unless no `/ai-loop` job exists
+(`CronList`): then the loop has stopped, so let the watcher lapse. **If the
+Monitor tool is unavailable** (no schema, or the call is refused), run without
+it on the cron cadence below, and add one line to this pass's report:
+`Monitor tool missing: ticking on the cron cadence, not on change`.
+
+| Driver | `SUMMARY` | Cadence | `cron` | `DELAY` |
+|---|---|---|---|---|
+| a `loop watch` Monitor running (the default) — it wakes the session on change, so the job is only the fallback | anything | 30 minutes | `17,47 * * * *` | `1800` |
+| no Monitor | `idle` — a new `ai-ready` issue can wait half an hour | 30 minutes | `17,47 * * * *` | `1800` |
+| no Monitor | anything else — agents in flight, reviews pending, a PR waiting | 10 minutes | `4,14,24,34,44,54 * * * *` | `600` |
 
 **On a halt, don't create or retime the job** — skip the `CronList` below
 entirely. Every `loop guard` halt holds for the life of the session: `GH_TOKEN`
@@ -844,7 +862,9 @@ review, picked up, blocked — marking handoffs carrying `ai-notes`, and any
 `.errors` and `.warnings` (a stale installed skill or workflow names `fix
 claude-skills` — say it, never run it). Then print `$DIGEST`, unless `$SUGGESTED` is empty or equals
 `$PREV_SUGGESTED`. **End with exactly one line saying what happens next:**
-`Next tick: every 10m — say "stop the loop" to end it` (or `every 30m`). On a
+`Next tick: on change, or every 30m — say "stop the loop" to end it` with a
+watcher running; without one, `Next tick: every 10m — say "stop the loop" to
+end it` (or `every 30m`). On a
 halt, name the fix instead: `Next tick: none — relaunch as <agentUser>, then
 /ai-loop` for an identity mismatch, or `Next tick: none — run /ai-loop from the
 main checkout` for a bare clone or linked worktree. After a quiet stop:
@@ -859,7 +879,9 @@ main checkout` for a bare clone or linked worktree. After a quiet stop:
 ```
 
 That is the whole entry point, and the only thing to type. The first tick
-implements the `ai-ready` queue and schedules the rest itself (Pass 5): every
+implements the `ai-ready` queue and schedules the rest itself (Pass 5): it
+starts a `loop watch` Monitor that wakes the session on change, with a
+30-minute cron job as the fallback. Without the Monitor tool it ticks every
 10 minutes while work is in flight, every 30 when idle. The ticks after it
 carry the PRs through review, fix rounds and cleanup. Type `/ai-loop` again any
 time to tick now — say after merging a PR — without adding a second schedule.
@@ -870,8 +892,8 @@ segment (`repo-ai fix statusline`) shows it: `🤖 1 agent · next 9m` while the
 is running, and nothing at all once the last tick is over 35 minutes old.
 
 **Wake on change, not on a timer.** A tick is a full LLM turn; a poll needs no
-LLM. Run the watcher through the **Monitor** tool, where each stdout line wakes
-the session:
+LLM. Pass 5 runs the watcher through the **Monitor** tool, where each stdout
+line wakes the session:
 
 ```bash
 npx @rtorcato/repo-ai loop watch --root "$ROOT"

@@ -58,17 +58,17 @@ describe('resolveLoopEnv', () => {
 		expect(env).toMatchObject({ ownerRepo: 'acme/widget', humanUser: 'acme', me: 'me-bot' })
 	})
 
-	it('reads rules.aiLoop.agentUser and keeps it when assignable', async () => {
+	it('reads agentUser and keeps it when assignable', async () => {
 		const root = checkout(newTmpDir())
-		fs.writeJsonSync(join(root, '.repo-tooling.json'), { rules: { aiLoop: { agentUser: 'bot' } } })
+		fs.writeJsonSync(join(root, '.repo-ai.json'), { agentUser: 'bot' })
 		const env = await resolveLoopEnv({ dir: root, gh: fakeGh({ assignable: ['bot'] }).gh, env: {} })
 		expect(env.agentUser).toBe('bot')
 		expect(env.warnings).toEqual([])
 	})
 
-	it('lets AI_LOOP_AGENT override the lockfile', async () => {
+	it('lets AI_LOOP_AGENT override the config', async () => {
 		const root = checkout(newTmpDir())
-		fs.writeJsonSync(join(root, '.repo-tooling.json'), { aiLoop: { agentUser: 'bot' } })
+		fs.writeJsonSync(join(root, '.repo-ai.json'), { agentUser: 'bot' })
 		const { gh } = fakeGh({ assignable: ['bot', 'other'] })
 		const env = await resolveLoopEnv({ dir: root, gh, env: { AI_LOOP_AGENT: 'other' } })
 		expect(env.agentUser).toBe('other')
