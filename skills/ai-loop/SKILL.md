@@ -306,7 +306,7 @@ removes those worktrees, then runs `loop guard --removed`. A non-zero exit halts
 the tick; a failed removal lands in `.errors` and the next tick retries it:
 
 ```bash
-APPLY=$(npx @rtorcato/repo-ai loop apply --root "$ROOT" --json)
+APPLY=$(npx @rtorcato/repo-ai loop apply --root <root> --json)
 printf '%s' "$APPLY" | jq '{removed: [.removed[].issue], rebuild, halt, errors}'
 ```
 
