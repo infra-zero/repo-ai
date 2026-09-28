@@ -226,6 +226,16 @@ describe('ai-loop-pickup', () => {
 		})
 	})
 
+	it('gives each reviewer arm its own body file, so concurrent reviews never collide (#206)', async () => {
+		const { prompts } = await run('ai-loop-pickup', one, (label) =>
+			label === 'impl:#1' ? { pr: 10 } : { passed: true }
+		)
+		expect(prompts.find((p) => p.includes(':code:'))).toContain(
+			'--body-file <dir>/review-10-code.md'
+		)
+		expect(prompts.find((p) => p.includes(':sec:'))).toContain('--body-file <dir>/review-10-sec.md')
+	})
+
 	const one = {
 		repo: 'o/r',
 		agentUser: '',
