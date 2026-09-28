@@ -3,7 +3,7 @@ import chalk from 'chalk'
 import fs from 'fs-extra'
 import { type GitExec, realGitExec } from '../../base/git.js'
 import { type GhExec, ghPaginated, realGhExec } from '../../base/gh.js'
-import { ciRunWarning } from '../../base/ci-runs.js'
+import { ciRunWarning, releaseStuckWarning } from '../../base/ci-runs.js'
 import { readConfig } from '../../base/config.js'
 import { releaseGated } from '../../base/release-gate.js'
 import {
@@ -130,6 +130,8 @@ export interface LoopTickResult {
 	staleInstall: string[]
 	/** Worth saying, never a reason to leave idle or halt. */
 	warnings: string[]
+	/** #146: a release run has waited on `release` environment approval for over a day. */
+	releaseStuck: boolean
 	exitCode: 0 | 1 | 2
 }
 
@@ -236,6 +238,7 @@ function empty(env: LoopEnv): LoopTickResult {
 		errors: [],
 		staleInstall: [],
 		warnings: [],
+		releaseStuck: false,
 		exitCode: 0,
 	}
 }
@@ -273,6 +276,12 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	// #153: worth surfacing even on a halting tick — decoupled from worktree state.
 	const ciWarning = await ciRunWarning(gh, ownerRepo, now)
 	if (ciWarning) result.warnings.push(ciWarning)
+	// #146: same reasoning — a stuck approval pins main's push concurrency group.
+	const releaseWarning = await releaseStuckWarning(gh, ownerRepo, now)
+	if (releaseWarning) {
+		result.warnings.push(releaseWarning)
+		result.releaseStuck = true
+	}
 
 	const guard = await runLoopGuard({ ...seams, install: options.install })
 	if (guard.exitCode !== 0) {
@@ -677,6 +686,7 @@ export function summarize(r: LoopTickResult, t: Turns): string {
 		[r.errors.length > 0, '⚠error'],
 		[blocked, `⚠${blocked}blocked`],
 		[ciRed, `⚠${ciRed}ci-red`],
+		[r.releaseStuck, '⚠release-stuck'],
 		[r.rebuild === 'deferred' || r.rebuild === 'rebuild-failed', '⚠rebuild'],
 		[t.agents, `${t.agents} agent${t.agents === 1 ? '' : 's'}`],
 		[t.ci, `${t.ci} on CI`],
