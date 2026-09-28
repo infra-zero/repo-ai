@@ -1,7 +1,7 @@
 import path from 'node:path'
 import chalk from 'chalk'
 import fs from 'fs-extra'
-import { type GhExec, realGhExec } from './gh.js'
+import { type GhExec, ghPaginated, realGhExec } from './gh.js'
 import type { CheckResult } from './types.js'
 
 /**
@@ -97,25 +97,24 @@ const skip = (reason: string): CheckResult => ({
  */
 const normalizeColor = (c: string) => c.trim().replace(/^#/, '').toLowerCase()
 
+// `gh label list` caps at `--limit`, dropping labels past it on a repo with a
+// large label set (#163) — `gh api ... --paginate` has no such cap.
 async function readLabels(gh: GhExec): Promise<Map<string, GhLabel> | null> {
-	const r = await gh(['label', 'list', '--json', 'name,color,description', '--limit', '200'])
-	if (!r.ok) return null
-	try {
-		const parsed = JSON.parse(r.stdout)
-		if (!Array.isArray(parsed)) return null
-		const byName = new Map<string, GhLabel>()
-		for (const l of parsed) {
-			if (typeof l?.name !== 'string') continue
-			byName.set(l.name, {
-				name: l.name,
-				color: typeof l.color === 'string' ? l.color : '',
-				description: typeof l.description === 'string' ? l.description : '',
-			})
-		}
-		return byName
-	} catch {
-		return null
+	const parsed = await ghPaginated<{ name?: unknown; color?: unknown; description?: unknown }>(
+		gh,
+		'repos/{owner}/{repo}/labels?per_page=100'
+	)
+	if (!parsed) return null
+	const byName = new Map<string, GhLabel>()
+	for (const l of parsed) {
+		if (typeof l?.name !== 'string') continue
+		byName.set(l.name, {
+			name: l.name,
+			color: typeof l.color === 'string' ? l.color : '',
+			description: typeof l.description === 'string' ? l.description : '',
+		})
 	}
+	return byName
 }
 
 interface LabelDeltas {

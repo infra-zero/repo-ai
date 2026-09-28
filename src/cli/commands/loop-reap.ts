@@ -70,8 +70,19 @@ interface Pr {
 	labels: { name: string }[]
 }
 
-// ponytail: newest 200 PRs; an ai-wip issue's PR older than that reads as "no PR".
-const PR_WINDOW = 200
+/**
+ * Shared `--limit` ceiling for the reads below. `gh issue list`/`gh pr list`
+ * have no unbounded mode, so these stay windows rather than true complete
+ * sets (#163) — but "recent" really is the intent for the PR list:
+ * implementer-stall detection only needs an ai-wip issue's own PR (opened
+ * the same tick it was claimed, and MAX_IN_FLIGHT caps how many are ever in
+ * flight at once), and the orphan check only needs currently-open PRs, which
+ * for this loop's scale never approaches this ceiling either. Raised well
+ * past the old 200 anyway, for headroom on a repo with heavy non-loop PR
+ * traffic too — and the ai-wip issue list is a genuine complete set, just
+ * one MAX_IN_FLIGHT already keeps small.
+ */
+const LIST_CEILING = 1000
 
 /** `ai-<N>-slug`, or the legacy `worktree-ai-<N>-slug`. */
 const issueOf = (name: string) => Number(name.match(/^(?:worktree-)?ai-(\d+)-/)?.[1]) || null
@@ -140,6 +151,8 @@ export async function runLoopReap(options: LoopReapOptions = {}): Promise<LoopRe
 		return minutes >= STALE_MINUTES ? { minutes, applications: times?.length ?? 0 } : null
 	}
 
+	// Every ai-wip issue, not a page of them — MAX_IN_FLIGHT keeps this small
+	// in steady state, but the read itself is a complete set (#163).
 	const wip = await list<{ number: number }>([
 		'issue',
 		'list',
@@ -148,7 +161,7 @@ export async function runLoopReap(options: LoopReapOptions = {}): Promise<LoopRe
 		'--state',
 		'open',
 		'--limit',
-		'100',
+		String(LIST_CEILING),
 		'--json',
 		'number',
 	])
@@ -158,7 +171,7 @@ export async function runLoopReap(options: LoopReapOptions = {}): Promise<LoopRe
 		'--state',
 		'all',
 		'--limit',
-		String(PR_WINDOW),
+		String(LIST_CEILING),
 		'--json',
 		'number,state,headRefName,labels',
 	])
