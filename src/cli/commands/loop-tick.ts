@@ -2,7 +2,7 @@ import path from 'node:path'
 import chalk from 'chalk'
 import fs from 'fs-extra'
 import { type GitExec, realGitExec } from '../../base/git.js'
-import { type GhExec, realGhExec } from '../../base/gh.js'
+import { type GhExec, ghPaginated, realGhExec } from '../../base/gh.js'
 import { readConfig } from '../../base/config.js'
 import { releaseGated } from '../../base/release-gate.js'
 import {
@@ -40,6 +40,13 @@ import { labelApplications, MAX_APPLICATIONS, type ReapEntry, runLoopReap } from
 export const MAX_IN_FLIGHT = 6
 /** `ai-suggested` issues untouched this long are closed. */
 export const DECAY_DAYS = 30
+/**
+ * `gh issue list`/`gh pr list` have no unbounded mode — `--limit` is the only
+ * knob, but gh already pages internally to satisfy it (#163). These reads are
+ * each a complete set (every open loop PR, every ai-wip issue, …), so the
+ * ceiling is sized to never realistically bind rather than to bound cost.
+ */
+const LIST_CEILING = '1000'
 
 const TRUSTED = new Set(['OWNER', 'MEMBER', 'COLLABORATOR'])
 /** Merge states that name something to fix; any other non-CLEAN state waits. */
@@ -313,7 +320,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		'--state',
 		'closed',
 		'--limit',
-		'100',
+		LIST_CEILING,
 		'--json',
 		'number',
 	])
@@ -337,7 +344,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		'--state',
 		'open',
 		'--limit',
-		'100',
+		LIST_CEILING,
 		'--json',
 		'number,headRefName,labels,autoMergeRequest,author,body,statusCheckRollup',
 	])
@@ -349,7 +356,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		'--state',
 		'open',
 		'--limit',
-		'100',
+		LIST_CEILING,
 		'--json',
 		'number,body',
 	])
@@ -500,7 +507,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 			'--state',
 			'open',
 			'--limit',
-			'100',
+			LIST_CEILING,
 			'--json',
 			'number,updatedAt,labels',
 		]
@@ -512,11 +519,13 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		.filter((i) => Date.parse(i.updatedAt) < cutoff)
 		.map((i) => i.number)
 
-	// ponytail: first 100 ai-ready issues; paginate if a queue ever outgrows that.
-	const queue = await json<RestIssue[]>([
-		'api',
-		`repos/${ownerRepo}/issues?labels=ai-ready&state=open&per_page=100`,
-	])
+	// The whole ai-ready queue, not a page of it (#163) — a capped read would
+	// silently starve issues past the cap every tick.
+	const queue = await ghPaginated<RestIssue>(
+		gh,
+		`repos/${ownerRepo}/issues?labels=ai-ready&state=open&per_page=100`
+	)
+	if (queue === null) errors.push(`gh api repos/${ownerRepo}/issues failed`)
 	const isBug = (i: RestIssue) => i.labels.some((l) => l.name === 'bug')
 	// A candidate sharing a file with an in-flight issue waits its turn (#120).
 	const busy = new Set((wip ?? []).flatMap((i) => namedFiles(i.body ?? '')))

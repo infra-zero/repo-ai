@@ -68,6 +68,8 @@ interface World {
 	closedWip?: number[]
 	suggested?: { number: number; updatedAt: string; labels: { name: string }[] }[]
 	queue?: unknown[]
+	/** Overrides `queue`, spread across more than one `--slurp` page. */
+	queuePages?: unknown[][]
 	merge?: Record<number, string>
 	failing?: number[]
 	/** PRs whose required checks are still running. */
@@ -102,7 +104,7 @@ function fakeGh(w: World): GhExec {
 						: [],
 				})
 			if (b === 'repos/acme/widget/assignees/agent-bot') return ok('')
-			if (b?.startsWith('repos/acme/widget/issues?')) return ok(w.queue ?? [])
+			if (b?.startsWith('repos/acme/widget/issues?')) return ok(w.queuePages ?? [w.queue ?? []])
 			const timeline = b?.match(/issues\/(\d+)\/timeline/)
 			if (timeline) {
 				const n = Number(timeline[1])
@@ -352,6 +354,24 @@ describe('runLoopTick', () => {
 			}),
 		})
 		expect(r.pickups.map((p) => p.number)).toEqual([51, 53, 50, 52])
+	})
+
+	it('reads the whole ai-ready queue across more than one page (#163)', async () => {
+		const root = checkout(newTmpDir())
+		const issue = (number: number) => ({
+			number,
+			title: `#${number}`,
+			body: '',
+			labels: [],
+			author_association: 'OWNER',
+		})
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({ queuePages: [[issue(60), issue(61)], [issue(62)]] }),
+		})
+		expect(r.pickups.map((p) => p.number)).toEqual([60, 61, 62])
 	})
 
 	it('drops a candidate naming a file an ai-wip issue already names (#120)', async () => {
