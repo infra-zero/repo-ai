@@ -276,7 +276,7 @@ describe('runLoopTick', () => {
 		expect(r.pickups.map((p) => p.number)).toEqual([40])
 		expect(r.slots).toBe(3)
 		expect(r.idle).toBe(false)
-		expect(r.summary).toBe('⚠1blocked·⚠1ci-red·4wip·6rev·1ready')
+		expect(r.summary).toBe('⚠1blocked·⚠1ci-red·5 agents·1 on CI·1 to merge')
 	})
 
 	describe('autoMerge needs the opt-in and the release gate (#142)', () => {
@@ -521,7 +521,26 @@ describe('runLoopTick', () => {
 			{ pr: 22, issue: 3, arm: 'code' },
 			{ pr: 22, issue: 3, arm: 'sec' },
 		])
-		expect(r.summary).toBe('3wip·3rev·1saved')
+		expect(r.summary).toBe('3 agents·1 saved')
+	})
+
+	it('says agents are idle when every PR waits on the human or CI (#181)', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({
+				wip: [1, 2, 3],
+				prs: [
+					pr(30, 'ai-1-handed', ['merge-ready']),
+					pr(31, 'ai-2-passed', ['ai-review', 'ai-ok-code', 'ai-ok-sec']),
+					pr(32, 'ai-3-behind', ['merge-ready']),
+				],
+				merge: { 30: 'CLEAN', 31: 'CLEAN', 32: 'BEHIND' },
+			}),
+		})
+		expect(r.summary).toBe('agents idle·1 on CI·2 to merge')
 	})
 })
 
