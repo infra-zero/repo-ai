@@ -401,6 +401,18 @@ Three details worth knowing because they fail *silently* when got wrong:
 - **Pass 2 confirms the squash landed on `main`** before removing anything. A
   squash-merged branch always looks like it has unmerged commits, which is
   indistinguishable from work that was never merged at all.
+- **A stale `release` approval blocks every later `main` run.** GitHub's push
+  concurrency group on `main` holds only one pending run at a time. A
+  `release` job sitting on the `release` environment's approval pins that
+  slot, so every merge behind it queues and then gets cancelled with zero
+  jobs the moment a newer one lands — cancelled, not failed, so nothing
+  reports red. **Fix it by cancelling the stale run, not approving it**:
+  approving releases whatever commit was at `main`'s tip when that run
+  started, and if `main` has moved on since, semantic-release's "is behind
+  the remote one" guard makes it a silent no-op that publishes nothing.
+  `loop tick` and `doctor` warn (`⚠release-stuck`) once a run has sat
+  `waiting` for over a day; the loop only reports it, never approves or
+  cancels a deployment itself.
 
 **The merge ripple.** Under strict required checks, every merge makes the other
 passed PRs `BEHIND`. Pass 1 updates each branch rather than spending a fixer on
