@@ -71,7 +71,7 @@ Read `{halt, idle, summary, errors, warnings}` first. Commands start with a plai
 
 ## Pass 1 — hand over
 
-Triage the pickups first (Pass 4), then run `loop apply` **once** — never repeat its edits by hand. It disarms early auto-merges, hands passed `CLEAN` PRs to `<humanUser>` as `merge-ready` (keeping `ai-notes`), updates `BEHIND` branches, gives a `ci-red` PR whose failing run is on its first attempt one free `gh run rerun --failed` instead of sending it back (`.rerunFailed`, #202), sends back `ci-red`/`BLOCKED` as `ai-changes` (a rerun that fails too counts as `ci-red`) and `DIRTY` as `ai-conflicts`, merges only an opted-in `.autoMerge` handoff, does Pass 2's cleanup, and takes Pass 3's and Pass 4's claims. A non-zero exit halts the tick; a failed edit lands in `.errors` for the next tick.
+Triage the pickups first (Pass 4), then run `loop apply` **once** — never repeat its edits by hand. It disarms early auto-merges, hands passed `CLEAN` PRs to `<humanUser>` as `merge-ready` (keeping `ai-notes`), updates `BEHIND` branches, gives a `ci-red` PR whose failing runs are all on their first attempt one free `gh run rerun --failed` instead of sending it back (`.rerunFailed`, #202), sends back `ci-red`/`BLOCKED` as `ai-changes` (a rerun that fails too counts as `ci-red`) and `DIRTY` as `ai-conflicts`, merges only an opted-in `.autoMerge` handoff, does Pass 2's cleanup, and takes Pass 3's and Pass 4's claims. A non-zero exit halts the tick; a failed edit lands in `.errors` for the next tick.
 
 ```bash
 APPLY=$(npx @rtorcato/repo-ai loop apply --root <root> --json)

@@ -76,7 +76,7 @@ interface World {
 	merge?: Record<number, string>
 	failing?: number[]
 	/** A failing PR's check `link` names this workflow run id, instead of the default unparseable `'l'`. */
-	runIds?: Record<number, number>
+	runIds?: Record<number, number | number[]>
 	/** That run id's `run_attempt`, from `repos/…/actions/runs/<id>` (#202). */
 	runAttempts?: Record<number, number>
 	/** PRs whose required checks are still running. */
@@ -193,13 +193,19 @@ function fakeGh(w: World): GhExec {
 			const failing = w.failing?.includes(n)
 			const pending = w.pending?.includes(n)
 			const unreported = w.unreported?.includes(n)
-			const runId = w.runIds?.[n]
-			const failLink = runId ? `https://github.com/acme/widget/actions/runs/${runId}/job/1` : 'l'
+			// One failing check per run id, each from its own workflow run (#211).
+			const runs = [w.runIds?.[n]].flat()
+			const failed = runs.map((id, i) => ({
+				name: i ? `test${i}` : 'test',
+				state: 'FAILURE',
+				bucket: 'fail',
+				link: id ? `https://github.com/acme/widget/actions/runs/${id}/job/1` : 'l',
+			}))
 			return {
 				ok: !failing && !pending && !unreported,
 				stdout: JSON.stringify(
 					failing
-						? [{ name: 'test', state: 'FAILURE', bucket: 'fail', link: failLink }]
+						? failed
 						: pending
 							? [{ name: 'test', state: 'IN_PROGRESS', bucket: 'pending', link: 'l' }]
 							: unreported
@@ -706,7 +712,7 @@ describe('runLoopTick', () => {
 			}),
 		})
 		expect(r.sendBacks).toEqual([])
-		expect(r.rerunFailed).toEqual([{ pr: 10, issue: 1, runId: 555 }])
+		expect(r.rerunFailed).toEqual([{ pr: 10, issue: 1, runIds: [555] }])
 		expect(r.summary).toContain('1 on CI')
 		expect(r.summary).not.toContain('ci-red')
 	})
@@ -752,8 +758,45 @@ describe('runLoopTick', () => {
 				runAttempts: { 555: 2, 777: 1 },
 			}),
 		})
-		expect(r.rerunFailed).toEqual([{ pr: 10, issue: 1, runId: 777 }])
+		expect(r.rerunFailed).toEqual([{ pr: 10, issue: 1, runIds: [777] }])
 		expect(r.sendBacks).toEqual([])
+	})
+
+	it('reruns every failing run when two checks from different runs fail on attempt 1 (#211)', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({
+				wip: [1],
+				prs: [pr(10, 'ai-1-two-runs', ['ai-review'])],
+				failing: [10],
+				runIds: { 10: [555, 666] },
+				runAttempts: { 555: 1, 666: 1 },
+			}),
+		})
+		expect(r.sendBacks).toEqual([])
+		expect(r.rerunFailed).toEqual([{ pr: 10, issue: 1, runIds: [555, 666] }])
+	})
+
+	it('sends back when any failing run has already been retried, even if another is on attempt 1 (#211)', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({
+				wip: [1],
+				prs: [pr(10, 'ai-1-mixed', ['ai-review'])],
+				failing: [10],
+				runIds: { 10: [555, 666] },
+				runAttempts: { 555: 1, 666: 2 },
+			}),
+		})
+		expect(r.rerunFailed).toEqual([])
+		expect(r.sendBacks.map((s) => s.reason)).toEqual(['ci-red'])
+		expect(r.sendBacks[0]?.failing).toHaveLength(2)
 	})
 
 	it('starts a fixer for ai-conflicts without it costing a fix round (#176)', async () => {

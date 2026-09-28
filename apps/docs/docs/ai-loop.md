@@ -437,8 +437,9 @@ reports each in `.applied[]`, and returns the comments still owed in `.comments[
 - **Update the branch** — `.updateBranches[]`: a passed `BEHIND` PR gets
   `gh pr update-branch`, keeping its reviews; a failed update is sent back as
   `ai-conflicts`. A PR waiting only on running checks appears in no list.
-- **Rerun** — `.rerunFailed[]`: a `ci-red` PR whose failing run is still on its
-  first attempt gets `gh run rerun <runId> --failed` instead of a send-back — a
+- **Rerun** — `.rerunFailed[]`: a `ci-red` PR whose failing runs are all still on
+  their first attempt gets `gh run rerun <runId> --failed` for each of `.runIds`
+  instead of a send-back; if any one has already been retried, it is sent back (#211) — a
   flaky test costs neither a fix round nor an agent. A second failure (attempt
   ≥ 2) is a normal `ci-red` send-back; a new commit starts a fresh run at
   attempt 1, so nothing needs to remember the first try (#202).
