@@ -9,7 +9,7 @@ The **ai-loop** pipeline: a label-driven loop that takes an `ai-ready` GitHub is
 
 This package holds the moving parts: the Claude Code skills, the `loop` commands they call, and a `doctor`/`fix` pair for the loop's setup. It was split out of [`@rtorcato/repo-tooling`](https://github.com/rtorcato/repo-tooling) so the tooling can be used without the loop.
 
-See [the docs site](https://rtorcato.github.io/repo-ai/docs/ai-loop) for how the pipeline works.
+New here? [Getting started](https://rtorcato.github.io/repo-ai/docs/getting-started) is the one-page walkthrough from zero to a first handed-over PR. See [the docs site](https://rtorcato.github.io/repo-ai/docs/ai-loop) for how the pipeline works.
 
 ## Requirements
 

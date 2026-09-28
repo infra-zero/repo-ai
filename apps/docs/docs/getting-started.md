@@ -1,0 +1,179 @@
+---
+title: Getting started
+description: Zero to a first handed-over PR — the bot account, config, Claude Code allow rules, repo prerequisites, and labels, in the order you actually need them.
+---
+
+# Getting started
+
+Everything below gets a new repo from nothing to a first PR the loop has
+implemented, reviewed and handed to you to merge. It's the practical
+walkthrough; [The AI Loop](./ai-loop.md) is the reference for how the pipeline
+itself works, and [Risks and responsibilities](./risks.md) is what you're
+accepting by running it.
+
+:::warning
+
+**Costs and liability.** repo-ai runs AI agents unattended, and they spend your
+Anthropic credits or plan limits and your GitHub Actions minutes. Read the full
+[Risks and responsibilities](./risks.md) before continuing.
+
+:::
+
+## 0. Prerequisites
+
+- **Node ≥ 22** and **`gh`**, authenticated (`gh auth status`).
+- **Claude Code**, since the loop is a skill it drives.
+- A GitHub repo you can push to and label.
+
+## 1. Give the loop its own GitHub identity (recommended)
+
+By default every agent runs as **your own `gh` login** — nothing to set up,
+but every comment, branch and PR *is* you, and GitHub refuses
+`gh pr review --approve` on your own PR (see
+[the one constraint](./ai-loop.md#the-one-constraint)). A second identity
+fixes the attribution problem; it does not remove the human-merges rule below.
+
+Simplest path, per session:
+
+```bash
+gh auth login --web --scopes repo   # once, signed in as the bot account
+GH_TOKEN=$(gh auth token --user <bot-login>) claude   # this session only
+```
+
+Everything that session pushes, comments or labels runs as `<bot-login>`;
+every other terminal stays you. For a checkout dedicated to the loop, wire it
+permanently instead:
+
+```bash
+npx @rtorcato/repo-ai fix ai-loop-identity
+```
+
+Either way, invite the bot as a collaborator with **push** access first — read
+access can't push branches or apply labels — and see
+[Running reviewers as a second identity](./ai-loop.md#running-reviewers-as-a-second-identity)
+for what this does and doesn't buy you.
+
+## 2. Configure `.repo-ai.json`
+
+At the repo root:
+
+```json
+{
+  "$schema": "https://rtorcato.github.io/repo-ai/repo-ai.json",
+  "agentUser": "<bot-login>"
+}
+```
+
+`agentUser` makes `loop guard` halt any tick not running as that account —
+the safety net for step 1. `npx @rtorcato/repo-ai fix config` creates or
+updates the file for you. See the [full key table](./ai-loop.md#configuration)
+for `requiredSkills`, `pollSeconds`, `budgetTokens`, `quietStopMinutes` and
+`autoMerge`; the defaults are fine to start.
+
+## 3. Let Claude run unattended
+
+The loop makes many `gh`/`git`/`npx @rtorcato/repo-ai` calls per tick. Without
+an allow rule, Claude Code prompts you to approve each one — which defeats an
+unattended loop. Add a project-level `.claude/settings.json` (not
+`settings.local.json`, which is per-checkout and gitignored) with the commands
+the loop needs:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh:*)",
+      "Bash(git:*)",
+      "Bash(npx @rtorcato/repo-ai:*)"
+    ]
+  }
+}
+```
+
+Already have prompts piling up from other tools? The `fewer-permission-prompts`
+skill scans your transcripts and writes a prioritized allowlist instead of you
+guessing at rules.
+
+## 4. Meet the repo prerequisites
+
+```bash
+npx @rtorcato/repo-tooling fix github-settings --yes
+```
+
+This sets squash as the *only* merge method, auto-merge, delete-branch-on-merge,
+and `required_pull_request_reviews: null` — required review deadlocks
+auto-merge. You also need **at least one required status check**: that's the
+gate doing the real work once merges aren't reviewed by GitHub itself. Verify:
+
+```bash
+gh api repos/$OWNER_REPO --jq '{allow_squash_merge, allow_merge_commit, allow_rebase_merge, allow_auto_merge, delete_branch_on_merge}'
+gh api repos/$OWNER_REPO/branches/main/protection \
+  --jq '{contexts: .required_status_checks.contexts, reviews: .required_pull_request_reviews}'
+```
+
+**The `release` environment** is separate and only matters if you want
+`autoMerge: true` (step 2) to merge a fully-passed issue PR unattended — every
+other setup always hands issue PRs to you at Pass 1. If you want it, add a
+`release` environment in the repo's Settings → Environments with
+`required_reviewers` set, so a human still stands between the merge and
+`npm publish`. Skip this and every PR waits for you regardless — the safer
+default while you're starting out.
+
+See [Repo prerequisites](./ai-loop.md#repo-prerequisites) for why each setting
+matters.
+
+## 5. Install the skills and labels
+
+```bash
+npx @rtorcato/repo-ai setup
+```
+
+One guided run: writes `.repo-ai.json` (step 2), installs the `ai-loop`,
+`ai-issue` and `ai-loop-status` skills, creates the loop's labels
+(`ai-ready`, `ai-wip`, `ai-review`, …) with `gh label create`, runs
+`fix ai-loop-identity` if you give it an agent user, and installs the
+statusline segment — asking before each step, then running `doctor` to
+confirm. `--yes` skips the prompts. See [Commands](./commands.md#setup) for
+each piece run alone.
+
+## 6. Run it on one trivial issue
+
+File something small enough to sanity-check by eye — a typo fix, a missing
+test — labelled for the loop:
+
+```bash
+/ai-issue
+```
+
+Then, in Claude Code, in the repo:
+
+```bash
+/ai-loop
+```
+
+That's the whole entry point — never `/loop /ai-loop`. The first tick claims
+the issue, implements it in a git worktree, opens a PR, and has two agents
+review it. It then keeps itself going on a schedule (every 10 minutes while
+work is in flight, every 30 when idle) so you don't have to retype it. Watch
+the first few ticks before trusting it on a real queue — see
+[the tick](./ai-loop.md#the-tick) for what each pass does.
+
+You'll end up with a PR labelled `merge-ready` (plus `ai-notes` if a reviewer
+left something to read first), assigned to you. **The loop never merges an
+issue PR** — read the diff and merge it yourself.
+
+## 7. Stopping it
+
+- Say **"stop the loop"** — it deletes its recurring job.
+- Or just stop labelling issues `ai-ready`; an idle loop spawns no agents and
+  [stops itself](./ai-loop.md#driving-it) after a quiet period (default 120
+  minutes) either way.
+- Closing the Claude Code session stops it immediately — ticks only fire while
+  a session is running.
+
+## What's next
+
+- [The AI Loop](./ai-loop.md) — the label state machine, the tick's five
+  passes, and the limits it runs against.
+- [Commands](./commands.md) — every `loop`/`doctor`/`fix` command.
+- [Risks and responsibilities](./risks.md) — what running it costs and exposes.
