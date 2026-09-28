@@ -5,6 +5,7 @@ import {
 	checkAutoMerge,
 	checkCiRuns,
 	checkHumanUser,
+	checkReleaseStuck,
 	runDoctor,
 } from '../../../src/cli/commands/doctor.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
@@ -157,6 +158,54 @@ describe('checkCiRuns (#153)', () => {
 		const dir = newTmpDir()
 		fs.ensureDirSync(join(dir, '.git'))
 		const r = await checkCiRuns(dir, async () => ({ ok: false, stdout: '', stderr: '', code: 1 }))
+		expect(r.status).toBe('ok')
+	})
+})
+
+describe('checkReleaseStuck (#146)', () => {
+	it('skips outside a git repository', async () => {
+		const r = await checkReleaseStuck(newTmpDir())
+		expect(r).toMatchObject({ status: 'ok', detail: expect.stringMatching(/not a git repository/) })
+	})
+
+	it('flags a release run waiting on approval past 24h', async () => {
+		const dir = newTmpDir()
+		fs.ensureDirSync(join(dir, '.git'))
+		const r = await checkReleaseStuck(dir, async (args) => {
+			if (args[0] === 'repo') return { ok: true, stdout: 'acme/widget\n', stderr: '', code: 0 }
+			if (args[1]?.includes('/actions/runs?'))
+				return {
+					ok: true,
+					stdout: JSON.stringify({
+						workflow_runs: [
+							{
+								id: 9,
+								status: 'waiting',
+								conclusion: null,
+								html_url: 'https://github.com/acme/widget/actions/runs/9',
+								created_at: new Date(Date.now() - 25 * 3_600_000).toISOString(),
+								path: '.github/workflows/ci.yml',
+							},
+						],
+					}),
+					stderr: '',
+					code: 0,
+				}
+			return { ok: false, stdout: '', stderr: 'unexpected', code: 1 }
+		})
+		expect(r.status).toBe('drift')
+		expect(r.detail).toContain('runs/9')
+	})
+
+	it('is ok when the repo cannot be resolved', async () => {
+		const dir = newTmpDir()
+		fs.ensureDirSync(join(dir, '.git'))
+		const r = await checkReleaseStuck(dir, async () => ({
+			ok: false,
+			stdout: '',
+			stderr: '',
+			code: 1,
+		}))
 		expect(r.status).toBe('ok')
 	})
 })

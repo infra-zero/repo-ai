@@ -88,6 +88,8 @@ interface World {
 	gated?: boolean
 	/** The latest main push run of ci.yml was cancelled with no jobs (#153). */
 	ciCancelled?: boolean
+	/** A main push run of ci.yml has sat waiting on `release` approval past 24h (#146). */
+	releaseWaiting?: boolean
 }
 
 function fakeGh(w: World): GhExec {
@@ -122,7 +124,18 @@ function fakeGh(w: World): GhExec {
 									path: '.github/workflows/ci.yml',
 								},
 							]
-						: [],
+						: w.releaseWaiting
+							? [
+									{
+										id: 9,
+										status: 'waiting',
+										conclusion: null,
+										html_url: 'https://github.com/acme/widget/actions/runs/9',
+										created_at: new Date(NOW.getTime() - 25 * 3_600_000).toISOString(),
+										path: '.github/workflows/ci.yml',
+									},
+								]
+							: [],
 				})
 			if (b === 'repos/acme/widget/actions/runs/9/jobs?per_page=1') return ok({ total_count: 0 })
 			if (b?.startsWith('repos/acme/widget/issues?')) return ok(w.queuePages ?? [w.queue ?? []])
@@ -203,6 +216,24 @@ describe('runLoopTick', () => {
 		const root = checkout(newTmpDir())
 		const r = await runLoopTick({ root, gh: fakeGh({ ciCancelled: true }), env: {}, now: NOW })
 		expect(r.warnings).toEqual([expect.stringContaining('runs/9')])
+	})
+
+	it('warns when a release run has waited on approval past 24h (#146)', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({ root, gh: fakeGh({ releaseWaiting: true }), env: {}, now: NOW })
+		expect(r.releaseStuck).toBe(true)
+		expect(r.warnings).toContainEqual(expect.stringContaining('waiting on approval'))
+	})
+
+	it('adds ⚠release-stuck to a non-idle summary (#146)', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			gh: fakeGh({ closedWip: [1], releaseWaiting: true }),
+			env: {},
+			now: NOW,
+		})
+		expect(r.summary).toContain('⚠release-stuck')
 	})
 
 	it('reports a closed issue still labelled ai-wip, and is not idle (#23)', async () => {
