@@ -6,6 +6,7 @@ import { type GhExec, ghPaginated, realGhExec } from '../../base/gh.js'
 import { ciRunWarning, releaseStuckWarning } from '../../base/ci-runs.js'
 import { readConfig } from '../../base/config.js'
 import { releaseGated } from '../../base/release-gate.js'
+import { securityAlertWarning } from '../../base/security-alerts.js'
 import {
 	claudeSkillStatus,
 	pluginInstallPaths,
@@ -281,6 +282,9 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		result.warnings.push(releaseWarning)
 		result.releaseStuck = true
 	}
+	// #203: high/critical only — moderate/low are doctor's business, not a tick warning.
+	const securityWarning = await securityAlertWarning(gh, ownerRepo, false)
+	if (securityWarning) result.warnings.push(securityWarning)
 
 	const guard = await runLoopGuard({ ...seams, install: options.install })
 	if (guard.exitCode !== 0) {

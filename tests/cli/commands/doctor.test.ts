@@ -6,6 +6,7 @@ import {
 	checkCiRuns,
 	checkHumanUser,
 	checkReleaseStuck,
+	checkSecurityAlerts,
 	runDoctor,
 } from '../../../src/cli/commands/doctor.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
@@ -158,6 +159,63 @@ describe('checkCiRuns (#153)', () => {
 		const dir = newTmpDir()
 		fs.ensureDirSync(join(dir, '.git'))
 		const r = await checkCiRuns(dir, async () => ({ ok: false, stdout: '', stderr: '', code: 1 }))
+		expect(r.status).toBe('ok')
+	})
+})
+
+describe('checkSecurityAlerts (#203)', () => {
+	it('skips outside a git repository', async () => {
+		const r = await checkSecurityAlerts(newTmpDir())
+		expect(r).toMatchObject({ status: 'ok', detail: expect.stringMatching(/not a git repository/) })
+	})
+
+	it('flags an open high alert, folding moderate into the count', async () => {
+		const dir = newTmpDir()
+		fs.ensureDirSync(join(dir, '.git'))
+		const r = await checkSecurityAlerts(dir, async (args) => {
+			if (args[0] === 'repo') return { ok: true, stdout: 'acme/widget\n', stderr: '', code: 0 }
+			if (args[1]?.startsWith('repos/acme/widget/dependabot/alerts?'))
+				return {
+					ok: true,
+					stdout: JSON.stringify([
+						[
+							{ security_vulnerability: { severity: 'high' } },
+							{ security_vulnerability: { severity: 'moderate' } },
+						],
+					]),
+					stderr: '',
+					code: 0,
+				}
+			return { ok: false, stdout: '', stderr: 'unexpected', code: 1 }
+		})
+		expect(r.status).toBe('drift')
+		expect(r.detail).toContain('2 open security alerts (1 high)')
+	})
+
+	it('is ok on only-moderate alerts', async () => {
+		const dir = newTmpDir()
+		fs.ensureDirSync(join(dir, '.git'))
+		const r = await checkSecurityAlerts(dir, async (args) => {
+			if (args[0] === 'repo') return { ok: true, stdout: 'acme/widget\n', stderr: '', code: 0 }
+			if (args[1]?.startsWith('repos/acme/widget/dependabot/alerts?'))
+				return {
+					ok: true,
+					stdout: JSON.stringify([[{ security_vulnerability: { severity: 'moderate' } }]]),
+					stderr: '',
+					code: 0,
+				}
+			return { ok: false, stdout: '', stderr: 'unexpected', code: 1 }
+		})
+		expect(r.status).toBe('ok')
+	})
+
+	it('is ok on a 403 — never an error', async () => {
+		const dir = newTmpDir()
+		fs.ensureDirSync(join(dir, '.git'))
+		const r = await checkSecurityAlerts(dir, async (args) => {
+			if (args[0] === 'repo') return { ok: true, stdout: 'acme/widget\n', stderr: '', code: 0 }
+			return { ok: false, stdout: '', stderr: 'HTTP 403', code: 1 }
+		})
 		expect(r.status).toBe('ok')
 	})
 })

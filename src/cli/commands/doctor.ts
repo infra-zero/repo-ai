@@ -16,6 +16,7 @@ import { checkConfigSchema } from '../../base/config-schema.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
 import { checkLoopLabels } from '../../base/labels.js'
 import { releaseGated } from '../../base/release-gate.js'
+import { securityAlertWarning } from '../../base/security-alerts.js'
 import { checkStatusline } from '../../base/statusline.js'
 import type { CheckResult } from '../../base/types.js'
 import { ghOut } from './loop-env.js'
@@ -34,6 +35,7 @@ export async function runDoctor(dir: string, skillsDir?: string): Promise<CheckR
 		await checkAutoMerge(dir, config.autoMerge === true),
 		await checkCiRuns(dir),
 		await checkReleaseStuck(dir),
+		await checkSecurityAlerts(dir),
 		await checkClaudeSkills(skillsDir),
 		await checkPluginSkills(),
 		await checkWorkflows(skillsDir),
@@ -182,6 +184,24 @@ export async function checkReleaseStuck(
 	return warning
 		? { check, status: 'drift', detail: warning }
 		: { check, status: 'ok', detail: 'no release run stuck waiting on approval' }
+}
+
+/** #203: open high/critical Dependabot alerts, invisible otherwise. Moderate/low fold into the count here, not in the tick warning. */
+export async function checkSecurityAlerts(dir: string, exec?: GhExec): Promise<CheckResult> {
+	const check = 'Security alerts'
+	// No .git → never spawn gh (keeps tmp-dir doctor runs offline).
+	if (!(await fs.pathExists(path.join(dir, '.git')))) {
+		return { check, status: 'ok', detail: 'skipped — not a git repository' }
+	}
+	const gh: GhExec = exec ?? ((args, stdin) => realGhExec(args, stdin, dir))
+	const nwo = await ghOut(gh, ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'])
+	if (!nwo) {
+		return { check, status: 'ok', detail: 'skipped — could not resolve the GitHub repo' }
+	}
+	const warning = await securityAlertWarning(gh, nwo, true)
+	return warning
+		? { check, status: 'drift', detail: warning }
+		: { check, status: 'ok', detail: 'no open high/critical security alerts' }
 }
 
 const ICON: Record<CheckResult['status'], string> = {
