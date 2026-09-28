@@ -757,7 +757,8 @@ At most one notification, via the **`PushNotification`** tool — `message`:
 when that tool is unavailable:
 
 ```bash
-osascript -e "display notification \"$MESSAGE\" with title \"ai-loop\" subtitle \"$OWNER_REPO\"" 2>/dev/null \
+ESCAPED=$(printf '%s' "$MESSAGE" | sed 's/[\\"]/\\&/g')
+osascript -e "display notification \"$ESCAPED\" with title \"ai-loop\" subtitle \"$OWNER_REPO\"" 2>/dev/null \
   || notify-send "ai-loop" "$MESSAGE" 2>/dev/null || true
 ```
 
