@@ -231,7 +231,7 @@ that state, so a missed tick, a crash, or a restart costs nothing.
 | `ai-ok-code` | PR | `code-reviewer` passed. In-flight only — the handoff strips it. |
 | `ai-ok-sec` | PR | `security-expert` passed. In-flight only — the handoff strips it. |
 | `ai-changes` | PR | A reviewer requested changes, or Pass 1 sent the PR back: a required check failed, or the PR is `BLOCKED` by a ruleset. On a PR opened by hand, with no loop worktree, it waits for you instead of a fixer. |
-| `ai-conflicts` | PR | Pass 1 sent the PR back `DIRTY` — it conflicts with the default branch. A fixer rebases it; this never counts toward the 2-fix-round cap. |
+| `ai-conflicts` | PR | Pass 1 sent the PR back `DIRTY` — it conflicts with the default branch. A fixer merges the default branch in; this never counts toward the 2-fix-round cap. |
 | `ai-fixing` | PR | Fix-round implementer claimed and running. Cleared with its push. |
 | `ai-notes` | PR | Passed, but a reviewer left something to read before merging. |
 | `merge-ready` | PR | Both agent reviews passed and the PR is mergeable — waiting on a human. Supersedes the `ai-ok-*` pair rather than joining it. |
@@ -249,8 +249,8 @@ A PR moves through a few label combinations. Read them as "whose turn is it":
 | `ai-review` `ai-ok-code` `ai-ok-sec` | Both passed; waiting for CI to go green, or for the branch to be updated from `main` | the loop |
 | `ai-changes` | A reviewer asked for a change, or CI failed | the loop (a fixer is next) |
 | `ai-changes` `ai-fixing` | A fixer is pushing a fix; both reviews run again afterwards | the fixer |
-| `ai-conflicts` | The branch conflicts with `main` | the loop (a fixer rebases it next, for free) |
-| `ai-conflicts` `ai-fixing` | A fixer is rebasing onto `main`; the reviews run again only if that changed the PR's own diff (#217) | the fixer |
+| `ai-conflicts` | The branch conflicts with `main` | the loop (a fixer merges `main` in next, for free) |
+| `ai-conflicts` `ai-fixing` | A fixer is merging `main` in; the reviews run again only if that changed the PR's own diff (#217) | the fixer |
 | `merge-ready` | Reviewed, green, mergeable | **you** |
 | `merge-ready` `ai-notes` | Same, but read the reviewer's `### Before merging` first | **you** |
 
@@ -286,7 +286,7 @@ PR: ai-review ─> ai-reviewing-* ─┬─> ai-ok-code + ai-ok-sec ─┬─ is
                                  ├─> ai-changes ─> ai-fixing (max 2) ─> ai-review
                                  │   ▲                       └─ round 3 ─> ai-blocked
                                  │   └─ Pass 1 sends back: ci-red (after one free rerun), or BLOCKED
-                                 └─> ai-conflicts ─> ai-fixing (rebase, free) ─> ai-review
+                                 └─> ai-conflicts ─> ai-fixing (merge, free) ─> ai-review
                                      ▲
                                      └─ Pass 1 sends back: DIRTY
 ```
@@ -455,7 +455,7 @@ reports each in `.applied[]`, and returns the comments still owed in `.comments[
 - **Send back** — `.sendBacks[]`: `ci-red` or `BLOCKED` becomes `ai-changes`,
   `DIRTY` becomes `ai-conflicts` (off the round cap, #176). `ai-changes` drops every
   review label; `ai-conflicts` keeps the pass and `ai-notes`, which the fixer strips
-  only if the rebase changed the PR's own diff (#217).
+  only if merging `main` in changed the PR's own diff (#217).
 - **Clean up** — removes `.toClean[]` worktrees (PR closed, or its squash on the
   default branch), relabels their issues and closed `ai-wip` leftovers, runs
   `loop guard --removed`, and applies the label side of every `.stalled[]` verdict.
@@ -499,7 +499,7 @@ number below is a default; the [config table](#configuration) names the
   No repo-wide exploration.
 - **2 fix rounds per PR** (`maxFixRounds`). On the third `ai-changes`, stop and mark
   `ai-blocked`. Reviewer↔implementer ping-pong is the one unbounded token sink.
-  `ai-conflicts` rebases don't count — they aren't the PR's own churn.
+  `ai-conflicts` merges don't count — they aren't the PR's own churn.
 - **8 review and fix agents per tick** (`maxTasksPerTick`), in one Workflow; the rest wait for the
   next tick.
 - **An idle tick spawns zero agents.**
