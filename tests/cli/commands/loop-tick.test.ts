@@ -364,6 +364,33 @@ describe('runLoopTick', () => {
 		expect(r.summary).toBe('⚠1blocked·⚠1ci-red·5 agents·1 on CI·1 to merge')
 	})
 
+	it('takes maxInFlight and maxFixRounds from .repo-ai.json (#158)', async () => {
+		const tick = async (config?: object) => {
+			const root = checkout(newTmpDir())
+			if (config) fs.outputJsonSync(`${root}/.repo-ai.json`, config)
+			await fs.ensureDir(`${root}-worktrees/ai-7-capped`)
+			return runLoopTick({
+				root,
+				env: {},
+				now: NOW,
+				gh: fakeGh({
+					wip: [1],
+					prs: [pr(16, 'ai-7-capped', ['ai-changes'])],
+					changes: { 16: 3 },
+				}),
+			})
+		}
+		const defaults = await tick()
+		expect(defaults.slots).toBe(5)
+		expect(defaults.fixRounds.map((f) => f.action)).toEqual(['block'])
+		const tuned = await tick({ maxInFlight: 2, maxFixRounds: 3 })
+		expect(tuned.slots).toBe(1)
+		expect(tuned.fixRounds.map((f) => f.action)).toEqual(['spawn'])
+		const invalid = await tick({ maxInFlight: 0, maxFixRounds: 'x' })
+		expect(invalid.slots).toBe(5)
+		expect(invalid.fixRounds.map((f) => f.action)).toEqual(['block'])
+	})
+
 	describe('autoMerge needs the opt-in and the release gate (#142)', () => {
 		const tick = async (optIn: boolean, gated: boolean) => {
 			const root = checkout(newTmpDir())

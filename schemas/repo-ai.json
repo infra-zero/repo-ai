@@ -20,7 +20,9 @@
     },
     "requiredSkills": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "Skills `doctor` checks are installed, when agentUser is set. Empty or unset means no check."
     },
     "pollSeconds": {
@@ -45,6 +47,42 @@
       "type": "boolean",
       "default": false,
       "description": "Let the loop merge a fully-passed issue PR unattended. Takes effect only when the repo is also release-gated (its publishing job runs behind an environment with required_reviewers). Unset or false, every issue PR stops for a human."
+    },
+    "maxInFlight": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 6,
+      "description": "Issues the loop keeps in flight at once (open issues labelled ai-wip); `loop tick` sizes its pickup slots from it. Values below 1 are ignored."
+    },
+    "maxFixRounds": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 2,
+      "description": "Fix rounds per PR. ai-loop-pickup runs at most this many, and the round-cap block (ai-blocked) fires on ai-changes application number maxFixRounds + 1. Values below 0 are ignored."
+    },
+    "maxTasksPerTick": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 8,
+      "description": "Review and fix tasks the ai-loop-recover Workflow runs per tick; the rest wait for the next tick. Values below 1 are ignored."
+    },
+    "staleMinutes": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 45,
+      "description": "Minutes a claim label (ai-wip, ai-reviewing-*, ai-fixing) may sit before `loop reap` treats its agent as dead. Values below 1 are ignored."
+    },
+    "busyMinutes": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10,
+      "description": "Minutes between /ai-loop cron ticks while work is in flight and no `loop watch` Monitor runs. Values below 1 are ignored."
+    },
+    "idleMinutes": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 30,
+      "description": "Minutes between /ai-loop cron ticks when idle, and the fallback cadence under a `loop watch` Monitor. Values below 1 are ignored."
     }
   }
 }

@@ -22,6 +22,18 @@ export interface RepoAiConfig {
 	quietStopMinutes?: number
 	/** Opt-in to unattended merges on a release-gated repo (#142); absent means off. */
 	autoMerge?: boolean
+	/** Issues in flight at once (#158). */
+	maxInFlight?: number
+	/** Fix rounds per PR; the round-cap block fires at `maxFixRounds + 1` `ai-changes` (#158). */
+	maxFixRounds?: number
+	/** Review/fix tasks per tick in `ai-loop-recover` (#158). */
+	maxTasksPerTick?: number
+	/** Minutes a claim label may sit before `loop reap` calls its agent dead (#158). */
+	staleMinutes?: number
+	/** `/ai-loop` job cadence while work is in flight (#158). */
+	busyMinutes?: number
+	/** `/ai-loop` job cadence when idle (#158). */
+	idleMinutes?: number
 	source: ConfigSource
 }
 
@@ -42,18 +54,28 @@ function asPollSeconds(value: unknown): number | undefined {
 export const DEFAULT_BUDGET_TOKENS = 400_000
 const MIN_BUDGET_TOKENS = 1000
 
-function asBudgetTokens(value: unknown): number | undefined {
-	return typeof value === 'number' && Number.isFinite(value) && value >= MIN_BUDGET_TOKENS
+export const DEFAULT_QUIET_STOP_MINUTES = 120
+
+/** Today's hard-coded limits, and the floor below which a configured value is ignored (#158). */
+export const LIMITS = {
+	maxInFlight: { default: 6, min: 1 },
+	maxFixRounds: { default: 2, min: 0 },
+	maxTasksPerTick: { default: 8, min: 1 },
+	staleMinutes: { default: 45, min: 1 },
+	busyMinutes: { default: 10, min: 1 },
+	idleMinutes: { default: 30, min: 1 },
+} as const
+export type LimitKey = keyof typeof LIMITS
+
+function asAtLeast(value: unknown, min: number): number | undefined {
+	return typeof value === 'number' && Number.isFinite(value) && value >= min
 		? Math.floor(value)
 		: undefined
 }
 
-export const DEFAULT_QUIET_STOP_MINUTES = 120
-
-function asQuietStopMinutes(value: unknown): number | undefined {
-	return typeof value === 'number' && Number.isFinite(value) && value >= 0
-		? Math.floor(value)
-		: undefined
+/** A limit's configured value, else its default. */
+export function limit(config: RepoAiConfig | null, key: LimitKey): number {
+	return config?.[key] ?? LIMITS[key].default
 }
 
 export function asSkillList(value: unknown): string[] | undefined {
@@ -72,9 +94,12 @@ export async function readConfig(dir: string): Promise<RepoAiConfig> {
 			humanUser: asLogin(own.humanUser),
 			requiredSkills: asSkillList(own.requiredSkills),
 			pollSeconds: asPollSeconds(own.pollSeconds),
-			budgetTokens: asBudgetTokens(own.budgetTokens),
-			quietStopMinutes: asQuietStopMinutes(own.quietStopMinutes),
+			budgetTokens: asAtLeast(own.budgetTokens, MIN_BUDGET_TOKENS),
+			quietStopMinutes: asAtLeast(own.quietStopMinutes, 0),
 			autoMerge: own.autoMerge === true,
+			...Object.fromEntries(
+				Object.entries(LIMITS).map(([k, { min }]) => [k, asAtLeast(own[k], min)])
+			),
 			source: 'repo-ai.json',
 		}
 	}
