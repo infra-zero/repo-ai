@@ -431,6 +431,35 @@ describe('runLoopTick', () => {
 		expect(r.pickups.map((p) => p.number)).toEqual([117])
 	})
 
+	it('does not serialise on shared docs every issue touches (#185)', async () => {
+		const root = checkout(newTmpDir())
+		const issue = (number: number, body: string) => ({
+			number,
+			title: `#${number}`,
+			body,
+			labels: [],
+			author_association: 'OWNER',
+		})
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({
+				wip: [
+					{
+						number: 116,
+						body: 'Edit `loop-reap.ts`, `skills/ai-loop/SKILL.md` and `apps/docs/docs/ai-loop.md`.',
+					},
+				],
+				queue: [
+					issue(118, 'Update `skills/ai-loop/SKILL.md` and `apps/docs/docs/ai-loop.md`.'),
+					issue(119, 'Edit `src/cli/commands/loop-reap.ts` and `README.md`.'),
+				],
+			}),
+		})
+		expect(r.pickups.map((p) => p.number)).toEqual([118])
+	})
+
 	it('waits on a BLOCKED PR whose required checks are still pending', async () => {
 		const root = checkout(newTmpDir())
 		const r = await runLoopTick({
