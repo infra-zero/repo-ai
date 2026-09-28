@@ -11,7 +11,7 @@ The ai-loop pipeline, split out of `@rtorcato/repo-tooling`:
 - `src/cli/commands/{doctor,fix}.ts` — the loop's own audit and fixers.
 - `src/base/{gh,git}.ts` — `gh`/`git` runners, copied from repo-tooling (not shared).
 
-Config is read from the consuming repo's `.repo-ai.json`: `agentUser` and `requiredSkills` (`src/base/config.ts`). Falls back to the legacy `.repo-tooling.json` `rules.aiLoop.agentUser` / `rules.requiredSkills` when `.repo-ai.json` doesn't exist.
+Config is read from the consuming repo's `.repo-ai.json`: `agentUser` and `requiredSkills` (`src/base/config.ts`).
 
 ## Conventions
 

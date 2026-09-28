@@ -92,10 +92,9 @@ rather than silently ignoring it. It also reports a wrong type, and a file that
 is not valid JSON.
 
 `npx @rtorcato/repo-ai fix config` adds `$schema` to an existing file. With no
-file, it creates one, copying over any `agentUser` / `requiredSkills` still
-held in the legacy `.repo-tooling.json` (`rules.aiLoop.agentUser`,
-`rules.requiredSkills`). Without `.repo-ai.json` the loop falls back to that
-legacy location, and `doctor` flags it as drift.
+file, it creates one, copying over any `agentUser` / `requiredSkills` once
+from an old `.repo-tooling.json`, which it leaves untouched. Nothing else reads
+`.repo-tooling.json`; without `.repo-ai.json`, `doctor` reports it missing.
 
 ## The one constraint
 
@@ -135,8 +134,7 @@ GH_CONFIG_DIR=~/.config/gh-bot gh pr review 42 --approve           # runs as the
 Complete the device flow in a private window logged in as the bot — your default
 browser will authorise *you* instead, leaving two profiles holding one identity.
 
-When `.repo-ai.json` declares `agentUser` (or the legacy `.repo-tooling.json`
-`rules.aiLoop.agentUser`), `loop guard` halts any tick not running as that
+When `.repo-ai.json` declares `agentUser`, `loop guard` halts any tick not running as that
 account. `npx @rtorcato/repo-ai fix ai-loop-identity`
 wires a checkout to it: it checks that `~/.config/gh-<agentUser>` (or
 `--gh-config-dir <path>`) is signed in as the agent, then merges

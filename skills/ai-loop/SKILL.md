@@ -164,7 +164,7 @@ printf '%s' "$TICK" | jq '{halt, idle, summary, errors, warnings}'
 runs `loop guard` first: it repairs a main checkout gone `core.bare = true`
 (which turns every worktree commit into a whole-repo deletion), refuses a bare
 clone or linked worktree, and proves `gh` authenticates as a declared
-`rules.aiLoop.agentUser`. `halt` says which. Run **no further passes** — report
+`agentUser`. `halt` says which. Run **no further passes** — report
 via Pass 5 and stop. An identity mismatch wants `fix ai-loop-identity`.
 
 **`OWNER_REPO` comes from the working directory's remote — never from
@@ -174,7 +174,7 @@ current repo only. GitHub only — on a GitLab remote, bail in one line. **Use
 nothing, silently. Worktrees live in `WT_ROOT`, a sibling of the repo, never
 under `$ROOT/.claude/`, which most repos' tooling excludes.
 
-`AGENT_USER` (`rules.aiLoop.agentUser`, empty unless assignable) and
+`AGENT_USER` (`.repo-ai.json` `agentUser`, empty unless assignable) and
 `HUMAN_USER` (the repo owner if a user, empty on an organisation) are always
 spelled `${AGENT_USER:+--add-assignee} ${AGENT_USER:+"$AGENT_USER"}` — **flag and
 value in separate expansions**; zsh does not word-split the packed form (#624).

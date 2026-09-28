@@ -97,7 +97,10 @@ jobs:
           npm init -y > /dev/null
           npm install --no-audit --no-fund "$tarball"
           npx --no-install repo-ai --version
-          npx --no-install repo-ai doctor --json | node -e 'JSON.parse(require("fs").readFileSync(0, "utf8"))'
+          # doctor exits 1 on drift/missing — a bare dir has no .repo-ai.json (#159).
+          # Only a crash (any other code) or non-JSON output fails the smoke test.
+          out="$(npx --no-install repo-ai doctor --json)" || [ $? -eq 1 ]
+          node -e 'JSON.parse(require("fs").readFileSync(0, "utf8"))' <<< "$out"
 
   # The required status check. Branch protection names `verify`, so this one
   # job stands for every matrix leg: it fails unless all of them succeeded,

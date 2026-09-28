@@ -9,7 +9,7 @@
  */
 import path from 'node:path'
 import fs from 'fs-extra'
-import { CONFIG_FILE, readConfig } from './config.js'
+import { asLogin, asSkillList, CONFIG_FILE } from './config.js'
 import { FixerAbort } from './fixer-abort.js'
 import type { CheckResult } from './types.js'
 
@@ -82,8 +82,10 @@ export async function checkConfigSchema(dir: string): Promise<CheckResult | null
 
 /**
  * `fix config`: stamp `$schema` into `.repo-ai.json`, first in key order. With
- * no file yet, create one seeded from the legacy `.repo-tooling.json` settings
- * `readConfig` falls back to — so the new file never shadows them.
+ * no file yet, create one, migrating `agentUser` / `requiredSkills` once from
+ * the old `.repo-tooling.json` `rules.aiLoop.agentUser` / `rules.requiredSkills`
+ * (flat pre-v4 `aiLoop.agentUser` too). That file is only read, never changed;
+ * nothing else reads it since #159.
  */
 export async function writeConfigSchema(dir: string): Promise<string[]> {
 	const file = path.join(dir, CONFIG_FILE)
@@ -100,8 +102,11 @@ export async function writeConfigSchema(dir: string): Promise<string[]> {
 		current = parsed
 		if (current.$schema === SCHEMA_URL) return []
 	} else {
-		const { agentUser, requiredSkills } = await readConfig(dir)
-		current = { agentUser, requiredSkills }
+		const old = await fs.readJson(path.join(dir, '.repo-tooling.json')).catch(() => null)
+		current = {
+			agentUser: asLogin(old?.rules?.aiLoop?.agentUser ?? old?.aiLoop?.agentUser),
+			requiredSkills: asSkillList(old?.rules?.requiredSkills),
+		}
 	}
 	const { $schema: _, ...rest } = current
 	await fs.writeJson(file, { $schema: SCHEMA_URL, ...rest }, { spaces: 2 })
