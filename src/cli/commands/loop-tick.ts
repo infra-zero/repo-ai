@@ -3,7 +3,12 @@ import chalk from 'chalk'
 import fs from 'fs-extra'
 import { type GitExec, realGitExec } from '../../base/git.js'
 import { type GhExec, ghPaginated, realGhExec } from '../../base/gh.js'
-import { ciRunWarning, releaseFailedWarning, releaseStuckWarning } from '../../base/ci-runs.js'
+import {
+	ciRunWarning,
+	releaseFailedWarning,
+	releaseStuckWarning,
+	runAttempt,
+} from '../../base/ci-runs.js'
 import { readConfig } from '../../base/config.js'
 import { releaseGated } from '../../base/release-gate.js'
 import {
@@ -74,6 +79,13 @@ export interface SendBack {
 	failing: { name: string; link: string }[]
 }
 
+export interface RerunFailed {
+	pr: number
+	issue: number | null
+	/** `gh run rerun <runId> --failed` — its first attempt failed; a second failure sends it back. */
+	runId: number
+}
+
 export interface FixRound {
 	pr: number
 	issue: number | null
@@ -97,6 +109,8 @@ export interface LoopTickResult {
 	disarm: number[]
 	handoffs: Handoff[]
 	sendBacks: SendBack[]
+	/** Pass 1 — a `ci-red` PR whose failing run's first attempt: rerun instead of a send-back (#202). */
+	rerunFailed: RerunFailed[]
 	/** Pass 1 — passed but `BEHIND`: `gh pr update-branch`; send back only if that fails (#51). */
 	updateBranches: { pr: number; issue: number | null }[]
 	/** Pass 1 — `merge-ready` that no longer holds (not CLEAN, or `ai-changes`). */
@@ -213,6 +227,12 @@ const SHARED_DOCS = new Set(['skill.md', 'ai-loop.md', 'readme.md', 'commands.md
 
 const issueOf = (head: string) => Number(head.match(/^(?:worktree-)?ai-(\d+)-/)?.[1]) || null
 
+/** The workflow run id out of a check's `link` (`…/actions/runs/<id>/job/<id>`), or `null`. */
+export function runIdFromLink(link: string): number | null {
+	const m = link.match(/\/actions\/runs\/(\d+)/)
+	return m ? Number(m[1]) : null
+}
+
 export function emptyTick(env: LoopEnv): LoopTickResult {
 	return {
 		env,
@@ -223,6 +243,7 @@ export function emptyTick(env: LoopEnv): LoopTickResult {
 		disarm: [],
 		handoffs: [],
 		sendBacks: [],
+		rerunFailed: [],
 		updateBranches: [],
 		stripMergeReady: [],
 		dependabotCiRed: [],
@@ -434,13 +455,21 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 				.filter((c) => c.state === 'FAILURE')
 				.map(({ name, link }) => ({ name, link }))
 			if (failing.length > 0) {
-				result.sendBacks.push({
-					pr: pr.number,
-					issue,
-					reason: 'ci-red',
-					label: 'ai-changes',
-					failing,
-				})
+				// One free rerun per head SHA: a fresh commit is a brand-new run at
+				// attempt 1, so this needs no state beyond the run's own attempt count.
+				const runId = runIdFromLink(failing[0]?.link ?? '')
+				const attempt = runId !== null ? await runAttempt(gh, ownerRepo, runId) : null
+				if (runId !== null && attempt === 1) {
+					result.rerunFailed.push({ pr: pr.number, issue, runId })
+				} else {
+					result.sendBacks.push({
+						pr: pr.number,
+						issue,
+						reason: 'ci-red',
+						label: 'ai-changes',
+						failing,
+					})
+				}
 				continue
 			}
 			// No required check reported yet (e.g. `verify` that `needs:` other jobs) is pending too (#112).
@@ -653,10 +682,16 @@ function turns(
 		...r.fixRounds.filter((f) => f.action === 'block').map((f) => f.pr),
 	])
 	const sentBack = new Set(r.sendBacks.map((s) => s.pr))
+	// A rerun is waiting on CI, same as a passed PR waiting on checks (#202).
+	const rerunning = new Set(r.rerunFailed.map((f) => f.pr))
 	let agents = 0
 	let ci = 0
 	for (const p of loopPrs) {
 		if (human.has(p.number)) continue
+		if (rerunning.has(p.number)) {
+			ci++
+			continue
+		}
 		const labels = new Set(p.labels.map((l) => l.name))
 		const passed =
 			(labels.has('ai-ok-code') && labels.has('ai-ok-sec')) || labels.has('merge-ready')

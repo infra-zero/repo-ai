@@ -285,7 +285,7 @@ PR: ai-review ─> ai-reviewing-* ─┬─> ai-ok-code + ai-ok-sec ─┬─ is
                                  │                           └─ dependabot ─> auto-merge
                                  ├─> ai-changes ─> ai-fixing (max 2) ─> ai-review
                                  │   ▲                       └─ round 3 ─> ai-blocked
-                                 │   └─ Pass 1 sends back: ci-red, or BLOCKED
+                                 │   └─ Pass 1 sends back: ci-red (after one free rerun), or BLOCKED
                                  └─> ai-conflicts ─> ai-fixing (rebase, free) ─> ai-review
                                      ▲
                                      └─ Pass 1 sends back: DIRTY
@@ -437,6 +437,11 @@ reports each in `.applied[]`, and returns the comments still owed in `.comments[
 - **Update the branch** — `.updateBranches[]`: a passed `BEHIND` PR gets
   `gh pr update-branch`, keeping its reviews; a failed update is sent back as
   `ai-conflicts`. A PR waiting only on running checks appears in no list.
+- **Rerun** — `.rerunFailed[]`: a `ci-red` PR whose failing run is still on its
+  first attempt gets `gh run rerun <runId> --failed` instead of a send-back — a
+  flaky test costs neither a fix round nor an agent. A second failure (attempt
+  ≥ 2) is a normal `ci-red` send-back; a new commit starts a fresh run at
+  attempt 1, so nothing needs to remember the first try (#202).
 - **Send back** — `.sendBacks[]`: `ci-red` or `BLOCKED` becomes `ai-changes`,
   `DIRTY` becomes `ai-conflicts` (off the round cap, #176); every review label is dropped.
 - **Clean up** — removes `.toClean[]` worktrees (PR closed, or its squash on the

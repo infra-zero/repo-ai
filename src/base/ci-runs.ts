@@ -103,6 +103,23 @@ export async function ciRunWarning(
 	return null
 }
 
+/**
+ * The `run_attempt` of a single workflow run — `loop tick`'s ci-red path uses
+ * it to tell a first failure (worth one free `gh run rerun --failed`, #202)
+ * from a failure that already survived a rerun. `null` on any gh/parse
+ * failure, so the caller falls back to its old, safe behaviour: send back.
+ */
+export async function runAttempt(gh: GhExec, nwo: string, runId: number): Promise<number | null> {
+	const r = await gh(['api', `repos/${nwo}/actions/runs/${runId}`])
+	if (!r.ok) return null
+	try {
+		const attempt = JSON.parse(r.stdout).run_attempt
+		return typeof attempt === 'number' ? attempt : null
+	} catch {
+		return null
+	}
+}
+
 const RELEASE_STUCK_HOURS = 24
 
 /**
