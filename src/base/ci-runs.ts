@@ -20,6 +20,7 @@ interface RunApi {
 	conclusion: string | null
 	html_url: string
 	created_at: string
+	head_sha: string
 }
 
 /**
@@ -125,15 +126,18 @@ export async function runAttempt(gh: GhExec, nwo: string, runId: number): Promis
 	}
 }
 
-const RELEASE_STUCK_HOURS = 24
+const RELEASE_STUCK_HOURS = 1
 
 /**
  * `loop tick`/`doctor`'s release-approval probe (#146). A `release` job
  * waiting on the `release` environment's approval pins the `main` push
  * concurrency group: every later merge's run queues behind it and gets
  * cancelled with zero jobs the moment a newer one lands, invisible because a
- * cancelled run isn't a failing check. Reports a run only once it has sat
- * `waiting` for over a day — the loop never approves or cancels it.
+ * cancelled run isn't a failing check. Reports a waiting run at once when a
+ * newer push run exists behind it (#220) — it is no longer at the branch head
+ * and is already cancelling what follows — and otherwise once it has sat
+ * `waiting` for over {@link RELEASE_STUCK_HOURS}h. The loop never approves or
+ * cancels it.
  */
 export async function releaseStuckWarning(
 	gh: GhExec,
@@ -142,8 +146,15 @@ export async function releaseStuckWarning(
 	now: number,
 	workflow = DEFAULT_CI_WORKFLOW
 ): Promise<string | null> {
-	const waiting = (await ciRuns(gh, nwo, branch, workflow))?.find((run) => run.status === 'waiting')
-	if (!waiting) return null
+	const runs = await ciRuns(gh, nwo, branch, workflow)
+	const waiting = runs?.find((run) => run.status === 'waiting')
+	if (!runs || !waiting) return null
+	// ponytail: the newest push run stands in for the branch head — a push that
+	// triggers no CI run can't be pinned behind the waiting one anyway.
+	const head = runs[0]?.head_sha
+	if (head && waiting.head_sha && head !== waiting.head_sha) {
+		return `release run ${waiting.id} waiting on approval is stale (${waiting.head_sha.slice(0, 7)}, ${branch} is at ${head.slice(0, 7)}) and is cancelling newer runs — cancel it, don't approve it: ${waiting.html_url}`
+	}
 	const hours = (now - Date.parse(waiting.created_at)) / 3_600_000
 	if (hours <= RELEASE_STUCK_HOURS) return null
 	return `release run ${waiting.id} waiting on approval for ${Math.round(hours)}h: ${waiting.html_url}`

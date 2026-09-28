@@ -158,7 +158,7 @@ export interface LoopTickResult {
 	staleInstall: string[]
 	/** Worth saying, never a reason to leave idle or halt. */
 	warnings: string[]
-	/** #146: a release run has waited on `release` environment approval for over a day. */
+	/** #146/#220: a release run waiting on `release` approval is stale or has waited over an hour. */
 	releaseStuck: boolean
 	/** #204: the newest completed run's `release` job failed — nothing published. */
 	releaseFailed: boolean
