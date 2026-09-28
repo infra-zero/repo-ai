@@ -737,13 +737,29 @@ line 4 resets.
   `idle` tick notifies once.
 - **Otherwise** → silent. Unchanged state is not news.
 
+**A handoff names the PR, not just the count (#157).** `.handoffs[]` now
+carries `title`. When this tick has any, `MESSAGE` names them instead of the
+summary count — one handoff: `#<N> ready to merge: <title>`; several: list the
+numbers, `#<N1>, #<N2> ready to merge`. Every other change still notifies with
+the summary, and it stays one notification either way:
+
+```bash
+MESSAGE=$(printf '%s' "$TICK" | jq -r '
+  if (.handoffs | length) == 1 then "#\(.handoffs[0].pr) ready to merge: \(.handoffs[0].title)"
+  elif (.handoffs | length) > 1 then (.handoffs | map("#\(.pr)") | join(", ")) + " ready to merge"
+  else "" end')
+[ -n "$MESSAGE" ] || MESSAGE="$OWNER_REPO: $SUMMARY"
+MESSAGE=$(printf '%s' "$MESSAGE" | cut -c1-200)
+```
+
 At most one notification, via the **`PushNotification`** tool — `message`:
-`"$OWNER_REPO: $SUMMARY"`, under 200 characters; never retry a "not sent". Only
+`"$MESSAGE"`, under 200 characters; never retry a "not sent". Only
 when that tool is unavailable:
 
 ```bash
-osascript -e "display notification \"$SUMMARY\" with title \"ai-loop\" subtitle \"$OWNER_REPO\"" 2>/dev/null \
-  || notify-send "ai-loop" "$OWNER_REPO: $SUMMARY" 2>/dev/null || true
+ESCAPED=$(printf '%s' "$MESSAGE" | sed 's/[\\"]/\\&/g')
+osascript -e "display notification \"$ESCAPED\" with title \"ai-loop\" subtitle \"$OWNER_REPO\"" 2>/dev/null \
+  || notify-send "ai-loop" "$MESSAGE" 2>/dev/null || true
 ```
 
 **Keep the loop going.** `/ai-loop` is the whole entry point: it schedules its
