@@ -71,13 +71,12 @@ argument.
 
 4. **Check the worktrees** — one per in-flight issue, removed by the loop's
    Pass 2 after its PR merges. They live in a **sibling** directory of the
-   repo (plus a legacy in-repo path); flag any whose issue is no longer
-   `ai-wip` as a stale leftover the next tick will clean up. Only meaningful
-   when `$R` is the current repo:
+   repo; flag any whose issue is no longer `ai-wip` as a stale leftover the
+   next tick will clean up. Only meaningful when `$R` is the current repo:
 
    ```bash
    ROOT=$(git rev-parse --path-format=absolute --git-common-dir)/..; ROOT=$(cd "$ROOT" && pwd)
-   find "$(dirname "$ROOT")/$(basename "$ROOT")-worktrees" "$ROOT/.claude/worktrees" \
+   find "$(dirname "$ROOT")/$(basename "$ROOT")-worktrees" \
      -maxdepth 1 -name 'ai-*' -type d 2>/dev/null
    ```
 

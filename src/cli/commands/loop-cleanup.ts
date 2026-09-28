@@ -7,8 +7,8 @@ import { defaultWorktreeRoot, findLive } from './loop-guard.js'
 
 /**
  * `repo-tooling loop cleanup` — the ai-loop skill's Pass 2 worktree
- * cleanup, moved out of prose (#617). For each `ai-*` worktree in either root
- * (the sibling `<root>-worktrees` and the legacy `<root>/.claude/worktrees`):
+ * cleanup, moved out of prose (#617). For each `ai-*` worktree in the sibling
+ * `<root>-worktrees` root:
  *
  * - **closed-unmerged PR** → remove; the work was abandoned deliberately.
  * - **merged PR** → remove only once its `(#<PR>)` squash subject is on
@@ -78,15 +78,14 @@ export async function runLoopCleanup(options: LoopCleanupOptions = {}): Promise<
 	const git: GitExec = options.git ?? ((args) => realGitExec(args, root, 120_000))
 	const gh: GhExec = options.gh ?? ((args, stdin) => realGhExec(args, stdin, root))
 
-	const dirs = await findLive([worktreeRoot, path.join(root, '.claude', 'worktrees')])
+	const dirs = await findLive([worktreeRoot])
 	let subjects: string[] | null = null
 	const worktrees: CleanupEntry[] = []
 
 	for (const dir of dirs) {
 		const slug = path.basename(dir)
 		const issue = Number(slug.match(/^ai-(\d+)-/)?.[1]) || null
-		// `worktree-` is the prefix EnterWorktree once gave branches — legacy.
-		const heads = [slug, `worktree-${slug}`]
+		const heads = [slug]
 		const branch =
 			(await git(['branch', '--list', ...heads, '--format=%(refname:short)']))
 				?.split('\n')[0]

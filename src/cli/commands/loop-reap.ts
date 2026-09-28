@@ -84,8 +84,8 @@ interface Pr {
  */
 const LIST_CEILING = 1000
 
-/** `ai-<N>-slug`, or the legacy `worktree-ai-<N>-slug`. */
-const issueOf = (name: string) => Number(name.match(/^(?:worktree-)?ai-(\d+)-/)?.[1]) || null
+/** `ai-<N>-slug`. */
+const issueOf = (name: string) => Number(name.match(/^ai-(\d+)-/)?.[1]) || null
 
 const REVIEW_CLAIMS: Record<string, string> = {
 	'ai-reviewing-code': 'ai-ok-code',
@@ -175,7 +175,7 @@ export async function runLoopReap(options: LoopReapOptions = {}): Promise<LoopRe
 		'--json',
 		'number,state,headRefName,labels',
 	])
-	const dirs = await findLive([worktreeRoot, path.join(root, '.claude', 'worktrees')])
+	const dirs = await findLive([worktreeRoot])
 	const worktreeOf = (issue: number) =>
 		dirs.find((d) => issueOf(path.basename(d)) === issue) ?? null
 

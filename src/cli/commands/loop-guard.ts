@@ -200,7 +200,7 @@ async function gitEntryKind(root: string): Promise<GitEntry> {
 	}
 }
 
-/** `ai-*` directories one level down, in either place worktrees are kept. */
+/** `ai-*` directories one level down in each given root. */
 export async function findLive(dirs: string[]): Promise<string[]> {
 	const live: string[] = []
 	for (const dir of dirs) {
@@ -278,7 +278,7 @@ export async function runLoopGuard(options: LoopGuardOptions = {}): Promise<Loop
 	// A failed repair (1) is the more specific verdict, so it keeps the code.
 	if (identity === 'mismatch' && exitCode === 0) exitCode = 2
 
-	const live = await findLive([worktreeRoot, path.join(root, '.claude', 'worktrees')])
+	const live = await findLive([worktreeRoot])
 	const rebuild = await decideRebuild({ root, removed: options.removed === true, exitCode, live })
 
 	let outcome = rebuild

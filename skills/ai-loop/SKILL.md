@@ -287,15 +287,7 @@ the loop's login — one edited comment per PR, not one per tick. Use it for eve
 Pass 1 comment and the Pass 3 ping-pong stop.
 
 **Dependabot** — `.dependabotCiRed`: count as `ci-red`, nothing more; only a
-human chooses between a fix and a close. `.dependabotChanges` (legacy, stranded)
-— assign it:
-
-```bash
-if [ -n "$HUMAN_USER" ] || [ -n "$AGENT_USER" ]; then
-  gh pr edit <N> ${HUMAN_USER:+--add-assignee} ${HUMAN_USER:+"$HUMAN_USER"} \
-    ${AGENT_USER:+--remove-assignee} ${AGENT_USER:+"$AGENT_USER"}
-fi
-```
+human chooses between a fix and a close.
 
 ### Pass 2 — clean up
 

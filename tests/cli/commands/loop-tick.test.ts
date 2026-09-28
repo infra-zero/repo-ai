@@ -295,7 +295,6 @@ describe('runLoopTick', () => {
 		])
 		expect(r.fixRounds[0]?.worktree).toBe(`${root}-worktrees/ai-6-fix`)
 		expect(r.adopt).toEqual([17])
-		expect(r.dependabotChanges).toEqual([19])
 		expect(r.decay).toEqual([30])
 		expect(r.pickups.map((p) => p.number)).toEqual([40])
 		expect(r.slots).toBe(3)
