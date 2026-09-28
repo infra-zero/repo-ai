@@ -73,9 +73,9 @@ export function actionable(r: LoopTickResult) {
 
 type Work = ReturnType<typeof actionable>
 
-/** One readable line: local time, the summary, then each non-empty category by number. */
-export function describeWork(summary: string, w: Work, now: Date): string {
-	const groups: [string, (number | null)[]][] = [
+/** Each category's identity numbers, shared by `describeWork` and `hasNewWork` below. */
+function workGroups(w: Work): [string, (number | null)[]][] {
+	return [
 		['adopt', w.adopt],
 		['disarm', w.disarm],
 		['review', w.reviewsToSpawn.map((x) => x.pr)],
@@ -90,11 +90,30 @@ export function describeWork(summary: string, w: Work, now: Date): string {
 		['stalled', w.stalled.map((x) => x.pr ?? x.issue)],
 		['decay', w.decay],
 	]
-	const items = groups
+}
+
+/** One readable line: local time, the summary, then each non-empty category by number. */
+export function describeWork(summary: string, w: Work, now: Date): string {
+	const items = workGroups(w)
 		.map(([name, ns]) => [name, [...new Set(ns.filter((n) => n !== null))]] as const)
 		.filter(([, ns]) => ns.length > 0)
 		.map(([name, ns]) => `${name} ${ns.map((n) => `#${n}`).join(' ')}`)
 	return [clock(now), summary, items.join(' · ')].filter(Boolean).join('  ')
+}
+
+/**
+ * True when some category has an entry the previous poll's same category
+ * didn't (#183): removals and unchanged entries are not news — `handoffs`
+ * re-listing an already-`merge-ready` PR must not wake the session just
+ * because `cleaned` shrank. `prev === null` (the first poll) is news whenever
+ * any category is non-empty, matching the old first-poll behaviour.
+ */
+function hasNewWork(curr: Work, prev: Work | null): boolean {
+	const prevGroups = prev ? workGroups(prev) : null
+	return workGroups(curr).some(([, ns], i) => {
+		const prevNs = new Set(prevGroups?.[i]?.[1] ?? [])
+		return ns.some((n) => n !== null && !prevNs.has(n))
+	})
 }
 
 const clock = (now: Date) => now.toTimeString().slice(0, 5)
@@ -164,7 +183,7 @@ export async function runLoopWatch(options: LoopWatchOptions = {}): Promise<void
 	const seconds = (await readConfig(root)).pollSeconds ?? DEFAULT_POLL_SECONDS
 	const gh = await watchGh(root, options.gh ?? ((args, stdin) => realGhExec(args, stdin, root)))
 
-	let last = ''
+	let last: Work | null = null
 	let lastHalt: string | null = null
 	for (let i = 0; options.polls === undefined || i < options.polls; i++) {
 		if (i > 0) await sleep(seconds * 1000)
@@ -193,16 +212,13 @@ export async function runLoopWatch(options: LoopWatchOptions = {}): Promise<void
 		if (r.errors.length > 0 && r.cleaned.length === 0) continue
 		if (r.errors.length === 0) updateStatusSummary(root, r.summary, writeStatus, epoch(now()))
 		const work = actionable(r)
-		const print = JSON.stringify(work)
-		// Work draining away is not news; the next tick finds it gone anyway.
-		const some = Object.values(work).some((l) => l.length > 0)
-		if (print !== last && some)
+		if (hasNewWork(work, last))
 			write(
 				options.json
 					? JSON.stringify({ summary: r.summary, ...work })
 					: describeWork(r.summary, work, now())
 			)
-		last = print
+		last = work
 	}
 }
 

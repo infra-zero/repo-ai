@@ -56,6 +56,42 @@ describe('runLoopWatch', () => {
 		expect(sleeps).toEqual([180_000, 180_000])
 	})
 
+	it('wakes only on a gain, not a loss (#183)', async () => {
+		const handoff7 = { pr: 7, issue: 3, notes: false, autoMerge: false }
+		const handoff9 = { pr: 9, issue: 5, notes: false, autoMerge: false }
+		const cleaned153 = {
+			path: '/worktrees/153',
+			issue: 153,
+			branch: 'fix/153',
+			pr: null,
+			prState: null,
+			action: 'removed' as const,
+		}
+		const oneHandoff = tick({ summary: '1ready', handoffs: [handoff7] })
+
+		// An entry draining away prints nothing.
+		expect((await watch([oneHandoff, tick({ summary: 'idle' })])).lines).toEqual([
+			'09:05  1ready  handoff #7',
+		])
+
+		// An unchanged handoff next to a shrinking `cleaned` prints nothing (the
+		// reported bug: removing a leftover ai-wip label shrank `cleaned` while an
+		// already merge-ready PR kept re-appearing in `handoffs`).
+		const withCleaned = tick({
+			summary: '1ready·1cln',
+			handoffs: [handoff7],
+			cleaned: [cleaned153],
+		})
+		expect((await watch([withCleaned, oneHandoff])).lines).toEqual([
+			'09:05  1ready·1cln  handoff #7 · cleaned #153',
+		])
+
+		// A new handoff alongside the unchanged one still prints.
+		expect(
+			(await watch([oneHandoff, tick({ summary: '2ready', handoffs: [handoff7, handoff9] })])).lines
+		).toEqual(['09:05  1ready  handoff #7', '09:05  2ready  handoff #7 #9'])
+	})
+
 	it('ignores a blocked fix round and a growing stall age', async () => {
 		const blocked = (minutes: number) =>
 			tick({
