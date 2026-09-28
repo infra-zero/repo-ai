@@ -707,8 +707,11 @@ Notes, so it doesn't get "tidied" into breakage:
 Never skip this pass, **including on an idle tick or a halt** — an unobservable
 loop is indistinguishable from a dead one. A halt reports but schedules
 nothing (below). `SUMMARY` is `.summary`
-(`⚠1blocked·⚠1ci-red·2wip·1rev·1ready·1saved`, `⚠` stalls first, or `idle`;
-`saved` counts reviewers not spawned because a docs-only PR got one combined review), adjusted
+(`⚠1blocked·⚠1ci-red·2 agents·1 on CI·1 to merge·1 saved`, `⚠` stalls first, or `idle`),
+split by whose turn it is: `agents` are implementers and PRs in review or a fix
+round, `on CI` are passed PRs waiting on checks or a branch update, `to merge` are
+waiting on the human, and `agents idle` says nothing is running (#181). `saved`
+counts reviewers not spawned because a docs-only PR got one combined review. Adjusted
 only where you deviated from the list; `⚠halt` on a halt. `ai-notes` never
 borrows the `⚠`.
 
@@ -858,7 +861,7 @@ time to tick now — say after merging a PR — without adding a second schedule
 Don't wrap it in `/loop`.
 
 **Is a tick coming?** Every tick ends with a `Next tick:` line, and the statusline
-segment (`repo-ai fix statusline`) shows it: `🤖 1wip · next 9m` while the loop
+segment (`repo-ai fix statusline`) shows it: `🤖 1 agent · next 9m` while the loop
 is running, and nothing at all once the last tick is over 35 minutes old.
 
 **Wake on change, not on a timer.** A tick is a full LLM turn; a poll needs no

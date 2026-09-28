@@ -432,7 +432,7 @@ relaunch as <agentUser>, then /ai-loop`.
 
 **Is a tick coming?** Every tick ends with a `Next tick:` line, and the
 statusline segment (`npx @rtorcato/repo-ai fix statusline`) shows it:
-`🤖 1wip · next 9m` while the loop runs, and nothing once the last tick is over
+`🤖 1 agent · next 9m` while the loop runs, and nothing once the last tick is over
 35 minutes old. `/ai-loop-status`
 reports the same.
 
@@ -452,7 +452,7 @@ something to do. Nothing here polls CI with the model; that judgement happens
 inside a tick.
 
 ```
-15:42  5wip·1rev  review #78 · fix #69 · update #74 · handoff #74 · pickup #39 #41 · cleaned #62 · stalled #55
+15:42  4 agents·1 on CI  review #78 · fix #69 · update #74 · handoff #74 · pickup #39 #41 · cleaned #62 · stalled #55
 ```
 
 The line never carries an issue or PR body. `--json` prints the full structured

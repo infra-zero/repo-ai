@@ -585,8 +585,44 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 			result.decay,
 			result.dependabotCiRed,
 		].every((l) => l.length === 0)
-	result.summary = summarize(result, inFlight, loopPrs.length)
+	result.summary = summarize(result, turns(result, loopPrs, wip ?? [], freed))
 	return result
+}
+
+export interface Turns {
+	/** Implementers with no PR yet, plus PRs in review or in a fix round. */
+	agents: number
+	/** Passed, waiting on checks or a branch update. */
+	ci: number
+}
+
+/** Whose turn each in-flight item is once this tick's actions land (#181). */
+function turns(
+	r: LoopTickResult,
+	loopPrs: Pr[],
+	wip: { number: number }[],
+	freed: Set<number | null>
+): Turns {
+	const human = new Set([
+		...r.handoffs.map((h) => h.pr),
+		...r.fixRounds.filter((f) => f.action === 'block').map((f) => f.pr),
+	])
+	const sentBack = new Set(r.sendBacks.map((s) => s.pr))
+	let agents = 0
+	let ci = 0
+	for (const p of loopPrs) {
+		if (human.has(p.number)) continue
+		const labels = new Set(p.labels.map((l) => l.name))
+		const passed =
+			(labels.has('ai-ok-code') && labels.has('ai-ok-sec')) || labels.has('merge-ready')
+		if (passed && !sentBack.has(p.number)) ci++
+		else agents++
+	}
+	const withPr = new Set(loopPrs.map((p) => issueOf(p.headRefName)))
+	agents +=
+		wip.filter((i) => !freed.has(i.number) && !withPr.has(i.number)).length +
+		Math.min(r.slots, r.pickups.length)
+	return { agents, ci }
 }
 
 /**
@@ -626,32 +662,33 @@ export async function staleInstall(env: NodeJS.ProcessEnv): Promise<string[]> {
 }
 
 /** `⚠` segments first, so a truncated phone banner still leads with the stall. */
-export function summarize(r: LoopTickResult, inFlight: number, loopPrs: number): string {
+export function summarize(r: LoopTickResult, t: Turns): string {
 	if (r.idle) return 'idle'
 	const blocked =
 		r.stalled.filter((s) => s.action === 'block').length +
 		r.fixRounds.filter((f) => f.action === 'block').length
 	const ciRed = r.sendBacks.filter((s) => s.reason === 'ci-red').length + r.dependabotCiRed.length
-	const wip = inFlight + Math.min(r.slots, r.pickups.length)
-	const ready = r.handoffs.length
+	const merge = r.handoffs.length
 	const saved = r.reviewsToSpawn.filter((s) => s.arm === 'both').length
 	const segments: [number | boolean, string][] = [
 		[r.errors.length > 0, '⚠error'],
 		[blocked, `⚠${blocked}blocked`],
 		[ciRed, `⚠${ciRed}ci-red`],
 		[r.rebuild === 'deferred' || r.rebuild === 'rebuild-failed', '⚠rebuild'],
-		[wip, `${wip}wip`],
-		[loopPrs - ready, `${loopPrs - ready}rev`],
-		[ready, `${ready}ready`],
+		[t.agents, `${t.agents} agent${t.agents === 1 ? '' : 's'}`],
+		[t.ci, `${t.ci} on CI`],
+		[merge, `${merge} to merge`],
 		// Reviewer agents not spawned: one combined review instead of two.
-		[saved, `${saved}saved`],
+		[saved, `${saved} saved`],
 	]
-	return (
-		segments
-			.filter(([n]) => n)
-			.map(([, s]) => s)
-			.join('·') || 'idle'
-	)
+	const shown = segments.filter(([n]) => n).map(([, s]) => s)
+	if (!shown.length) return 'idle'
+	// Say so when nothing is running, so waiting on the human never reads as work (#181).
+	if (!t.agents) {
+		const at = shown.findIndex((s) => !s.startsWith('⚠'))
+		shown.splice(at < 0 ? shown.length : at, 0, 'agents idle')
+	}
+	return shown.join('·')
 }
 
 /** Plain-text errors and warnings, each prefixed and coloured so an advisory never reads as a failure. */

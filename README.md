@@ -59,7 +59,7 @@ The plugin carries the skills only. Pass 3 and Pass 4 run their Workflow scripts
 | `fix labels` | Repair loop label colours and descriptions with `gh label edit`. |
 | `fix claude-skills` | Install or update the skills, and the Workflow scripts they run by name (`workflows/*.js` → `~/.claude/workflows`). `--force-skills` overwrites a modified or newer copy. |
 | `fix ai-loop-identity` | Point this checkout's Claude sessions at a `gh` profile signed in as `rules.aiLoop.agentUser`. |
-| `fix statusline` | Install the loop's status segment (`🤖 2wip·1rev · next 9m`) to `~/.claude/ai-loop-statusline.sh`, replacing that file on every run (it is ours; don't edit it). Never touches an existing statusline: sets `statusLine` in `~/.claude/settings.json` only when you have none, otherwise prints the one line to add to your own script. Never prompts. |
+| `fix statusline` | Install the loop's status segment (`🤖 2 agents·1 to merge · next 9m`) to `~/.claude/ai-loop-statusline.sh`, replacing that file on every run (it is ours; don't edit it). Never touches an existing statusline: sets `statusLine` in `~/.claude/settings.json` only when you have none, otherwise prints the one line to add to your own script. Never prompts. |
 | `loop guard` | Repair a wrongly-bare main checkout, gate the `node_modules` rebuild, and assert the agent identity. |
 | `loop env` | Resolve a tick's variables (root, worktree root, owner/repo, agent and human users). |
 | `loop worktree add <slug>` | Create an `ai-*` worktree off `origin/main` and link its dependencies. |
