@@ -418,6 +418,53 @@ Three details worth knowing because they fail *silently* when got wrong:
   `waiting` for over a day; the loop only reports it, never approves or
   cancels a deployment itself.
 
+### What `loop apply` does
+
+The skill keeps only the judgement; `loop apply --json` makes every edit below,
+reports each in `.applied[]`, and returns the comments still owed in `.comments[]`:
+
+- **Disarm** — `.disarm`: an auto-merge armed before both reviews passed is
+  switched off first, so the merge cannot beat the review.
+- **Hand over** — `.handoffs[]`: both `ai-ok-*`, no `ai-changes`, `CLEAN`. Adds
+  `merge-ready`, assigns the human, drops `ai-review`, both `ai-ok-*` and the
+  agent. `ai-notes` survives to the merge.
+- **The one unattended merge** — a handoff with `.autoMerge`, set only when
+  `.repo-ai.json` has `"autoMerge": true`, publishing runs behind an environment
+  with required reviewers, and the PR has no `ai-notes`. Unreadable answers fail closed.
+- **Reconcile** — `.stripMergeReady`: removes `merge-ready` from a PR no longer
+  `CLEAN`, or carrying `ai-changes`.
+- **Update the branch** — `.updateBranches[]`: a passed `BEHIND` PR gets
+  `gh pr update-branch`, keeping its reviews; a failed update is sent back as
+  `ai-conflicts`. A PR waiting only on running checks appears in no list.
+- **Send back** — `.sendBacks[]`: `ci-red` or `BLOCKED` becomes `ai-changes`,
+  `DIRTY` becomes `ai-conflicts` (off the round cap, #176); every review label is dropped.
+- **Clean up** — removes `.toClean[]` worktrees (PR closed, or its squash on the
+  default branch), relabels their issues and closed `ai-wip` leftovers, runs
+  `loop guard --removed`, and applies the label side of every `.stalled[]` verdict.
+- **Claims** — `ai-reviewing-*` for `.reviewsToSpawn[]` and `ai-fixing` for
+  fix rounds, within `maxTasksPerTick`, fixes first; then the first `slots`
+  pickups (`ai-wip` on, `ai-ready` off, worktree created), skipping one whose
+  backticked paths overlap another pickup's (#594) — shared docs like `SKILL.md`
+  and `ai-loop.md` don't count (#185).
+
+### The Workflows
+
+Both `ai-loop-pickup` and `ai-loop-recover` are installed to `~/.claude/workflows/`
+by `fix claude-skills`. Details that break if "tidied":
+
+- **The agents write the state.** Reviewers post their verdict marker and label;
+  fixers push and relabel. A Workflow's result is a report only — the launching
+  session may be gone, and the next tick reads labels and markers.
+- **No retries, no `isolation`, no `EnterWorktree`.** One agent per claim, so
+  `staleMinutes` reaping describes every claim; agents reach worktrees through `git -C`.
+- **`pipeline`, not `parallel`** in pickup — issue B's reviewers start when B's
+  PR opens, without waiting for A.
+- **Caps are enforced in the scripts (#41).** A task past `maxTasksPerTick` or
+  `budgetTokens` is `log()`ged, not spawned, and its label waits for a later tick.
+- **`outputTokensSpent` counts output tokens only** — the harness's own total,
+  input and cache reads included, runs about 8-9× higher, so the report's
+  `·NtokK` is a relative gauge.
+
 **The merge ripple.** Under strict required checks, every merge makes the other
 passed PRs `BEHIND`. Pass 1 updates each branch rather than spending a fixer on
 it, but each update re-runs CI and delays that handoff by a tick. A merge queue,
