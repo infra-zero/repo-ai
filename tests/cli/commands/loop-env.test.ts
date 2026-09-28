@@ -26,11 +26,15 @@ function checkout(parent: string): string {
 }
 
 /** Answers by the first arg that names a route; records every call. */
-function fakeGh(opts: { owner?: 'User' | 'Organization'; assignable?: string[] } = {}) {
+function fakeGh(
+	opts: { owner?: 'User' | 'Organization'; assignable?: string[]; defaultBranch?: string } = {}
+) {
 	const calls: string[][] = []
 	const gh: GhExec = async (args) => {
 		calls.push(args)
 		const ok = (stdout: string) => ({ ok: true, stdout, stderr: '' })
+		if (args[0] === 'repo' && args.includes('defaultBranchRef'))
+			return ok(`${opts.defaultBranch ?? 'main'}\n`)
 		if (args[0] === 'repo') return ok('acme/widget\n')
 		const route = args[1]
 		if (route === 'user') return ok('me-bot\n')
@@ -130,8 +134,38 @@ describe('resolveLoopEnv', () => {
 		const dir = newTmpDir()
 		const gh: GhExec = async () => ({ ok: false, stdout: '', stderr: 'no repo' })
 		const env = await resolveLoopEnv({ dir, gh, git: async () => null, env: {} })
-		expect(env).toMatchObject({ root: '', worktreeRoot: '', ownerRepo: '', me: '' })
-		expect(env.warnings).toHaveLength(2)
+		expect(env).toMatchObject({
+			root: '',
+			worktreeRoot: '',
+			ownerRepo: '',
+			defaultBranch: '',
+			me: '',
+		})
+		expect(env.warnings).toHaveLength(3)
+	})
+
+	it('resolves a non-main default branch, and reads it from origin/HEAD over gh', async () => {
+		const root = checkout(newTmpDir())
+		git(root, 'remote', 'add', 'origin', 'https://example.invalid/acme/widget.git')
+		git(root, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/trunk')
+		const env = await resolveLoopEnv({
+			dir: root,
+			gh: fakeGh({ defaultBranch: 'master' }).gh,
+			env: {},
+		})
+		// origin/HEAD (trunk) wins over what gh would have said (master).
+		expect(env.defaultBranch).toBe('trunk')
+	})
+
+	it('falls back to gh for the default branch when origin/HEAD is unset', async () => {
+		const root = checkout(newTmpDir())
+		const env = await resolveLoopEnv({
+			dir: root,
+			gh: fakeGh({ defaultBranch: 'master' }).gh,
+			env: {},
+		})
+		expect(env.defaultBranch).toBe('master')
+		expect(env.warnings).toEqual([])
 	})
 })
 
@@ -141,6 +175,7 @@ describe('toShell', () => {
 			root: "/a'b",
 			worktreeRoot: '/w',
 			ownerRepo: 'o/r',
+			defaultBranch: 'main',
 			agentUser: '',
 			humanUser: 'h',
 			me: '$(id)',
@@ -149,6 +184,7 @@ describe('toShell', () => {
 			warnings: [],
 		})
 		expect(out).toContain(`ROOT='/a'\\''b'`)
+		expect(out).toContain(`DEFAULT_BRANCH='main'`)
 		expect(out).toContain(`ME='$(id)'`)
 		expect(out).toContain(`AGENT_USER=''`)
 		expect(out).toContain(`BUDGET_TOKENS='400000'`)

@@ -13,23 +13,29 @@ const git = (cwd: string, ...args: string[]) =>
 		.toString()
 		.trim()
 
-/** A main checkout cloned from a bare origin, so `origin/main` is real. */
-function checkout(parent: string): string {
+/**
+ * A checkout of a bare origin whose default branch is `branch`, with a real
+ * `origin/HEAD` — the bare repo is empty at clone time, so `git clone` never
+ * records it on its own; `remote set-head --auto` sets it once the branch has
+ * been pushed, the way a real clone of a populated repo would already have it.
+ */
+function checkout(parent: string, branch = 'main'): string {
 	const origin = join(parent, 'origin.git')
-	git(parent, 'init', '-q', '--bare', '-b', 'main', origin)
+	git(parent, 'init', '-q', '--bare', '-b', branch, origin)
 	const dir = join(parent, 'repo')
 	git(parent, 'clone', '-q', origin, dir)
 	git(dir, 'config', 'user.email', 'test@example.com')
 	git(dir, 'config', 'user.name', 'Test')
 	git(dir, 'commit', '-q', '--allow-empty', '-m', 'init')
-	git(dir, 'push', '-q', 'origin', 'main')
+	git(dir, 'push', '-q', 'origin', branch)
+	git(dir, 'remote', 'set-head', 'origin', '--auto')
 	return fs.realpathSync(dir)
 }
 
-/** Lands a squash subject on origin/main, the way GitHub would. */
-function squash(root: string, subject: string) {
+/** Lands a squash subject on the default branch, the way GitHub would. */
+function squash(root: string, subject: string, branch = 'main') {
 	git(root, 'commit', '-q', '--allow-empty', '-m', subject)
-	git(root, 'push', '-q', 'origin', 'main')
+	git(root, 'push', '-q', 'origin', branch)
 }
 
 function fakeGh(prs: Record<string, { number: number; state: string }>): GhExec {
@@ -99,5 +105,20 @@ describe('runLoopCleanup', () => {
 		const root = checkout(newTmpDir())
 		const result = await runLoopCleanup({ root, gh: fakeGh({}) })
 		expect(result).toMatchObject({ removed: false, worktrees: [], exitCode: 0 })
+	})
+
+	it('reads a non-main default branch from origin/HEAD instead of assuming origin/main', async () => {
+		const root = checkout(newTmpDir(), 'trunk')
+		const wt = `${root}-worktrees`
+		git(root, 'worktree', 'add', '-q', join(wt, 'ai-1-landed'), '-b', 'ai-1-landed')
+		squash(root, 'feat: landed (#11)', 'trunk')
+
+		const result = await runLoopCleanup({
+			root,
+			gh: fakeGh({ 'ai-1-landed': { number: 11, state: 'MERGED' } }),
+		})
+
+		expect(result.worktrees).toMatchObject([{ action: 'removed' }])
+		expect(fs.existsSync(join(wt, 'ai-1-landed'))).toBe(false)
 	})
 })
