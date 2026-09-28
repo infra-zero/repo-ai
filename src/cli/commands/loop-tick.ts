@@ -270,10 +270,10 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	const seams = { root, git: options.git, gh: options.gh }
 
 	// #153: worth surfacing even on a halting tick — decoupled from worktree state.
-	const ciWarning = await ciRunWarning(gh, ownerRepo, now)
+	const ciWarning = await ciRunWarning(gh, ownerRepo, env.defaultBranch, now)
 	if (ciWarning) result.warnings.push(ciWarning)
 	// #146: same reasoning — a stuck approval pins main's push concurrency group.
-	const releaseWarning = await releaseStuckWarning(gh, ownerRepo, now)
+	const releaseWarning = await releaseStuckWarning(gh, ownerRepo, env.defaultBranch, now)
 	if (releaseWarning) {
 		result.warnings.push(releaseWarning)
 		result.releaseStuck = true

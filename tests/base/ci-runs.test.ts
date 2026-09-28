@@ -37,14 +37,14 @@ function fakeGh(runs: ReturnType<typeof run>[], jobs: Record<number, number> = {
 describe('ciRunWarning (#153)', () => {
 	it('warns when the latest completed run was cancelled with no jobs', async () => {
 		const gh = fakeGh([run({ id: 9, status: 'completed', conclusion: 'cancelled' })], { 9: 0 })
-		const w = await ciRunWarning(gh, 'acme/widget', NOW)
+		const w = await ciRunWarning(gh, 'acme/widget', 'main', NOW)
 		expect(w).toContain('cancelled with no jobs')
 		expect(w).toContain('runs/9')
 	})
 
 	it('does not warn on a cancelled run that actually ran jobs', async () => {
 		const gh = fakeGh([run({ id: 9, status: 'completed', conclusion: 'cancelled' })], { 9: 3 })
-		expect(await ciRunWarning(gh, 'acme/widget', NOW)).toBeNull()
+		expect(await ciRunWarning(gh, 'acme/widget', 'main', NOW)).toBeNull()
 	})
 
 	it('warns when the latest run has sat pending with no jobs past 30 minutes', async () => {
@@ -52,7 +52,7 @@ describe('ciRunWarning (#153)', () => {
 			[run({ id: 10, status: 'in_progress', conclusion: null, created_at: minutesAgo(45) })],
 			{ 10: 0 }
 		)
-		const w = await ciRunWarning(gh, 'acme/widget', NOW)
+		const w = await ciRunWarning(gh, 'acme/widget', 'main', NOW)
 		expect(w).toContain('pending with no jobs')
 		expect(w).toContain('runs/10')
 	})
@@ -62,7 +62,7 @@ describe('ciRunWarning (#153)', () => {
 			[run({ id: 10, status: 'in_progress', conclusion: null, created_at: minutesAgo(10) })],
 			{ 10: 0 }
 		)
-		expect(await ciRunWarning(gh, 'acme/widget', NOW)).toBeNull()
+		expect(await ciRunWarning(gh, 'acme/widget', 'main', NOW)).toBeNull()
 	})
 
 	it('does not warn on a pending run that already has jobs running', async () => {
@@ -70,7 +70,7 @@ describe('ciRunWarning (#153)', () => {
 			[run({ id: 10, status: 'in_progress', conclusion: null, created_at: minutesAgo(45) })],
 			{ 10: 2 }
 		)
-		expect(await ciRunWarning(gh, 'acme/widget', NOW)).toBeNull()
+		expect(await ciRunWarning(gh, 'acme/widget', 'main', NOW)).toBeNull()
 	})
 
 	it('checks the latest completed run even when a fresh run is already in flight', async () => {
@@ -81,13 +81,13 @@ describe('ciRunWarning (#153)', () => {
 			],
 			{ 9: 0, 11: 0 }
 		)
-		const w = await ciRunWarning(gh, 'acme/widget', NOW)
+		const w = await ciRunWarning(gh, 'acme/widget', 'main', NOW)
 		expect(w).toContain('runs/9')
 	})
 
 	it('is healthy on a normal green history', async () => {
 		const gh = fakeGh([run({ id: 9, status: 'completed', conclusion: 'success' })])
-		expect(await ciRunWarning(gh, 'acme/widget', NOW)).toBeNull()
+		expect(await ciRunWarning(gh, 'acme/widget', 'main', NOW)).toBeNull()
 	})
 
 	it('asks for ci.yml runs only, so other push workflows cannot dilute the window (#174)', async () => {
@@ -97,15 +97,33 @@ describe('ciRunWarning (#153)', () => {
 			paths.push(args[1] ?? '')
 			return inner(args)
 		}
-		await ciRunWarning(gh, 'acme/widget', NOW)
+		await ciRunWarning(gh, 'acme/widget', 'main', NOW)
 		expect(paths[0]).toBe(
 			'repos/acme/widget/actions/workflows/ci.yml/runs?event=push&branch=main&per_page=5'
 		)
 	})
 
+	it("queries the repo's default branch, not a hardcoded main (#179)", async () => {
+		const paths: string[] = []
+		const inner = fakeGh([run()])
+		const gh: GhExec = async (args) => {
+			paths.push(args[1] ?? '')
+			return inner(args)
+		}
+		await ciRunWarning(gh, 'acme/widget', 'trunk', NOW)
+		expect(paths[0]).toContain('branch=trunk&')
+	})
+
+	it('skips without calling gh when the default branch is unresolved', async () => {
+		const gh: GhExec = async () => {
+			throw new Error('gh should not be called')
+		}
+		expect(await ciRunWarning(gh, 'acme/widget', '', NOW)).toBeNull()
+	})
+
 	it('fails open when gh cannot list runs', async () => {
 		const gh: GhExec = async () => ({ ok: false, stdout: '', stderr: 'offline', code: 1 })
-		expect(await ciRunWarning(gh, 'acme/widget', NOW)).toBeNull()
+		expect(await ciRunWarning(gh, 'acme/widget', 'main', NOW)).toBeNull()
 	})
 
 	it('fails open when the jobs count is unreadable', async () => {
@@ -122,7 +140,7 @@ describe('ciRunWarning (#153)', () => {
 				}
 			return { ok: false, stdout: '', stderr: 'rate limited', code: 1 }
 		}
-		expect(await ciRunWarning(gh, 'acme/widget', NOW)).toBeNull()
+		expect(await ciRunWarning(gh, 'acme/widget', 'main', NOW)).toBeNull()
 	})
 })
 
@@ -140,7 +158,7 @@ describe('releaseStuckWarning (#146)', () => {
 		const gh = runsGh([
 			run({ id: 9, status: 'waiting', conclusion: null, created_at: hoursAgo(25) }),
 		])
-		const w = await releaseStuckWarning(gh, 'acme/widget', NOW)
+		const w = await releaseStuckWarning(gh, 'acme/widget', 'main', NOW)
 		expect(w).toContain('waiting on approval')
 		expect(w).toContain('9')
 		expect(w).toContain('runs/9')
@@ -150,25 +168,25 @@ describe('releaseStuckWarning (#146)', () => {
 		const gh = runsGh([
 			run({ id: 9, status: 'waiting', conclusion: null, created_at: hoursAgo(2) }),
 		])
-		expect(await releaseStuckWarning(gh, 'acme/widget', NOW)).toBeNull()
+		expect(await releaseStuckWarning(gh, 'acme/widget', 'main', NOW)).toBeNull()
 	})
 
 	it('does not warn on a pending run', async () => {
 		const gh = runsGh([
 			run({ id: 9, status: 'in_progress', conclusion: null, created_at: hoursAgo(25) }),
 		])
-		expect(await releaseStuckWarning(gh, 'acme/widget', NOW)).toBeNull()
+		expect(await releaseStuckWarning(gh, 'acme/widget', 'main', NOW)).toBeNull()
 	})
 
 	it('does not warn on a completed run', async () => {
 		const gh = runsGh([
 			run({ id: 9, status: 'completed', conclusion: 'success', created_at: hoursAgo(25) }),
 		])
-		expect(await releaseStuckWarning(gh, 'acme/widget', NOW)).toBeNull()
+		expect(await releaseStuckWarning(gh, 'acme/widget', 'main', NOW)).toBeNull()
 	})
 
 	it('fails open when gh cannot list runs', async () => {
 		const gh: GhExec = async () => ({ ok: false, stdout: '', stderr: 'offline', code: 1 })
-		expect(await releaseStuckWarning(gh, 'acme/widget', NOW)).toBeNull()
+		expect(await releaseStuckWarning(gh, 'acme/widget', 'main', NOW)).toBeNull()
 	})
 })
