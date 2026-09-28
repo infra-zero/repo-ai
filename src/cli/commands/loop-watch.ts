@@ -13,8 +13,8 @@ import { type LoopTickResult, runLoopTick } from './loop-tick.js'
  * LLM turn; a poll is a few `gh` calls, so the skill runs this under the
  * Monitor tool and each stdout line wakes the session.
  *
- * It inherits `loop tick`'s local writes: it removes worktrees whose PR landed
- * or closed, and reports them in `cleaned` so the next tick relabels them.
+ * Like `loop tick` it removes nothing (#149): worktrees whose PR landed or
+ * closed come back in `toClean`, for the next tick's `loop apply`.
  *
  * Each line is `HH:MM  <summary>  review #78 · pickup #39 #41 …`: numbers only,
  * never an issue or PR body — the line wakes a Claude session, and bodies are
@@ -59,7 +59,7 @@ export function actionable(r: LoopTickResult) {
 		handoffs: r.handoffs,
 		sendBacks: r.sendBacks,
 		stripMergeReady: r.stripMergeReady,
-		cleaned: r.cleaned,
+		toClean: r.toClean,
 		stalled: r.stalled.map(({ issue, pr, label, action }) => ({ issue, pr, label, action })),
 		decay: r.decay,
 		verdicts: r.verdicts,
@@ -86,7 +86,7 @@ function workGroups(w: Work): [string, (number | null)[]][] {
 		['handoff', w.handoffs.map((x) => x.pr)],
 		['unready', w.stripMergeReady],
 		['pickup', w.pickups],
-		['cleaned', w.cleaned.map((x) => x.issue ?? x.pr)],
+		['clean', w.toClean.map((x) => x.issue ?? x.pr)],
 		['stalled', w.stalled.map((x) => x.pr ?? x.issue)],
 		['decay', w.decay],
 	]
@@ -105,7 +105,7 @@ export function describeWork(summary: string, w: Work, now: Date): string {
  * True when some category has an entry the previous poll's same category
  * didn't (#183): removals and unchanged entries are not news — `handoffs`
  * re-listing an already-`merge-ready` PR must not wake the session just
- * because `cleaned` shrank. `prev === null` (the first poll) is news whenever
+ * because `toClean` shrank. `prev === null` (the first poll) is news whenever
  * any category is non-empty, matching the old first-poll behaviour.
  */
 function hasNewWork(curr: Work, prev: Work | null): boolean {
@@ -207,10 +207,9 @@ export async function runLoopWatch(options: LoopWatchOptions = {}): Promise<void
 		}
 		lastHalt = null
 		for (const e of r.errors) console.error(chalk.yellow(e))
-		// Partial lists would read as a change, so keep the last good baseline —
-		// unless this poll removed worktrees, which no later poll reports again.
-		if (r.errors.length > 0 && r.cleaned.length === 0) continue
-		if (r.errors.length === 0) updateStatusSummary(root, r.summary, writeStatus, epoch(now()))
+		// Partial lists would read as a change, so keep the last good baseline.
+		if (r.errors.length > 0) continue
+		updateStatusSummary(root, r.summary, writeStatus, epoch(now()))
 		const work = actionable(r)
 		if (hasNewWork(work, last))
 			write(

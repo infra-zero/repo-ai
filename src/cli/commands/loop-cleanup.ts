@@ -24,7 +24,8 @@ import { defaultWorktreeRoot, findLive } from './loop-guard.js'
  */
 
 // 'relabel': no worktree left to remove — only the issue's ai-wip to strip (#23).
-export type CleanupAction = 'removed' | 'kept' | 'remove-failed' | 'relabel'
+// 'to-remove': what a `dryRun` (`loop tick`) would have removed (#149).
+export type CleanupAction = 'removed' | 'kept' | 'remove-failed' | 'relabel' | 'to-remove'
 
 export interface CleanupEntry {
 	path: string
@@ -51,6 +52,8 @@ export interface LoopCleanupOptions {
 	json?: boolean
 	/** Resolved once by a caller that already has it (`loop tick`); resolved here otherwise. */
 	defaultBranch?: string
+	/** Decide only: mark entries `to-remove`, fetch and remove nothing (`loop tick`, #149). */
+	dryRun?: boolean
 	/** Test seams. */
 	git?: GitExec
 	gh?: GhExec
@@ -111,7 +114,7 @@ export async function runLoopCleanup(options: LoopCleanupOptions = {}): Promise<
 				const defaultBranch = options.defaultBranch ?? (await resolveDefaultBranch(git, gh))
 				// Best-effort: a failed fetch leaves the default branch stale, which
 				// can only keep a worktree, never remove one wrongly.
-				await git(['fetch', '--prune', '--no-write-fetch-head', 'origin'])
+				if (!options.dryRun) await git(['fetch', '--prune', '--no-write-fetch-head', 'origin'])
 				// Whether #N ever landed is a complete-set question (#163) — a
 				// windowed log falsely "kept" a worktree whose squash had scrolled
 				// out of the window, a leak with no other trigger to catch it.
@@ -124,6 +127,11 @@ export async function runLoopCleanup(options: LoopCleanupOptions = {}): Promise<
 				entry.reason = `squash for #${pr.number} not landed`
 				continue
 			}
+		}
+		if (options.dryRun) {
+			entry.action = 'to-remove'
+			entry.reason = pr.state === 'MERGED' ? `#${pr.number} landed` : `#${pr.number} closed`
+			continue
 		}
 		if ((await git(['worktree', 'remove', '--force', dir])) === null) {
 			entry.action = 'remove-failed'

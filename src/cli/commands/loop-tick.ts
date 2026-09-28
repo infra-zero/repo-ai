@@ -15,7 +15,7 @@ import {
 import { installWorkflow, SHIPPED_WORKFLOWS, workflowsDirFor } from '../generators/workflows.js'
 import { type CleanupEntry, runLoopCleanup } from './loop-cleanup.js'
 import { type LoopEnv, resolveLoopEnv } from './loop-env.js'
-import { type InstallExec, type RebuildOutcome, runLoopGuard } from './loop-guard.js'
+import { type InstallExec, runLoopGuard } from './loop-guard.js'
 import { runLoopVerdict, type Verdict } from './loop-marker.js'
 import { labelApplications, MAX_APPLICATIONS, type ReapEntry, runLoopReap } from './loop-reap.js'
 
@@ -27,9 +27,9 @@ import { labelApplications, MAX_APPLICATIONS, type ReapEntry, runLoopReap } from
  * eligibility query, and says what to do. The skill applies it: every label,
  * assignee, comment, merge and agent spawn stays the agent's call.
  *
- * It writes no GitHub state. Its only local writes are the ones the helpers it
- * composes already make — `loop guard`'s bare repair and gated `node_modules`
- * rebuild, and `loop cleanup`'s removal of worktrees whose PR landed or closed.
+ * It writes no GitHub state and removes no worktree (#149): the worktrees whose
+ * PR landed or closed come back in `toClean`, and `loop apply` removes them.
+ * Its only local writes are `loop guard`'s bare repair and a `git fetch`.
  *
  * Exit non-zero only to halt the tick: `loop guard`'s own code (`1`/`2`), or `1`
  * when the checkout or its GitHub repo cannot be resolved. A failed gh read is
@@ -105,8 +105,8 @@ export interface LoopTickResult {
 	stripMergeReady: number[]
 	/** Pass 1 — flag only, never send back. */
 	dependabotCiRed: number[]
-	/** Pass 2 — worktrees removed; relabel each `issue`. */
-	cleaned: CleanupEntry[]
+	/** Pass 2 — worktrees for `loop apply` to remove, and issues to relabel. */
+	toClean: CleanupEntry[]
 	/** Pass 2 — `loop reap`'s verdicts, to apply. */
 	stalled: ReapEntry[]
 	/** Pass 2 — `ai-suggested` issues to close. */
@@ -119,7 +119,6 @@ export interface LoopTickResult {
 	/** Pass 4 — free slots, and every eligible issue in queue order. */
 	slots: number
 	pickups: { number: number; title: string; body: string }[]
-	rebuild: RebuildOutcome
 	summary: string
 	errors: string[]
 	/**
@@ -223,7 +222,7 @@ function empty(env: LoopEnv): LoopTickResult {
 		updateBranches: [],
 		stripMergeReady: [],
 		dependabotCiRed: [],
-		cleaned: [],
+		toClean: [],
 		stalled: [],
 		decay: [],
 		verdicts: [],
@@ -231,7 +230,6 @@ function empty(env: LoopEnv): LoopTickResult {
 		fixRounds: [],
 		slots: 0,
 		pickups: [],
-		rebuild: 'not-requested',
 		summary: '',
 		errors: [],
 		staleInstall: [],
@@ -284,22 +282,9 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	// Best-effort: Pass 4 branches worktrees off the default branch.
 	await git(['fetch', '--prune', '--no-write-fetch-head', 'origin'])
 
-	const cleanup = await runLoopCleanup({ ...seams, defaultBranch: env.defaultBranch })
-	result.cleaned = cleanup.worktrees.filter((w) => w.action === 'removed')
-	for (const w of cleanup.worktrees.filter((w) => w.action === 'remove-failed'))
-		errors.push(`could not remove ${w.path}`)
-	let live = guard.live
-	if (cleanup.removed) {
-		const again = await runLoopGuard({ ...seams, install: options.install, removed: true })
-		if (again.exitCode !== 0) {
-			result.halt =
-				again.messages.filter((m) => m.startsWith('⚠')).join('; ') || 'loop guard failed'
-			result.exitCode = again.exitCode
-			return result
-		}
-		result.rebuild = again.rebuild
-		live = again.live
-	}
+	const cleanup = await runLoopCleanup({ ...seams, defaultBranch: env.defaultBranch, dryRun: true })
+	result.toClean = cleanup.worktrees.filter((w) => w.action === 'to-remove')
+	const live = guard.live
 
 	const reap = await runLoopReap({ root, gh: options.gh, now: options.now })
 	result.stalled = reap.stalled
@@ -337,10 +322,10 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		'--json',
 		'number',
 	])
-	const cleanedIssues = new Set(result.cleaned.map((w) => w.issue))
+	const cleanedIssues = new Set(result.toClean.map((w) => w.issue))
 	for (const { number } of closedWip ?? []) {
 		if (cleanedIssues.has(number)) continue
-		result.cleaned.push({
+		result.toClean.push({
 			path: '',
 			issue: number,
 			branch: null,
@@ -564,7 +549,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 
 	// Slots count what is still in flight once this tick's cleanup and reaping land.
 	const freed = new Set([
-		...result.cleaned.map((w) => w.issue),
+		...result.toClean.map((w) => w.issue),
 		...result.stalled.filter((s) => s.kind === 'implementer').map((s) => s.issue),
 	])
 	const inFlight = (wip ?? []).filter((i) => !freed.has(i.number)).length
@@ -579,10 +564,10 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		errors.length === 0 &&
 		loopPrs.length === 0 &&
 		live.length === 0 &&
-		// `cleaned` counts: an idle tick skips Pass 2, which is what strips ai-wip.
+		// `toClean` counts: an idle tick skips Pass 2, which is what strips ai-wip.
 		[
 			result.adopt,
-			result.cleaned,
+			result.toClean,
 			result.pickups,
 			result.stalled,
 			result.decay,
@@ -677,7 +662,6 @@ export function summarize(r: LoopTickResult, t: Turns): string {
 		[r.errors.length > 0, '⚠error'],
 		[blocked, `⚠${blocked}blocked`],
 		[ciRed, `⚠${ciRed}ci-red`],
-		[r.rebuild === 'deferred' || r.rebuild === 'rebuild-failed', '⚠rebuild'],
 		[t.agents, `${t.agents} agent${t.agents === 1 ? '' : 's'}`],
 		[t.ci, `${t.ci} on CI`],
 		[merge, `${merge} to merge`],

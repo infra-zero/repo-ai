@@ -64,9 +64,10 @@ The plugin carries the skills only. Pass 3 and Pass 4 run their Workflow scripts
 | `loop env` | Resolve a tick's variables (root, worktree root, owner/repo, agent and human users). |
 | `loop worktree add <slug>` | Create an `ai-*` worktree off `origin/main` and link its dependencies. |
 | `loop cleanup` | Remove `ai-*` worktrees whose PR has landed or closed. |
+| `loop apply` | Apply a tick's local writes: remove the worktrees `loop tick` listed in `toClean`, then run the `node_modules` rebuild gate. |
 | `loop reap` | Report agents stalled past 45 minutes and what to do about each. |
 | `loop comment <pr>` / `loop verdict <pr>` | Upsert the decision comment, and read a reviewer's verdict marker. |
-| `loop tick` | Compute one tick's whole work list (guard, cleanup, reap, verdicts, pickups). Writes no GitHub state. |
+| `loop tick` | Compute one tick's whole work list (guard, cleanup, reap, verdicts, pickups). Read-only: writes no GitHub state and removes no worktree — `loop apply` does that. |
 
 Every command takes `--json`. Configuration lives in the repo's `.repo-ai.json` (`agentUser`, `requiredSkills`) — falling back to the legacy `.repo-tooling.json` `rules.aiLoop` / `rules.requiredSkills` when that file doesn't exist.
 
