@@ -150,7 +150,7 @@ in Pass 2.
 From the main checkout or any worktree of it:
 
 ```bash
-eval "$(npx @rtorcato/repo-ai loop env)"   # ROOT WT_ROOT OWNER_REPO AGENT_USER HUMAN_USER ME BUDGET_TOKENS QUIET_STOP_MINUTES
+eval "$(npx @rtorcato/repo-ai loop env)"   # ROOT WT_ROOT OWNER_REPO DEFAULT_BRANCH AGENT_USER HUMAN_USER ME BUDGET_TOKENS QUIET_STOP_MINUTES
 TICK=$(npx @rtorcato/repo-ai loop tick --json --root "$ROOT"); TICK_EXIT=$?
 printf '%s' "$TICK" | jq '{halt, idle, summary, errors, warnings}'
 ```
@@ -292,7 +292,7 @@ fi
 ### Pass 2 — clean up
 
 **Relabel what the tick cleaned** — `.cleaned[]`: worktrees it removed because
-the PR closed, or merged with its `(#<PR>)` squash subject on `origin/main`, plus
+the PR closed, or merged with its `(#<PR>)` squash subject on the default branch, plus
 `action: relabel` entries — closed issues still wearing `ai-wip` whose worktree
 an earlier, interrupted tick already removed. It already ran `loop guard
 --removed`. A tick with anything here is never `idle`. For each entry's `issue`:
@@ -610,7 +610,7 @@ kebab words from the title:
 npx @rtorcato/repo-ai loop worktree add "ai-<N>-<slug>" --root "$ROOT" --json
 ```
 
-It branches off `origin/main` under `WT_ROOT` and symlinks every
+It branches off the repo's default branch under `WT_ROOT` and symlinks every
 `worktree.symlinkDirectories` entry. **Exit 1 → do not implement it**: return the
 issue (`gh issue edit <N> --add-label ai-ready --remove-label ai-wip`).
 `needsInstall: true` means nothing was linked, so `(cd "$WT_ROOT/ai-<N>-<slug>" &&
@@ -737,13 +737,29 @@ line 4 resets.
   `idle` tick notifies once.
 - **Otherwise** → silent. Unchanged state is not news.
 
+**A handoff names the PR, not just the count (#157).** `.handoffs[]` now
+carries `title`. When this tick has any, `MESSAGE` names them instead of the
+summary count — one handoff: `#<N> ready to merge: <title>`; several: list the
+numbers, `#<N1>, #<N2> ready to merge`. Every other change still notifies with
+the summary, and it stays one notification either way:
+
+```bash
+MESSAGE=$(printf '%s' "$TICK" | jq -r '
+  if (.handoffs | length) == 1 then "#\(.handoffs[0].pr) ready to merge: \(.handoffs[0].title)"
+  elif (.handoffs | length) > 1 then (.handoffs | map("#\(.pr)") | join(", ")) + " ready to merge"
+  else "" end')
+[ -n "$MESSAGE" ] || MESSAGE="$OWNER_REPO: $SUMMARY"
+MESSAGE=$(printf '%s' "$MESSAGE" | cut -c1-200)
+```
+
 At most one notification, via the **`PushNotification`** tool — `message`:
-`"$OWNER_REPO: $SUMMARY"`, under 200 characters; never retry a "not sent". Only
+`"$MESSAGE"`, under 200 characters; never retry a "not sent". Only
 when that tool is unavailable:
 
 ```bash
-osascript -e "display notification \"$SUMMARY\" with title \"ai-loop\" subtitle \"$OWNER_REPO\"" 2>/dev/null \
-  || notify-send "ai-loop" "$OWNER_REPO: $SUMMARY" 2>/dev/null || true
+ESCAPED=$(printf '%s' "$MESSAGE" | sed 's/[\\"]/\\&/g')
+osascript -e "display notification \"$ESCAPED\" with title \"ai-loop\" subtitle \"$OWNER_REPO\"" 2>/dev/null \
+  || notify-send "ai-loop" "$MESSAGE" 2>/dev/null || true
 ```
 
 **Keep the loop going.** `/ai-loop` is the whole entry point: it schedules its

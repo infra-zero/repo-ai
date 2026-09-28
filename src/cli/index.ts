@@ -107,11 +107,11 @@ loop
 	.description('🌳 Loop worktree mechanics')
 	.command('add <slug>')
 	.description(
-		'🌱 Create ai-<issue>-<slug> off origin/main, link its deps, assert none are missing'
+		"🌱 Create ai-<issue>-<slug> off the repo's default branch, link its deps, assert none are missing"
 	)
 	.option('--root <path>', 'Main checkout to branch the worktree from', process.cwd())
 	.option('--worktree-root <path>', 'Where ai-* worktrees live (default: <root>-worktrees)')
-	.option('--base <ref>', 'Ref to branch from', 'origin/main')
+	.option('--base <ref>', "Ref to branch from (default: origin/<the repo's default branch>)")
 	.option('--json', 'Emit machine-readable JSON output')
 	.addHelpText(
 		'after',
