@@ -127,7 +127,7 @@ describe('checkCiRuns (#153)', () => {
 		const dir = newTmpDir()
 		fs.ensureDirSync(join(dir, '.git'))
 		const r = await checkCiRuns(dir, async (args) => {
-			if (args[0] === 'repo') return { ok: true, stdout: 'acme/widget\n', stderr: '', code: 0 }
+			if (args[0] === 'repo') return { ok: true, stdout: 'acme/widget main\n', stderr: '', code: 0 }
 			if (args[1]?.includes('/actions/workflows/ci.yml/runs?'))
 				return {
 					ok: true,
@@ -172,7 +172,7 @@ describe('checkReleaseStuck (#146)', () => {
 		const dir = newTmpDir()
 		fs.ensureDirSync(join(dir, '.git'))
 		const r = await checkReleaseStuck(dir, async (args) => {
-			if (args[0] === 'repo') return { ok: true, stdout: 'acme/widget\n', stderr: '', code: 0 }
+			if (args[0] === 'repo') return { ok: true, stdout: 'acme/widget main\n', stderr: '', code: 0 }
 			if (args[1]?.includes('/actions/workflows/ci.yml/runs?'))
 				return {
 					ok: true,

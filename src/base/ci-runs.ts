@@ -24,15 +24,17 @@ interface RunApi {
 }
 
 /**
- * The last 5 `main` push runs of {@link CI_WORKFLOW}, newest first, or `null`
- * on any gh/parse failure. Workflow-scoped (#174): listing `actions/runs` and
+ * The last 5 push runs of {@link CI_WORKFLOW} on `branch` (the repo's default
+ * branch, #179), newest first, or `null` on any gh/parse failure or an
+ * unresolved branch. Workflow-scoped (#174): listing `actions/runs` and
  * filtering client-side let other push-to-main workflows (e.g. `docs.yml`)
  * crowd `ci.yml` runs out of the 5-run window.
  */
-async function ciRuns(gh: GhExec, nwo: string): Promise<RunApi[] | null> {
+async function ciRuns(gh: GhExec, nwo: string, branch: string): Promise<RunApi[] | null> {
+	if (!branch) return null
 	const r = await gh([
 		'api',
-		`repos/${nwo}/actions/workflows/${CI_WORKFLOW}/runs?event=push&branch=main&per_page=5`,
+		`repos/${nwo}/actions/workflows/${CI_WORKFLOW}/runs?event=push&branch=${encodeURIComponent(branch)}&per_page=5`,
 	])
 	if (!r.ok) return null
 	try {
@@ -54,8 +56,13 @@ async function jobCount(gh: GhExec, nwo: string, runId: number): Promise<number>
 }
 
 /** `null` on any gh/parse failure or a healthy history — never the reason to halt. */
-export async function ciRunWarning(gh: GhExec, nwo: string, now: number): Promise<string | null> {
-	const runs = await ciRuns(gh, nwo)
+export async function ciRunWarning(
+	gh: GhExec,
+	nwo: string,
+	branch: string,
+	now: number
+): Promise<string | null> {
+	const runs = await ciRuns(gh, nwo, branch)
 	const [latest] = runs ?? []
 	if (!runs || !latest) return null
 
@@ -90,9 +97,10 @@ const RELEASE_STUCK_HOURS = 24
 export async function releaseStuckWarning(
 	gh: GhExec,
 	nwo: string,
+	branch: string,
 	now: number
 ): Promise<string | null> {
-	const waiting = (await ciRuns(gh, nwo))?.find((run) => run.status === 'waiting')
+	const waiting = (await ciRuns(gh, nwo, branch))?.find((run) => run.status === 'waiting')
 	if (!waiting) return null
 	const hours = (now - Date.parse(waiting.created_at)) / 3_600_000
 	if (hours <= RELEASE_STUCK_HOURS) return null

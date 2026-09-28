@@ -126,6 +126,20 @@ export async function checkAutoMerge(
 			}
 }
 
+/** `[nameWithOwner, defaultBranch]` in one `gh repo view` (#179); empty strings on failure. */
+async function repoAndDefaultBranch(gh: GhExec): Promise<[string, string]> {
+	const out = await ghOut(gh, [
+		'repo',
+		'view',
+		'--json',
+		'nameWithOwner,defaultBranchRef',
+		'--jq',
+		'.nameWithOwner + " " + .defaultBranchRef.name',
+	])
+	const [nwo = '', branch = ''] = out.split(/\s+/)
+	return [nwo, branch]
+}
+
 /** Surfaces #153's symptom: `main` push runs stuck pending or cancelled with no jobs. */
 export async function checkCiRuns(
 	dir: string,
@@ -138,12 +152,14 @@ export async function checkCiRuns(
 		return { check, status: 'ok', detail: 'skipped — not a git repository' }
 	}
 	const gh: GhExec = exec ?? ((args, stdin) => realGhExec(args, stdin, dir))
-	const nwo = await ghOut(gh, ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'])
-	if (!nwo) return { check, status: 'ok', detail: 'skipped — could not resolve the GitHub repo' }
-	const warning = await ciRunWarning(gh, nwo, now)
+	const [nwo, branch] = await repoAndDefaultBranch(gh)
+	if (!nwo || !branch) {
+		return { check, status: 'ok', detail: 'skipped — could not resolve the GitHub repo' }
+	}
+	const warning = await ciRunWarning(gh, nwo, branch, now)
 	return warning
 		? { check, status: 'drift', detail: warning }
-		: { check, status: 'ok', detail: 'main push runs look healthy' }
+		: { check, status: 'ok', detail: `${branch} push runs look healthy` }
 }
 
 /** Surfaces #146's symptom: a `release` run left waiting on approval, pinning main's push concurrency group. */
@@ -158,9 +174,11 @@ export async function checkReleaseStuck(
 		return { check, status: 'ok', detail: 'skipped — not a git repository' }
 	}
 	const gh: GhExec = exec ?? ((args, stdin) => realGhExec(args, stdin, dir))
-	const nwo = await ghOut(gh, ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'])
-	if (!nwo) return { check, status: 'ok', detail: 'skipped — could not resolve the GitHub repo' }
-	const warning = await releaseStuckWarning(gh, nwo, now)
+	const [nwo, branch] = await repoAndDefaultBranch(gh)
+	if (!nwo || !branch) {
+		return { check, status: 'ok', detail: 'skipped — could not resolve the GitHub repo' }
+	}
+	const warning = await releaseStuckWarning(gh, nwo, branch, now)
 	return warning
 		? { check, status: 'drift', detail: warning }
 		: { check, status: 'ok', detail: 'no release run stuck waiting on approval' }
