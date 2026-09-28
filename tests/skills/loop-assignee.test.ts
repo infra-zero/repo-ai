@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
  * `@me` resolves to whichever token `gh` is running as, which the Pass 0
  * identity check now *requires* to be the agent account whenever one is
  * declared — so every `--add-assignee @me` handed work back to the machine that
- * had just given up on it (#606). The human is named via `HUMAN_USER` instead.
+ * had just given up on it (#606). The human is named via the tick's `humanUser` instead.
  */
 const skills = ['ai-loop'].map((n) => join(import.meta.dirname, `../../skills/${n}/SKILL.md`))
 
@@ -19,36 +19,20 @@ describe('ai loop skills never assign @me (#606)', () => {
 		expect(offenders).toEqual([])
 	})
 
-	it('ai-loop resolves HUMAN_USER through `loop env`, humans only', () => {
+	it('ai-loop reads its values from the tick, never an eval of `loop env` (#150)', () => {
 		const skill = fs.readFileSync(skills[0], 'utf8')
-		// `loop env` owns the owner-type test now; loop-env.test.ts covers it.
-		expect(skill).toContain('eval "$(npx @rtorcato/repo-ai loop env)"')
-		// Every handoff site guards on it, so an org repo assigns nobody: either
-		// the `${HUMAN_USER:+…}` expansion, or an explicit `-n` test.
-		const unguarded = skill
-			.split('\n')
-			.filter((l) => l.includes('--add-assignee "$HUMAN_USER"') && !l.includes('${HUMAN_USER:+'))
-		expect(unguarded).toEqual(['  gh issue edit <N> --add-assignee "$HUMAN_USER"'])
-		expect(skill).toContain('if [ -n "$HUMAN_USER" ] && [ "$(gh issue view <N>')
+		// No allow rule can match an eval, so it sent every first step to the classifier.
+		expect(skill).not.toMatch(/\beval\b/)
+		expect(skill).toContain('npx @rtorcato/repo-ai loop tick --json\n')
+		// The values come from the tick's `.env`, written in as `<name>` placeholders.
+		expect(skill).not.toMatch(
+			/\$\{?(ROOT|WT_ROOT|OWNER_REPO|AGENT_USER|HUMAN_USER|ME|BUDGET_TOKENS|QUIET_STOP_MINUTES)\b/
+		)
+		expect(skill).toContain('--add-assignee <humanUser>')
 	})
 
 	/**
-	 * zsh does not word-split `${VAR:+--flag "$VAR"}`, so gh receives
-	 * `--flag value` as one argument and exits `unknown flag` (#624). The flag
-	 * and the value must be separate expansions.
-	 */
-	it.each(skills)('%s never packs a flag and its value into one ${VAR:+…}', (path) => {
-		const offenders = fs
-			.readFileSync(path, 'utf8')
-			.split('\n')
-			.filter((line) => /\$\{[A-Z_]+:\+--[a-z-]+\s[^}]+\}/.test(line))
-			// Lines that quote the broken form as a warning are prose, not commands.
-			.filter((line) => !line.includes('#624'))
-		expect(offenders).toEqual([])
-	})
-
-	/**
-	 * The `${VAR:+…}` guard keeps an *empty* name out of the flag, but says
+	 * Dropping an empty user's assignee flag keeps the name out, but says
 	 * nothing about the command as a whole: a `gh … edit <N>` whose only flags
 	 * are conditional collapses to zero flags when every one of them is empty,
 	 * and gh exits non-zero on that. A trailing "# skip when both are empty"
@@ -71,11 +55,16 @@ describe('ai loop skills never assign @me (#606)', () => {
 			for (let j = i; cmd.trimEnd().endsWith('\\') && j + 1 < lines.length; j++) {
 				cmd = `${cmd.trimEnd().slice(0, -1)} ${lines[j + 1].replace(/^[\s>|]*/, '').trim()}`
 			}
-			const withoutConditionals = cmd.replace(/\$\{[A-Z_]+:\+[^}]*\}/g, '')
+			// An assignee flag drops out when its user is empty (#150).
+			const withoutConditionals = cmd.replace(
+				/--(add|remove)-assignee <(agentUser|humanUser)>/g,
+				''
+			)
 			const hasUnconditionalFlag = /\s--[a-z-]+/.test(withoutConditionals)
 			if (hasUnconditionalFlag) return false
-			// Otherwise it must sit inside an `if [ -n … ]` guard.
-			return !lines.slice(Math.max(0, i - 4), i).some((l) => /if \[ -n "\$[A-Z_]+"/.test(l))
+			// Otherwise the prose just before it must guard on that user being set.
+			const before = [...lines.slice(Math.max(0, i - 2), i), line.slice(0, at.index)].join(' ')
+			return !/when `(agentUser|humanUser)` is set/.test(before)
 		})
 		expect(bare).toEqual([])
 	})

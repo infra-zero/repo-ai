@@ -56,7 +56,7 @@ export async function runDoctor(dir: string, skillsDir?: string): Promise<CheckR
 }
 
 /**
- * `humanUser` defaults to the repo owner (`loop env`'s `HUMAN_USER`), which is
+ * `humanUser` defaults to the repo owner (`loop env`'s `humanUser`), which is
  * empty for an organisation — so an org repo with no override leaves
  * merge-ready PRs, `ai-blocked` and declined issues with no assignee (#162).
  */

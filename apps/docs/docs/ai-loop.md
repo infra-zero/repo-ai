@@ -77,12 +77,12 @@ optional:
 | Key | Type | Default | Read by |
 |---|---|---|---|
 | `$schema` | string | none | Your editor, for completion and validation. `fix config` and `setup` write it. |
-| `agentUser` | string | none: the loop runs as whoever `gh` is signed in as | `loop guard`, which halts a tick running as anyone else; `loop env`; `fix ai-loop-identity`; `doctor`. |
-| `humanUser` | string | the repo owner's login, when it is a user; empty on an organisation-owned repo | `loop env` (as `HUMAN_USER`), which the skill assigns merge-ready PRs, `ai-blocked` issues and declined issues to. `doctor` warns when an organisation-owned repo leaves it unset. |
+| `agentUser` | string | none: the loop runs as whoever `gh` is signed in as | `loop guard`, which halts a tick running as anyone else; `loop tick`'s `.env`; `fix ai-loop-identity`; `doctor`. |
+| `humanUser` | string | the repo owner's login, when it is a user; empty on an organisation-owned repo | `loop tick`'s `.env.humanUser`, which the skill assigns merge-ready PRs, `ai-blocked` issues and declined issues to. `doctor` warns when an organisation-owned repo leaves it unset. |
 | `requiredSkills` | string[] | `[]`: no check | `doctor`, which reports any listed skill that is not installed. Checked only when `agentUser` is set. |
 | `pollSeconds` | integer | `180`; values below `60` are raised to `60` | `loop watch`, between polls. Each poll costs several GitHub API calls against the 5,000/h limit. |
-| `budgetTokens` | integer | `400000`; values below `1000` are ignored | `loop env` (as `BUDGET_TOKENS`), passed to the `ai-loop-pickup` and `ai-loop-recover` Workflow scripts, which enforce it — an agent past the cap is skipped and `log()`ged, not spawned. It bounds **output tokens only** (the Workflow runtime's `budget.spent()`, reported as `outputTokensSpent`); the harness's per-run total, input and cache reads included, runs several times higher. |
-| `quietStopMinutes` | integer | `120`; `0` disables | `loop env` (as `QUIET_STOP_MINUTES`). A tick that finds the status summary unchanged this long stops the loop — see [Driving it](#driving-it). |
+| `budgetTokens` | integer | `400000`; values below `1000` are ignored | `loop tick`'s `.env.budgetTokens`, passed to the `ai-loop-pickup` and `ai-loop-recover` Workflow scripts, which enforce it — an agent past the cap is skipped and `log()`ged, not spawned. It bounds **output tokens only** (the Workflow runtime's `budget.spent()`, reported as `outputTokensSpent`); the harness's per-run total, input and cache reads included, runs several times higher. |
+| `quietStopMinutes` | integer | `120`; `0` disables | `loop tick`'s `.env.quietStopMinutes`. A tick that finds the status summary unchanged this long stops the loop — see [Driving it](#driving-it). |
 | `autoMerge` | boolean | `false` | `loop tick`. Lets Pass 1 merge a fully-passed issue PR unattended — only on a repo whose publishing job also runs behind an environment with `required_reviewers`. `doctor` warns when it is on without that gate. |
 
 The schema is [`schemas/repo-ai.json`](https://rtorcato.github.io/repo-ai/repo-ai.json)
