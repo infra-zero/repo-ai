@@ -390,6 +390,10 @@ Passes run cheapest first, so a quiet repo exits fast.
 | **4 — pick up** | Claim eligible `ai-ready` issues, create the worktrees, and run one Workflow that owns each issue's whole chain — implement, both reviews, and every fix round — so its PRs normally reach Pass 1 already passed, without Pass 3. |
 | **5 — report** | One-line summary, notify only when it changed. Never skipped, including on an idle tick. |
 
+Every tick also reports `doctor`'s CI runs, release approval, release run and
+high/critical security-alert checks in `loop tick`'s `.warnings`. They are all
+read-only: the loop never approves, cancels or re-runs a release.
+
 Three details worth knowing because they fail *silently* when got wrong:
 
 - **Worktrees live in a sibling directory** (`<repo>-worktrees/`), never inside
