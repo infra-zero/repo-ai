@@ -181,8 +181,11 @@ describe('runLoopApply transitions (#147)', () => {
 		},
 		{
 			name: 'reruns a first-attempt ci-red run instead of spending a fix round (#202)',
-			work: { rerunFailed: [{ pr: 10, issue: 1, runId: 555 }] },
-			calls: [['run', 'rerun', '555', '--failed']],
+			work: { rerunFailed: [{ pr: 10, issue: 1, runIds: [555, 666] }] },
+			calls: [
+				['run', 'rerun', '555', '--failed'],
+				['run', 'rerun', '666', '--failed'],
+			],
 			errors: 0,
 		},
 		{
