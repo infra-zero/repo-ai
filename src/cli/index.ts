@@ -96,9 +96,7 @@ loop
 
 loop
 	.command('apply')
-	.description(
-		"✍️  Apply a tick's label, assignee, merge and worktree transitions (Pass 1 and Pass 2)"
-	)
+	.description("✍️  Apply a tick's transitions (Pass 1 and 2) and take its claims (Pass 3 and 4)")
 	.option('--root <path>', 'Main checkout the loop branches worktrees from', process.cwd())
 	.option('--worktree-root <path>', 'Where ai-* worktrees live (default: <root>-worktrees)')
 	.option('--json', 'Emit machine-readable JSON output')
@@ -106,6 +104,7 @@ loop
 		'after',
 		'\nReads the same state as `loop tick`, then applies it. Comments stay with the caller:\n' +
 			'`comments` lists each one owed. A failed edit lands in `errors`; the next apply retries it.\n' +
+			'`claimed` lists the review, fix and pickup tasks it claimed, for the caller to launch.\n' +
 			"Exit 1 or 2 halts the tick (loop tick's or loop guard's codes).\n"
 	)
 	.action(loopApplyCommand)

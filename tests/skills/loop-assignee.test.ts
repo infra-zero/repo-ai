@@ -28,7 +28,7 @@ describe('ai loop skills never assign @me (#606)', () => {
 		expect(skill).not.toMatch(
 			/\$\{?(ROOT|WT_ROOT|OWNER_REPO|AGENT_USER|HUMAN_USER|ME|BUDGET_TOKENS|QUIET_STOP_MINUTES)\b/
 		)
-		expect(skill).toContain('--add-assignee <humanUser>')
+		expect(skill).toContain('--add-assignee <agentUser>')
 	})
 
 	/**

@@ -5,7 +5,15 @@ import { type GhExec, realGhExec } from '../../base/gh.js'
 import { type CleanupEntry, runLoopCleanup } from './loop-cleanup.js'
 import { type InstallExec, type RebuildOutcome, runLoopGuard } from './loop-guard.js'
 import type { ReapEntry } from './loop-reap.js'
-import { type Handoff, type LoopTickResult, runLoopTick, type SendBack } from './loop-tick.js'
+import {
+	type FixRound,
+	type Handoff,
+	type LoopTickResult,
+	namedFiles,
+	runLoopTick,
+	type SendBack,
+} from './loop-tick.js'
+import { runLoopWorktreeAdd } from './loop-worktree.js'
 
 /**
  * `repo-ai loop apply` — the writes `loop tick` no longer makes. It reads the
@@ -18,6 +26,12 @@ import { type Handoff, type LoopTickResult, runLoopTick, type SendBack } from '.
  *   `(#<PR>)` squash landed, #149), runs `loop guard --removed` for the
  *   `node_modules` rebuild, relabels every cleaned issue, and applies the label
  *   side of `stalled`.
+ * - Pass 3: claims `reviewsToSpawn` (`ai-reviewing-*`) and spawnable `fixRounds`
+ *   (`ai-fixing`) within `maxTasksPerTick`, fixes first; blocks a round-capped or
+ *   worktree-less fix round (#148).
+ * - Pass 4: claims `pickups` up to `slots` (`ai-wip`, `ai-ready` dropped), then
+ *   `loop worktree add`; a failed worktree returns the issue to `ai-ready`.
+ *   `claimed` lists what the model launches Workflows for.
  *
  * It is the loop's only merge call site: `gh pr merge --squash --auto`, and only
  * for a handoff `loop tick` marked `autoMerge` (the repo's `.repo-ai.json`
@@ -32,7 +46,7 @@ import { type Handoff, type LoopTickResult, runLoopTick, type SendBack } from '.
  */
 
 export interface Applied {
-	pass: 1 | 2
+	pass: 1 | 2 | 3 | 4
 	transition:
 		| 'disarm'
 		| 'handoff'
@@ -42,6 +56,11 @@ export interface Applied {
 		| 'send-back'
 		| 'relabel'
 		| 'stall'
+		| 'claim-review'
+		| 'claim-fix'
+		| 'round-cap'
+		| 'claim-pickup'
+		| 'return-pickup'
 	/** The issue or PR the edit touched. */
 	number: number
 	/** The `gh` arguments run. */
@@ -53,11 +72,41 @@ export type CommentOwed =
 	| { kind: 'notes'; pr: number; handoff: Handoff }
 	| { kind: 'send-back'; pr: number; sendBack: SendBack }
 	| { kind: 'blocked'; issue: number; stall: ReapEntry }
+	| { kind: 'round-cap'; pr: number; fixRound: FixRound }
+
+export interface Claimed {
+	reviews: LoopTickResult['reviewsToSpawn']
+	fixes: FixRound[]
+	pickups: {
+		number: number
+		title: string
+		slug: string
+		worktree: string
+		needsInstall: boolean
+	}[]
+}
+
+const STOP_WORDS = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'to', 'in', 'on', 'for', 'with'])
+
+/** `ai-<N>-<up to 4 kebab words>` from the title, Conventional Commit prefix dropped. */
+export function pickupSlug(n: number, title: string): string {
+	const words = (
+		title
+			.replace(/^\w+(\([^)]*\))?!?:\s*/, '')
+			.toLowerCase()
+			.match(/[a-z0-9]+/g) ?? []
+	)
+		.filter((w) => !STOP_WORDS.has(w))
+		.slice(0, 4)
+	return `ai-${n}-${words.join('-') || 'issue'}`
+}
 
 export interface LoopApplyResult {
 	applied: Applied[]
 	/** Comments owed: `notes` and `send-back` through `loop comment`, `blocked` on the issue. */
 	comments: CommentOwed[]
+	/** Pass 3 and 4 claims taken: one review, fix or pickup task each for the Workflows. */
+	claimed: Claimed
 	/** Worktrees removed. */
 	removed: CleanupEntry[]
 	rebuild: RebuildOutcome
@@ -97,6 +146,7 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 	const result: LoopApplyResult = {
 		applied: [],
 		comments: [],
+		claimed: { reviews: [], fixes: [], pickups: [] },
 		removed: [],
 		rebuild: 'not-requested',
 		halt: tick.halt,
@@ -109,7 +159,7 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 	const gh: GhExec = options.gh ?? ((args, stdin) => realGhExec(args, stdin, root))
 	const { agentUser, humanUser } = tick.env
 	const run = async (
-		pass: 1 | 2,
+		pass: Applied['pass'],
 		transition: Applied['transition'],
 		n: number,
 		args: string[],
@@ -247,6 +297,118 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 		}
 		// ponytail: `remove-worktree` and a blocked implementer's worktree stay with the model — no label side.
 	}
+
+	// Pass 3 — claim before the Workflow spawns, or a later tick duplicates the task.
+	let tasks = tick.env.maxTasksPerTick
+	for (const f of tick.fixRounds) {
+		if (f.action === 'block') {
+			// The round cap, or nowhere to fix: the human's now, with a comment.
+			if (f.issue !== null)
+				await run(3, 'round-cap', f.issue, [
+					'issue',
+					'edit',
+					String(f.issue),
+					'--add-label',
+					'ai-blocked',
+					'--remove-label',
+					'ai-wip',
+					...flag('--add-assignee', humanUser),
+					...flag('--remove-assignee', agentUser),
+				])
+			const ok = await run(3, 'round-cap', f.pr, [
+				'pr',
+				'edit',
+				String(f.pr),
+				'--remove-label',
+				'ai-review',
+				...flag('--add-assignee', humanUser),
+				...flag('--remove-assignee', agentUser),
+			])
+			if (ok) result.comments.push({ kind: 'round-cap', pr: f.pr, fixRound: f })
+			continue
+		}
+		// Fixes first: past the cap, leave it unclaimed for the next tick.
+		if (tasks <= 0) continue
+		const ok = await run(3, 'claim-fix', f.pr, [
+			'pr',
+			'edit',
+			String(f.pr),
+			'--add-label',
+			'ai-fixing',
+			...flag('--add-assignee', agentUser),
+		])
+		if (ok) {
+			tasks--
+			result.claimed.fixes.push(f)
+		}
+	}
+	for (const r of tick.reviewsToSpawn) {
+		if (tasks <= 0) break
+		// `both` is one docs-only reviewer carrying both lenses: one task, both claims.
+		const arms = r.arm === 'both' ? ['code', 'sec'] : [r.arm]
+		const ok = await run(3, 'claim-review', r.pr, [
+			'pr',
+			'edit',
+			String(r.pr),
+			...arms.flatMap((a) => ['--add-label', `ai-reviewing-${a}`]),
+			...flag('--add-assignee', agentUser),
+		])
+		if (ok) {
+			tasks--
+			result.claimed.reviews.push(r)
+		}
+	}
+
+	// Pass 4 — dropping `ai-ready` is half the claim, or it re-enters the queue when `ai-wip` clears.
+	const picked = new Set<string>()
+	for (const p of tick.pickups) {
+		if (result.claimed.pickups.length >= tick.slots) break
+		// Sharing a named file with one already picked: waiting its turn, not declined (#594).
+		const files = namedFiles(p.body)
+		if (files.some((f) => picked.has(f))) continue
+		const ok = await run(4, 'claim-pickup', p.number, [
+			'issue',
+			'edit',
+			String(p.number),
+			'--add-label',
+			'ai-wip',
+			'--remove-label',
+			'ai-ready',
+			...flag('--add-assignee', agentUser),
+		])
+		if (!ok) continue
+		const slug = pickupSlug(p.number, p.title)
+		const wt = await runLoopWorktreeAdd(slug, {
+			...seams,
+			base: tick.env.defaultBranch ? `origin/${tick.env.defaultBranch}` : undefined,
+			git: options.git,
+			gh: options.gh,
+		})
+		if (wt.exitCode !== 0) {
+			result.errors.push(
+				`worktree ${slug}: ${wt.messages.filter((m) => m.startsWith('⚠')).join('; ')}`
+			)
+			await run(4, 'return-pickup', p.number, [
+				'issue',
+				'edit',
+				String(p.number),
+				'--add-label',
+				'ai-ready',
+				'--remove-label',
+				'ai-wip',
+				...flag('--remove-assignee', agentUser),
+			])
+			continue
+		}
+		for (const f of files) picked.add(f)
+		result.claimed.pickups.push({
+			number: p.number,
+			title: p.title,
+			slug,
+			worktree: wt.worktree,
+			needsInstall: wt.needsInstall,
+		})
+	}
 	return result
 }
 
@@ -265,6 +427,9 @@ export async function loopApplyCommand(options: {
 		for (const w of result.removed) console.log(`  removed ${path.basename(w.path)} — ${w.reason}`)
 		for (const c of result.comments)
 			console.log(`  comment owed: ${c.kind} on #${c.kind === 'blocked' ? c.issue : c.pr}`)
+		for (const r of result.claimed.reviews) console.log(`  claimed review ${r.arm}:#${r.pr}`)
+		for (const f of result.claimed.fixes) console.log(`  claimed fix:#${f.pr}`)
+		for (const p of result.claimed.pickups) console.log(`  claimed #${p.number} → ${p.worktree}`)
 		for (const e of result.errors) console.log(`  ${chalk.red(`error: ${e}`)}`)
 		if (result.rebuild !== 'not-requested') console.log(`  rebuild: ${result.rebuild}`)
 	}
