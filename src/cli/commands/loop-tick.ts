@@ -11,6 +11,7 @@ import {
 } from '../../base/ci-runs.js'
 import { readConfig } from '../../base/config.js'
 import { releaseGated } from '../../base/release-gate.js'
+import { securityAlertWarning } from '../../base/security-alerts.js'
 import {
 	claudeSkillStatus,
 	pluginInstallPaths,
@@ -313,6 +314,9 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		result.warnings.push(releaseWarning)
 		result.releaseStuck = true
 	}
+	// #203: high/critical only — moderate/low are doctor's business, not a tick warning.
+	const securityWarning = await securityAlertWarning(gh, ownerRepo, false)
+	if (securityWarning) result.warnings.push(securityWarning)
 	// #204: same reasoning — a failed release job is silent otherwise, and nothing publishes.
 	const releaseFailedMsg = await releaseFailedWarning(gh, ownerRepo, env.defaultBranch, ciWorkflow)
 	if (releaseFailedMsg) {

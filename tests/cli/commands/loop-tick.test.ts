@@ -94,6 +94,8 @@ interface World {
 	ciCancelled?: boolean
 	/** A main push run of ci.yml has sat waiting on `release` approval past 24h (#146). */
 	releaseWaiting?: boolean
+	/** Open Dependabot alert severities (#203). */
+	securityAlerts?: string[]
 	/** The newest completed main push run's `release` job failed (#204). */
 	releaseFailed?: boolean
 }
@@ -155,6 +157,10 @@ function fakeGh(w: World): GhExec {
 								: [],
 				})
 			if (b === 'repos/acme/widget/actions/runs/9/jobs?per_page=1') return ok({ total_count: 0 })
+			if (b?.startsWith('repos/acme/widget/dependabot/alerts?'))
+				return ok([
+					(w.securityAlerts ?? []).map((severity) => ({ security_vulnerability: { severity } })),
+				])
 			const runMatch = b?.match(/^repos\/acme\/widget\/actions\/runs\/(\d+)$/)
 			if (runMatch) return ok({ run_attempt: w.runAttempts?.[Number(runMatch[1])] ?? 1 })
 			if (b === 'repos/acme/widget/actions/runs/9/jobs?per_page=100')
@@ -252,6 +258,25 @@ describe('runLoopTick', () => {
 		const r = await runLoopTick({ root, gh: fakeGh({ releaseWaiting: true }), env: {}, now: NOW })
 		expect(r.releaseStuck).toBe(true)
 		expect(r.warnings).toContainEqual(expect.stringContaining('waiting on approval'))
+	})
+
+	it('warns on an open high security alert, but not moderate-only (#203)', async () => {
+		const root = checkout(newTmpDir())
+		const high = await runLoopTick({
+			root,
+			gh: fakeGh({ securityAlerts: ['high'] }),
+			env: {},
+			now: NOW,
+		})
+		expect(high.warnings).toContainEqual(expect.stringContaining('open security alerts (1 high)'))
+
+		const moderate = await runLoopTick({
+			root,
+			gh: fakeGh({ securityAlerts: ['moderate'] }),
+			env: {},
+			now: NOW,
+		})
+		expect(moderate.warnings).toEqual([])
 	})
 
 	it('adds ⚠release-stuck to a non-idle summary (#146)', async () => {
