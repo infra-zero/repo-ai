@@ -53,9 +53,6 @@ export interface LoopCleanupOptions {
 	gh?: GhExec
 }
 
-/** How far back to look for the squash subject. */
-const SQUASH_WINDOW = 200
-
 async function findPr(
 	gh: GhExec,
 	heads: string[]
@@ -112,7 +109,10 @@ export async function runLoopCleanup(options: LoopCleanupOptions = {}): Promise<
 				// Best-effort: a failed fetch leaves origin/main stale, which can
 				// only keep a worktree, never remove one wrongly.
 				await git(['fetch', '--prune', '--no-write-fetch-head', 'origin'])
-				const log = await git(['log', 'origin/main', `-n${SQUASH_WINDOW}`, '--format=%s'])
+				// Whether #N ever landed on main is a complete-set question (#163) —
+				// a windowed log falsely "kept" a worktree whose squash had scrolled
+				// out of the window, a leak with no other trigger to catch it.
+				const log = await git(['log', 'origin/main', '--format=%s'])
 				subjects = log ? log.split('\n') : []
 			}
 			if (!subjects.some((s) => s.trimEnd().endsWith(`(#${pr.number})`))) {
