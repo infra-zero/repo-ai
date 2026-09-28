@@ -224,7 +224,8 @@ that state, so a missed tick, a crash, or a restart costs nothing.
 | `ai-reviewing-sec` | PR | `security-expert` claimed and running. Cleared with its verdict. |
 | `ai-ok-code` | PR | `code-reviewer` passed. In-flight only — the handoff strips it. |
 | `ai-ok-sec` | PR | `security-expert` passed. In-flight only — the handoff strips it. |
-| `ai-changes` | PR | A reviewer requested changes, or Pass 1 sent the PR back: a required check failed, or the PR is `DIRTY` (conflicts) or `BLOCKED` by a ruleset. On a PR opened by hand, with no loop worktree, it waits for you instead of a fixer. |
+| `ai-changes` | PR | A reviewer requested changes, or Pass 1 sent the PR back: a required check failed, or the PR is `BLOCKED` by a ruleset. On a PR opened by hand, with no loop worktree, it waits for you instead of a fixer. |
+| `ai-conflicts` | PR | Pass 1 sent the PR back `DIRTY` — it conflicts with the default branch. A fixer rebases it; this never counts toward the 2-fix-round cap. |
 | `ai-fixing` | PR | Fix-round implementer claimed and running. Cleared with its push. |
 | `ai-notes` | PR | Passed, but a reviewer left something to read before merging. |
 | `merge-ready` | PR | Both agent reviews passed and the PR is mergeable — waiting on a human. Supersedes the `ai-ok-*` pair rather than joining it. |
@@ -242,6 +243,8 @@ A PR moves through a few label combinations. Read them as "whose turn is it":
 | `ai-review` `ai-ok-code` `ai-ok-sec` | Both passed; waiting for CI to go green, or for the branch to be updated from `main` | the loop |
 | `ai-changes` | A reviewer asked for a change, or CI failed | the loop (a fixer is next) |
 | `ai-changes` `ai-fixing` | A fixer is pushing a fix; both reviews run again afterwards | the fixer |
+| `ai-conflicts` | The branch conflicts with `main` | the loop (a fixer rebases it next, for free) |
+| `ai-conflicts` `ai-fixing` | A fixer is rebasing onto `main`; both reviews run again afterwards | the fixer |
 | `merge-ready` | Reviewed, green, mergeable | **you** |
 | `merge-ready` `ai-notes` | Same, but read the reviewer's `### Before merging` first | **you** |
 
@@ -274,9 +277,12 @@ issue: ai-ready ─pickup─> ai-wip ─> PR opened, labelled ai-review
 PR: ai-review ─> ai-reviewing-* ─┬─> ai-ok-code + ai-ok-sec ─┬─ issue PR  ─> merge-ready, assigned to you
                                  │        (± ai-notes)       │              ─> YOU merge
                                  │                           └─ dependabot ─> auto-merge
-                                 └─> ai-changes ─> ai-fixing (max 2) ─> ai-review
-                                     ▲                       └─ round 3 ─> ai-blocked
-                                     └─ Pass 1 sends back: not CLEAN, or a required check FAILED
+                                 ├─> ai-changes ─> ai-fixing (max 2) ─> ai-review
+                                 │   ▲                       └─ round 3 ─> ai-blocked
+                                 │   └─ Pass 1 sends back: ci-red, or BLOCKED
+                                 └─> ai-conflicts ─> ai-fixing (rebase, free) ─> ai-review
+                                     ▲
+                                     └─ Pass 1 sends back: DIRTY
 ```
 
 Pass 4's Workflow drives this whole chain itself for the issue it just picked
@@ -292,8 +298,11 @@ clears its own claim alongside the label it ends on — a verdict for a reviewer
 both implementers share one worktree and one branch, so they race each other's
 commits rather than merely posting two review comments.
 
-`ai-changes` is the send-back — **never** re-apply `ai-ready` to an open PR's
-issue; that is what double-picks it.
+`ai-changes` and `ai-conflicts` are the send-back — **never** re-apply
+`ai-ready` to an open PR's issue; that is what double-picks it. Keeping the two
+apart matters for the fix-round cap: repeated conflicts from unrelated PRs
+landing on `main` cost nothing, so a PR isn't blocked over churn it didn't
+cause.
 
 `ai-notes` is advisory and never blocks. It rides *alongside* a pass label, not
 instead of one. It exists because a pass label otherwise means both "clean" and
@@ -382,6 +391,7 @@ These exist because the loop runs unattended against a monthly usage cap.
   No repo-wide exploration.
 - **2 fix rounds per PR.** On the third `ai-changes`, stop and mark
   `ai-blocked`. Reviewer↔implementer ping-pong is the one unbounded token sink.
+  `ai-conflicts` rebases don't count — they aren't the PR's own churn.
 - **8 review and fix agents per tick**, in one Workflow; the rest wait for the
   next tick.
 - **An idle tick spawns zero agents.**

@@ -209,7 +209,7 @@ export async function runLoopReap(options: LoopReapOptions = {}): Promise<LoopRe
 			const claims: { kind: StallKind; claim: string }[] = Object.entries(REVIEW_CLAIMS)
 				.filter(([claim, ok]) => labels.has(claim) && !labels.has(ok) && !labels.has('ai-changes'))
 				.map(([claim]) => ({ kind: 'reviewer', claim }))
-			if (labels.has('ai-fixing') && labels.has('ai-changes'))
+			if (labels.has('ai-fixing') && (labels.has('ai-changes') || labels.has('ai-conflicts')))
 				claims.push({ kind: 'fixer', claim: 'ai-fixing' })
 			for (const { kind, claim } of claims) {
 				const s = await stale(pr.number, claim)
