@@ -5,7 +5,12 @@ import { type GitExec, realGitExec } from '../../base/git.js'
 import { type GhExec, ghPaginated, realGhExec } from '../../base/gh.js'
 import { readConfig } from '../../base/config.js'
 import { releaseGated } from '../../base/release-gate.js'
-import { claudeSkillStatus, SHIPPED_SKILLS } from '../generators/claude-skills.js'
+import {
+	claudeSkillStatus,
+	pluginInstallPaths,
+	pluginSkillStale,
+	SHIPPED_SKILLS,
+} from '../generators/claude-skills.js'
 import { installWorkflow, SHIPPED_WORKFLOWS, workflowsDirFor } from '../generators/workflows.js'
 import { type CleanupEntry, runLoopCleanup } from './loop-cleanup.js'
 import { type LoopEnv, resolveLoopEnv } from './loop-env.js'
@@ -115,7 +120,11 @@ export interface LoopTickResult {
 	rebuild: RebuildOutcome
 	summary: string
 	errors: string[]
-	/** Shipped skills/workflows whose installed copy is behind the package's (#116). */
+	/**
+	 * Shipped skills/workflows whose installed copy is behind the package's
+	 * (#116), plus any plugin-cached skill copy behind it too (#154, `plugin
+	 * skill <name>`).
+	 */
 	staleInstall: string[]
 	/** Worth saying, never a reason to leave idle or halt. */
 	warnings: string[]
@@ -233,10 +242,19 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	}
 	const { root, ownerRepo } = env
 	result.staleInstall = await staleInstall(options.env ?? process.env)
-	if (result.staleInstall.length > 0)
+	if (result.staleInstall.length > 0) {
+		const fixes = [
+			result.staleInstall.some((s) => !s.startsWith('plugin '))
+				? 'run `npx @rtorcato/repo-ai fix claude-skills`'
+				: null,
+			result.staleInstall.some((s) => s.startsWith('plugin '))
+				? 'run `/plugin update repo-ai@repo-ai` in Claude Code'
+				: null,
+		].filter((f) => f !== null)
 		result.warnings.push(
-			`installed copies behind this package: ${result.staleInstall.join(', ')} — run \`npx @rtorcato/repo-ai fix claude-skills\``
+			`installed copies behind this package: ${result.staleInstall.join(', ')} — ${fixes.join('; ')}`
 		)
+	}
 	const git: GitExec = options.git ?? ((args) => realGitExec(args, root, 120_000))
 	const gh: GhExec = options.gh ?? ((args, stdin) => realGhExec(args, stdin, root))
 	const now = (options.now ?? new Date()).getTime()
@@ -553,22 +571,36 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 
 /**
  * Ticks follow the installed `~/.claude` copies, not the package's, so name any
- * that `fix claude-skills` would refresh. Read-only; a fork, a missing copy or
- * no `~/.claude/skills` at all is not stale. `env` is the HOME seam.
+ * that `fix claude-skills` would refresh, plus any plugin cache (#132) Claude
+ * Code's plugin manager installed behind what this package ships (#154).
+ * Read-only; a fork, a missing copy or no install of either kind at all is not
+ * stale. `env` is the HOME seam.
  */
 export async function staleInstall(env: NodeJS.ProcessEnv): Promise<string[]> {
 	const home = env.HOME ?? env.USERPROFILE
 	if (!home) return []
-	const skillsDir = path.join(home, '.claude', 'skills')
-	if (!(await fs.pathExists(skillsDir))) return []
 	const stale: string[] = []
-	for (const name of SHIPPED_SKILLS) {
-		const s = await claudeSkillStatus(name, skillsDir)
-		if (s.installed && s.needsInstall) stale.push(`skill ${name}`)
+	const skillsDir = path.join(home, '.claude', 'skills')
+	if (await fs.pathExists(skillsDir)) {
+		for (const name of SHIPPED_SKILLS) {
+			const s = await claudeSkillStatus(name, skillsDir)
+			if (s.installed && s.needsInstall) stale.push(`skill ${name}`)
+		}
+		for (const name of SHIPPED_WORKFLOWS) {
+			const w = await installWorkflow(workflowsDirFor(skillsDir), name, { dryRun: true })
+			if (w.status === 'updated') stale.push(`workflow ${name}`)
+		}
 	}
-	for (const name of SHIPPED_WORKFLOWS) {
-		const w = await installWorkflow(workflowsDirFor(skillsDir), name, { dryRun: true })
-		if (w.status === 'updated') stale.push(`workflow ${name}`)
+	// The plugin ships skills only (#132) — never a fork, so any mismatch across
+	// every install path (scope, marketplace alias) is reported once per name.
+	const stalePluginSkills = new Set<string>()
+	for (const installPath of await pluginInstallPaths(home)) {
+		for (const name of SHIPPED_SKILLS) {
+			if (await pluginSkillStale(name, installPath)) stalePluginSkills.add(name)
+		}
+	}
+	for (const name of SHIPPED_SKILLS) {
+		if (stalePluginSkills.has(name)) stale.push(`plugin skill ${name}`)
 	}
 	return stale
 }
