@@ -119,6 +119,17 @@ describe('resolveLoopEnv', () => {
 		expect(env.humanUser).toBe('')
 	})
 
+	it('humanUser in .repo-ai.json overrides the owner-based default (#162)', async () => {
+		const root = checkout(newTmpDir())
+		fs.writeJsonSync(join(root, '.repo-ai.json'), { humanUser: 'org-owner' })
+		const env = await resolveLoopEnv({
+			dir: root,
+			gh: fakeGh({ owner: 'Organization' }).gh,
+			env: {},
+		})
+		expect(env.humanUser).toBe('org-owner')
+	})
+
 	it('reports an unresolvable checkout and repo as empty', async () => {
 		const dir = newTmpDir()
 		const gh: GhExec = async () => ({ ok: false, stdout: '', stderr: 'no repo' })

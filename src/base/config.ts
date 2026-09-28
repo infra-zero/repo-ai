@@ -16,6 +16,8 @@ export type ConfigSource = 'repo-ai.json' | 'repo-tooling.json' | 'none'
 
 export interface RepoAiConfig {
 	agentUser?: string
+	/** Overrides the owner-based default in `loop env`'s `HUMAN_USER` (#162) — needed on an organisation-owned repo, which has no owner user to fall back to. */
+	humanUser?: string
 	requiredSkills?: string[]
 	/** `loop watch`'s poll interval, floored at {@link MIN_POLL_SECONDS}. */
 	pollSeconds?: number
@@ -80,6 +82,7 @@ export async function readConfig(dir: string): Promise<RepoAiConfig> {
 	if (own) {
 		return {
 			agentUser: asLogin(own.agentUser),
+			humanUser: asLogin(own.humanUser),
 			requiredSkills: asSkillList(own.requiredSkills),
 			pollSeconds: asPollSeconds(own.pollSeconds),
 			budgetTokens: asBudgetTokens(own.budgetTokens),
