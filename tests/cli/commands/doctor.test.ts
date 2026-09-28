@@ -161,6 +161,20 @@ describe('checkCiRuns (#153)', () => {
 		const r = await checkCiRuns(dir, async () => ({ ok: false, stdout: '', stderr: '', code: 1 }))
 		expect(r.status).toBe('ok')
 	})
+
+	it('warns when the configured ciWorkflow does not exist (#201)', async () => {
+		const dir = newTmpDir()
+		fs.ensureDirSync(join(dir, '.git'))
+		fs.outputJsonSync(join(dir, '.repo-ai.json'), { ciWorkflow: 'build.yml' })
+		const paths: string[] = []
+		const r = await checkCiRuns(dir, async (args) => {
+			if (args[0] === 'repo') return { ok: true, stdout: 'acme/widget main\n', stderr: '', code: 0 }
+			paths.push(args[1] ?? '')
+			return { ok: false, stdout: '', stderr: 'gh: Not Found (HTTP 404)', code: 1 }
+		})
+		expect(paths).toEqual(['repos/acme/widget/actions/workflows/build.yml'])
+		expect(r).toMatchObject({ status: 'drift', detail: expect.stringContaining('build.yml') })
+	})
 })
 
 describe('checkReleaseStuck (#146)', () => {

@@ -36,6 +36,8 @@ export interface RepoAiConfig {
 	idleMinutes?: number
 	/** Live agents across every Workflow, counted from claim labels; unset means no cap (#167). */
 	maxAgents?: number
+	/** The CI workflow file the `main` run probes watch (#201); unset means `ci.yml`. */
+	ciWorkflow?: string
 	source: ConfigSource
 }
 
@@ -100,6 +102,7 @@ export async function readConfig(dir: string): Promise<RepoAiConfig> {
 			quietStopMinutes: asAtLeast(own.quietStopMinutes, 0),
 			autoMerge: own.autoMerge === true,
 			maxAgents: asAtLeast(own.maxAgents, 1),
+			ciWorkflow: asLogin(own.ciWorkflow),
 			...Object.fromEntries(
 				Object.entries(LIMITS).map(([k, { min }]) => [k, asAtLeast(own[k], min)])
 			),
