@@ -53,6 +53,9 @@ export const DECAY_DAYS = 30
  */
 const LIST_CEILING = '1000'
 
+/** A PR head lagging its branch this long is stuck, not just mid-sync (#219). */
+export const RESYNC_MINUTES = 5
+
 const TRUSTED = new Set(['OWNER', 'MEMBER', 'COLLABORATOR'])
 /** Merge states that name something to fix; any other non-CLEAN state waits. */
 const SEND_BACK_STATES = new Set(['DIRTY', 'BLOCKED'])
@@ -87,6 +90,15 @@ export interface RerunFailed {
 	runIds: number[]
 }
 
+export interface Resync {
+	pr: number
+	issue: number | null
+	branch: string
+	/** The branch head the PR never picked up, and its tree: the empty commit's parent and tree. */
+	sha: string
+	tree: string
+}
+
 export interface FixRound {
 	pr: number
 	issue: number | null
@@ -112,6 +124,8 @@ export interface LoopTickResult {
 	sendBacks: SendBack[]
 	/** Pass 1 — a `ci-red` PR whose failing run's first attempt: rerun instead of a send-back (#202). */
 	rerunFailed: RerunFailed[]
+	/** Pass 1 — the PR's head lags its branch: push an empty commit so GitHub resyncs it (#219). */
+	resync: Resync[]
 	/** Pass 1 — passed but `BEHIND`: `gh pr update-branch`; send back only if that fails (#51). */
 	updateBranches: { pr: number; issue: number | null }[]
 	/** Pass 1 — `merge-ready` that no longer holds (not CLEAN, or `ai-changes`). */
@@ -166,6 +180,7 @@ interface Pr {
 	number: number
 	title: string
 	headRefName: string
+	headRefOid?: string
 	labels: { name: string }[]
 	autoMergeRequest: unknown
 	author: { login: string } | null
@@ -245,6 +260,7 @@ export function emptyTick(env: LoopEnv): LoopTickResult {
 		handoffs: [],
 		sendBacks: [],
 		rerunFailed: [],
+		resync: [],
 		updateBranches: [],
 		stripMergeReady: [],
 		dependabotCiRed: [],
@@ -401,7 +417,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		'--limit',
 		LIST_CEILING,
 		'--json',
-		'number,title,headRefName,labels,autoMergeRequest,author,body,statusCheckRollup',
+		'number,title,headRefName,headRefOid,labels,autoMergeRequest,author,body,statusCheckRollup',
 	])
 	const wip = await json<{ number: number; body?: string }[]>([
 		'issue',
@@ -445,6 +461,29 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		const passed = (has('ai-ok-code') && has('ai-ok-sec')) || has('merge-ready')
 		if (pr.autoMergeRequest && !passed) result.disarm.push(pr.number)
 		const claimed = has('ai-reviewing-code') || has('ai-reviewing-sec')
+
+		// A push that reached the branch but not the PR: no CI starts and the old head's
+		// verdicts look current, so nothing below reads this PR until it catches up (#219).
+		if (pr.headRefOid) {
+			const branch = await json<{
+				commit: { sha: string; commit: { tree: { sha: string }; committer: { date: string } } }
+			}>(['api', `repos/${ownerRepo}/branches/${pr.headRefName}`])
+			const head = branch?.commit
+			if (head && head.sha !== pr.headRefOid) {
+				// ponytail: committer date stands in for push time; an old commit pushed late resyncs early, harmlessly.
+				const lagging = now - Date.parse(head.commit.committer.date) >= RESYNC_MINUTES * 60_000
+				// A fixer mid-push would race the empty commit; its own push resyncs anyway.
+				if (lagging && !has('ai-fixing'))
+					result.resync.push({
+						pr: pr.number,
+						issue,
+						branch: pr.headRefName,
+						sha: head.sha,
+						tree: head.commit.tree.sha,
+					})
+				continue
+			}
+		}
 
 		// CI red is a send-back, except mid-review or when one is already out.
 		let pending = false
@@ -697,8 +736,8 @@ function turns(
 		...r.fixRounds.filter((f) => f.action === 'block').map((f) => f.pr),
 	])
 	const sentBack = new Set(r.sendBacks.map((s) => s.pr))
-	// A rerun is waiting on CI, same as a passed PR waiting on checks (#202).
-	const rerunning = new Set(r.rerunFailed.map((f) => f.pr))
+	// A rerun or a resync is waiting on CI, same as a passed PR waiting on checks (#202, #219).
+	const rerunning = new Set([...r.rerunFailed.map((f) => f.pr), ...r.resync.map((f) => f.pr)])
 	let agents = 0
 	let ci = 0
 	for (const p of loopPrs) {

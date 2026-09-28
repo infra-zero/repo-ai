@@ -56,7 +56,7 @@ function fakeGh(fail: string[] = [], prs: Record<string, { number: number; state
 		calls.push(args)
 		if (fail.includes(`${args[0]} ${args[1]}`))
 			return { ok: false, stdout: '', stderr: 'boom', code: 1 }
-		return ok('')
+		return ok(args[1]?.endsWith('/git/commits') ? 'new\n' : '')
 	}
 	return { gh, calls }
 }
@@ -185,6 +185,28 @@ describe('runLoopApply transitions (#147)', () => {
 			calls: [
 				['run', 'rerun', '555', '--failed'],
 				['run', 'rerun', '666', '--failed'],
+			],
+			errors: 0,
+		},
+		{
+			name: 'resyncs a lagging PR head with a fast-forward empty commit (#219)',
+			work: {
+				resync: [{ pr: 10, issue: 1, branch: 'ai-1-stuck', sha: 'old', tree: 'tree' }],
+			},
+			calls: [
+				[
+					'api',
+					'repos/acme/widget/git/commits',
+					'-f',
+					'message=chore: resync PR head [ai-loop]',
+					'-f',
+					'tree=tree',
+					'-f',
+					'parents[]=old',
+					'--jq',
+					'.sha',
+				],
+				['api', '-X', 'PATCH', 'repos/acme/widget/git/refs/heads/ai-1-stuck', '-f', 'sha=new'],
 			],
 			errors: 0,
 		},
