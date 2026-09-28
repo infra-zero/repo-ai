@@ -21,7 +21,8 @@ import { runLoopWorktreeAdd } from './loop-worktree.js'
  * edit (#147):
  *
  * - Pass 1: `disarm`, `handoffs` (merge-ready, assignees, label removals),
- *   `stripMergeReady`, `updateBranches`, `sendBacks`.
+ *   `stripMergeReady`, `updateBranches`, `rerunFailed` (`gh run rerun --failed`,
+ *   #202), `sendBacks`.
  * - Pass 2: removes the `toClean` worktrees (re-checking each: PR closed, or its
  *   `(#<PR>)` squash landed, #149), runs `loop guard --removed` for the
  *   `node_modules` rebuild, relabels every cleaned issue, and applies the label
@@ -53,6 +54,7 @@ export interface Applied {
 		| 'merge'
 		| 'strip-merge-ready'
 		| 'update-branch'
+		| 'rerun'
 		| 'send-back'
 		| 'relabel'
 		| 'stall'
@@ -226,6 +228,10 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 				failing: [],
 			})
 	}
+
+	// A first-attempt ci-red gets one free rerun instead of spending a fix round (#202).
+	for (const f of tick.rerunFailed)
+		await run(1, 'rerun', f.pr, ['run', 'rerun', String(f.runId), '--failed'])
 
 	for (const s of tick.sendBacks) await sendBack(s)
 

@@ -75,6 +75,10 @@ interface World {
 	queuePages?: unknown[][]
 	merge?: Record<number, string>
 	failing?: number[]
+	/** A failing PR's check `link` names this workflow run id, instead of the default unparseable `'l'`. */
+	runIds?: Record<number, number>
+	/** That run id's `run_attempt`, from `repos/…/actions/runs/<id>` (#202). */
+	runAttempts?: Record<number, number>
 	/** PRs whose required checks are still running. */
 	pending?: number[]
 	/** PRs with no required check reported yet (`gh pr checks --required` is empty). */
@@ -138,6 +142,8 @@ function fakeGh(w: World): GhExec {
 							: [],
 				})
 			if (b === 'repos/acme/widget/actions/runs/9/jobs?per_page=1') return ok({ total_count: 0 })
+			const runMatch = b?.match(/^repos\/acme\/widget\/actions\/runs\/(\d+)$/)
+			if (runMatch) return ok({ run_attempt: w.runAttempts?.[Number(runMatch[1])] ?? 1 })
 			if (b?.startsWith('repos/acme/widget/issues?')) return ok(w.queuePages ?? [w.queue ?? []])
 			const timeline = b?.match(/issues\/(\d+)\/timeline/)
 			if (timeline) {
@@ -172,11 +178,13 @@ function fakeGh(w: World): GhExec {
 			const failing = w.failing?.includes(n)
 			const pending = w.pending?.includes(n)
 			const unreported = w.unreported?.includes(n)
+			const runId = w.runIds?.[n]
+			const failLink = runId ? `https://github.com/acme/widget/actions/runs/${runId}/job/1` : 'l'
 			return {
 				ok: !failing && !pending && !unreported,
 				stdout: JSON.stringify(
 					failing
-						? [{ name: 'test', state: 'FAILURE', bucket: 'fail', link: 'l' }]
+						? [{ name: 'test', state: 'FAILURE', bucket: 'fail', link: failLink }]
 						: pending
 							? [{ name: 'test', state: 'IN_PROGRESS', bucket: 'pending', link: 'l' }]
 							: unreported
@@ -648,6 +656,71 @@ describe('runLoopTick', () => {
 		expect(r.sendBacks).toEqual([
 			{ pr: 10, issue: 1, reason: 'DIRTY', label: 'ai-conflicts', failing: [] },
 		])
+	})
+
+	it("reruns a ci-red PR on its failing run's first attempt, instead of sending it back (#202)", async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({
+				wip: [1],
+				prs: [pr(10, 'ai-1-flaky', ['ai-review'])],
+				failing: [10],
+				runIds: { 10: 555 },
+				runAttempts: { 555: 1 },
+			}),
+		})
+		expect(r.sendBacks).toEqual([])
+		expect(r.rerunFailed).toEqual([{ pr: 10, issue: 1, runId: 555 }])
+		expect(r.summary).toContain('1 on CI')
+		expect(r.summary).not.toContain('ci-red')
+	})
+
+	it('sends a ci-red PR back once its failing run has already been retried (#202)', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({
+				wip: [1],
+				prs: [pr(10, 'ai-1-still-red', ['ai-review'])],
+				failing: [10],
+				runIds: { 10: 555 },
+				runAttempts: { 555: 2 },
+			}),
+		})
+		expect(r.rerunFailed).toEqual([])
+		expect(r.sendBacks).toEqual([
+			{
+				pr: 10,
+				issue: 1,
+				reason: 'ci-red',
+				label: 'ai-changes',
+				failing: [{ name: 'test', link: 'https://github.com/acme/widget/actions/runs/555/job/1' }],
+			},
+		])
+	})
+
+	it('reruns again after a new head starts a fresh run at attempt 1 (#202)', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({
+				wip: [1],
+				// A new commit is a brand-new run id, not a retried attempt of the old one.
+				prs: [pr(10, 'ai-1-new-head', ['ai-review'])],
+				failing: [10],
+				runIds: { 10: 777 },
+				runAttempts: { 555: 2, 777: 1 },
+			}),
+		})
+		expect(r.rerunFailed).toEqual([{ pr: 10, issue: 1, runId: 777 }])
+		expect(r.sendBacks).toEqual([])
 	})
 
 	it('starts a fixer for ai-conflicts without it costing a fix round (#176)', async () => {
