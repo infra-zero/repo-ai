@@ -80,6 +80,8 @@ interface World {
 	diffs?: Record<number, string[]>
 	/** The `release` environment carries `required_reviewers`. */
 	gated?: boolean
+	/** The latest main push run of ci.yml was cancelled with no jobs (#153). */
+	ciCancelled?: boolean
 }
 
 function fakeGh(w: World): GhExec {
@@ -101,6 +103,22 @@ function fakeGh(w: World): GhExec {
 						: [],
 				})
 			if (b === 'repos/acme/widget/assignees/agent-bot') return ok('')
+			if (b?.startsWith('repos/acme/widget/actions/runs?'))
+				return ok({
+					workflow_runs: w.ciCancelled
+						? [
+								{
+									id: 9,
+									status: 'completed',
+									conclusion: 'cancelled',
+									html_url: 'https://github.com/acme/widget/actions/runs/9',
+									created_at: NOW.toISOString(),
+									path: '.github/workflows/ci.yml',
+								},
+							]
+						: [],
+				})
+			if (b === 'repos/acme/widget/actions/runs/9/jobs?per_page=1') return ok({ total_count: 0 })
 			if (b?.startsWith('repos/acme/widget/issues?')) return ok(w.queue ?? [])
 			const timeline = b?.match(/issues\/(\d+)\/timeline/)
 			if (timeline) {
@@ -173,6 +191,12 @@ describe('runLoopTick', () => {
 		const root = checkout(newTmpDir())
 		const r = await runLoopTick({ root, gh: fakeGh({}), env: {}, now: NOW })
 		expect(r).toMatchObject({ idle: true, summary: 'idle', exitCode: 0, errors: [] })
+	})
+
+	it('warns when the latest main push run was cancelled with no jobs (#153)', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({ root, gh: fakeGh({ ciCancelled: true }), env: {}, now: NOW })
+		expect(r.warnings).toEqual([expect.stringContaining('runs/9')])
 	})
 
 	it('reports a closed issue still labelled ai-wip, and is not idle (#23)', async () => {

@@ -3,6 +3,7 @@ import chalk from 'chalk'
 import fs from 'fs-extra'
 import { type GitExec, realGitExec } from '../../base/git.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
+import { ciRunWarning } from '../../base/ci-runs.js'
 import { readConfig } from '../../base/config.js'
 import { releaseGated } from '../../base/release-gate.js'
 import { claudeSkillStatus, SHIPPED_SKILLS } from '../generators/claude-skills.js'
@@ -235,6 +236,10 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	const now = (options.now ?? new Date()).getTime()
 	const errors = result.errors
 	const seams = { root, git: options.git, gh: options.gh }
+
+	// #153: worth surfacing even on a halting tick — decoupled from worktree state.
+	const ciWarning = await ciRunWarning(gh, ownerRepo, now)
+	if (ciWarning) result.warnings.push(ciWarning)
 
 	const guard = await runLoopGuard({ ...seams, install: options.install })
 	if (guard.exitCode !== 0) {
