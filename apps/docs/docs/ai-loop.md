@@ -443,6 +443,11 @@ reports each in `.applied[]`, and returns the comments still owed in `.comments[
   flaky test costs neither a fix round nor an agent. A second failure (attempt
   ≥ 2) is a normal `ci-red` send-back; a new commit starts a fresh run at
   attempt 1, so nothing needs to remember the first try (#202).
+- **Resync** — `.resync[]`: a PR whose `headRefOid` has lagged its branch's head
+  for 5+ minutes (a push that reached the branch but never the PR: no CI, stale
+  verdicts) gets a fast-forward empty commit on the branch, through the API, so
+  GitHub resyncs it. Until the PR catches up, the tick reads nothing else of it —
+  no checks, no verdicts. Never while `ai-fixing` is claimed (#219).
 - **Send back** — `.sendBacks[]`: `ci-red` or `BLOCKED` becomes `ai-changes`,
   `DIRTY` becomes `ai-conflicts` (off the round cap, #176); every review label is dropped.
 - **Clean up** — removes `.toClean[]` worktrees (PR closed, or its squash on the
