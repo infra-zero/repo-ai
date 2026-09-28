@@ -56,6 +56,7 @@ const pr = (
 	number,
 	title: extra.title ?? `pr-${number}`,
 	headRefName: head,
+	headRefOid: 'head',
 	labels: labels.map((name) => ({ name })),
 	autoMergeRequest: extra.autoMergeRequest ?? null,
 	author: { login: extra.author ?? 'me-bot' },
@@ -98,6 +99,8 @@ interface World {
 	securityAlerts?: string[]
 	/** The newest completed main push run's `release` job failed (#204). */
 	releaseFailed?: boolean
+	/** Branch → its head, when it differs from the PR's `head` (#219). */
+	branchHeads?: Record<string, { sha: string; minutesAgo: number }>
 }
 
 function fakeGh(w: World): GhExec {
@@ -161,6 +164,14 @@ function fakeGh(w: World): GhExec {
 				return ok([
 					(w.securityAlerts ?? []).map((severity) => ({ security_vulnerability: { severity } })),
 				])
+			const branch = b?.match(/^repos\/acme\/widget\/branches\/(.+)$/)
+			if (branch) {
+				const h = w.branchHeads?.[branch[1] as string] ?? { sha: 'head', minutesAgo: 60 }
+				const date = new Date(NOW.getTime() - h.minutesAgo * 60_000).toISOString()
+				return ok({
+					commit: { sha: h.sha, commit: { tree: { sha: 'tree' }, committer: { date } } },
+				})
+			}
 			const runMatch = b?.match(/^repos\/acme\/widget\/actions\/runs\/(\d+)$/)
 			if (runMatch) return ok({ run_attempt: w.runAttempts?.[Number(runMatch[1])] ?? 1 })
 			if (b === 'repos/acme/widget/actions/runs/9/jobs?per_page=100')
@@ -822,6 +833,51 @@ describe('runLoopTick', () => {
 		expect(r.rerunFailed).toEqual([])
 		expect(r.sendBacks.map((s) => s.reason)).toEqual(['ci-red'])
 		expect(r.sendBacks[0]?.failing).toHaveLength(2)
+	})
+
+	it('resyncs a PR whose head has lagged its branch past the grace period, and skips its verdicts (#219)', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({
+				wip: [1],
+				prs: [pr(10, 'ai-1-stuck', ['ai-review'])],
+				failing: [10],
+				reviews: { 10: [['code', 'PASS']] },
+				branchHeads: { 'ai-1-stuck': { sha: 'newer', minutesAgo: 10 } },
+			}),
+		})
+		expect(r.resync).toEqual([
+			{ pr: 10, issue: 1, branch: 'ai-1-stuck', sha: 'newer', tree: 'tree' },
+		])
+		expect(r.verdicts).toEqual([])
+		expect(r.reviewsToSpawn).toEqual([])
+		expect(r.sendBacks).toEqual([])
+		expect(r.summary).toContain('1 on CI')
+	})
+
+	it('waits out a fresh head lag, and never resyncs under a fixer (#219)', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({
+				wip: [1, 2],
+				prs: [
+					pr(10, 'ai-1-fresh', ['ai-review']),
+					pr(11, 'ai-2-fixing', ['ai-changes', 'ai-fixing']),
+				],
+				branchHeads: {
+					'ai-1-fresh': { sha: 'newer', minutesAgo: 1 },
+					'ai-2-fixing': { sha: 'newer', minutesAgo: 10 },
+				},
+			}),
+		})
+		expect(r.resync).toEqual([])
+		expect(r.reviewsToSpawn).toEqual([])
 	})
 
 	it('starts a fixer for ai-conflicts without it costing a fix round (#176)', async () => {
