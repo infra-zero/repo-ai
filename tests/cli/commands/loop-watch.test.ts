@@ -1,10 +1,16 @@
+import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it, vi } from 'vitest'
 import type { GhExec } from '../../../src/base/gh.js'
 import { runLoopGuard } from '../../../src/cli/commands/loop-guard.js'
 import type { LoopTickResult } from '../../../src/cli/commands/loop-tick.js'
-import { actionable, describeWork, runLoopWatch } from '../../../src/cli/commands/loop-watch.js'
+import {
+	actionable,
+	describeWork,
+	ensureStatusExcluded,
+	runLoopWatch,
+} from '../../../src/cli/commands/loop-watch.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
 
 const newTmpDir = useTmpDir()
@@ -256,5 +262,39 @@ describe('describeWork', () => {
 		expect(describeWork('5wip·1rev', w, new Date(2026, 0, 1, 15, 42))).toBe(
 			'15:42  5wip·1rev  review #78 · update #74 · pickup #39 #41 · stalled #55'
 		)
+	})
+})
+
+describe('ensureStatusExcluded (#228)', () => {
+	const gitRepo = () => {
+		const root = newTmpDir()
+		execFileSync('git', ['init', '-q', root])
+		return { root, exclude: join(root, '.git', 'info', 'exclude') }
+	}
+	const lines = (f: string) => fs.readFileSync(f, 'utf8').split('\n')
+
+	it('adds the entry when missing, keeping existing lines', () => {
+		const { root, exclude } = gitRepo()
+		fs.outputFileSync(exclude, 'foo')
+		ensureStatusExcluded(root)
+		expect(lines(exclude)).toEqual(['foo', '.claude/ai-loop-status', ''])
+	})
+
+	it('does not duplicate an existing entry', () => {
+		const { root, exclude } = gitRepo()
+		ensureStatusExcluded(root)
+		ensureStatusExcluded(root)
+		expect(lines(exclude).filter((l) => l === '.claude/ai-loop-status')).toHaveLength(1)
+	})
+
+	it('creates info/exclude when absent', () => {
+		const { root, exclude } = gitRepo()
+		fs.removeSync(join(root, '.git', 'info'))
+		ensureStatusExcluded(root)
+		expect(fs.readFileSync(exclude, 'utf8')).toBe('.claude/ai-loop-status\n')
+	})
+
+	it('ignores a non-git directory', () => {
+		expect(() => ensureStatusExcluded(newTmpDir())).not.toThrow()
 	})
 })

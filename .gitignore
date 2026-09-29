@@ -7,3 +7,4 @@ coverage
 apps/docs/build
 .docusaurus
 apps/docs/docs/changelog.md
+.claude/ai-loop-status
