@@ -51,7 +51,13 @@ const pr = (
 	number: number,
 	head: string,
 	labels: string[],
-	extra: Partial<{ autoMergeRequest: unknown; author: string; body: string; title: string; base: string }> = {}
+	extra: Partial<{
+		autoMergeRequest: unknown
+		author: string
+		body: string
+		title: string
+		base: string
+	}> = {}
 ) => ({
 	number,
 	title: extra.title ?? `pr-${number}`,
