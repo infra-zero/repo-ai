@@ -51,11 +51,18 @@ const pr = (
 	number: number,
 	head: string,
 	labels: string[],
-	extra: Partial<{ autoMergeRequest: unknown; author: string; body: string; title: string }> = {}
+	extra: Partial<{
+		autoMergeRequest: unknown
+		author: string
+		body: string
+		title: string
+		base: string
+	}> = {}
 ) => ({
 	number,
 	title: extra.title ?? `pr-${number}`,
 	headRefName: head,
+	baseRefName: extra.base ?? 'main',
 	headRefOid: 'head',
 	labels: labels.map((name) => ({ name })),
 	autoMergeRequest: extra.autoMergeRequest ?? null,
@@ -1107,6 +1114,20 @@ describe('staleInstall — plugin (#154)', () => {
 		})
 		expect(r.staleInstall).toEqual(['plugin skill ai-loop'])
 		expect(r.warnings).toEqual([expect.stringContaining('/plugin update repo-ai@repo-ai')])
+	})
+})
+
+describe('stacked PRs (#233)', () => {
+	it('leaves a PR whose base is not the default branch out of every work list', async () => {
+		const root = checkout(newTmpDir())
+		const r = await runLoopTick({
+			root,
+			gh: fakeGh({ prs: [pr(30, 'ai-30-child', ['ai-changes'], { base: 'feat/parent' })] }),
+			env: {},
+			now: NOW,
+		})
+		expect(r.fixRounds).toEqual([])
+		expect(r.warnings).toContain('#30 targets feat/parent, not main — outside the loop')
 	})
 })
 
