@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -158,6 +159,28 @@ export function updateStatusSummary(
 }
 
 /**
+ * List the status file in the repo's local `info/exclude` (shared by all
+ * worktrees) so it never shows as untracked (#228). Touches no tracked file;
+ * a non-git root or unwritable exclude file is silently skipped.
+ */
+export function ensureStatusExcluded(root: string): void {
+	const entry = '.claude/ai-loop-status'
+	try {
+		const common = execFileSync('git', ['-C', root, 'rev-parse', '--git-common-dir'], {
+			encoding: 'utf8',
+			stdio: ['ignore', 'pipe', 'ignore'],
+		}).trim()
+		const file = path.join(path.resolve(root, common), 'info', 'exclude')
+		const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
+		if (text.split('\n').includes(entry)) return
+		fs.mkdirSync(path.dirname(file), { recursive: true })
+		fs.appendFileSync(file, `${text === '' || text.endsWith('\n') ? '' : '\n'}${entry}\n`)
+	} catch {
+		// not a git checkout, or exclude unwritable: the status file just shows as untracked
+	}
+}
+
+/**
  * The `gh` a watch's ticks run with. On an `agentUser` mismatch it warns once
  * and answers the login probe with `agentUser`, so the guard passes and the work
  * list is the one the agent's own tick would act on. Every other call is real.
@@ -182,6 +205,7 @@ export async function runLoopWatch(options: LoopWatchOptions = {}): Promise<void
 	const sleep = options.sleep ?? ((ms: number) => delay(ms))
 	const write = options.write ?? ((line: string) => console.log(line))
 	const writeStatus = options.writeStatus ?? ((file, text) => fs.writeFileSync(file, text))
+	ensureStatusExcluded(root)
 	const seconds = (await readConfig(root)).pollSeconds ?? DEFAULT_POLL_SECONDS
 	const gh = await watchGh(root, options.gh ?? ((args, stdin) => realGhExec(args, stdin, root)))
 
