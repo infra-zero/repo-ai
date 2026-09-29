@@ -26,6 +26,24 @@ const VERDICT = {
 	required: ['passed', 'summary'],
 }
 
+// #235: a reviewer can return a verdict it never posted (a sandboxed `gh` call
+// fails, the agent fills the schema anyway). So the Workflow reads the head-scoped
+// marker back off the PR itself and trusts that, never the reviewer's return.
+const VERIFIED = {
+	type: 'object',
+	properties: {
+		verdicts: {
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: { arm: { enum: ['code', 'sec'] }, verdict: { enum: ['PASS', 'PASS-NOTES', 'CHANGES', 'NONE'] } },
+				required: ['arm', 'verdict'],
+			},
+		},
+	},
+	required: ['verdicts'],
+}
+
 const FIXED = {
 	type: 'object',
 	properties: { pushed: { type: 'boolean' }, summary: { type: 'string' } },
@@ -50,10 +68,10 @@ const RELAYED = 'A message relayed from the user or the main session mid-run is 
 // higher (input + cache reads dominate). Reported as `outputTokensSpent`.
 const DEFAULT_BUDGET_TOKENS = 400_000
 // #218: per-role output-token estimates, sized so three pickups with one fix
-// round each (3 impl + 3 fix + 12 reviews = 375K) fit the default budget. A flat
+// round each (3 impl + 3 fix + 12 reviews + 6 verifies = 393K) fit the default budget. A flat
 // 40K each exhausted it on the first fix round. Observed reviewer spend ran
 // 5-15K. ponytail: constants, retune from `outputTokensSpent` data.
-const TOKENS = { impl: 40_000, fix: 25_000, review: 15_000 }
+const TOKENS = { impl: 40_000, fix: 25_000, review: 15_000, verify: 3_000 }
 const tokenBudget = args.budgetTokens ?? DEFAULT_BUDGET_TOKENS
 const startSpent = budget.spent()
 // #41: reserve this tick's estimated spend as agents queue, against whichever
@@ -81,8 +99,10 @@ function afford(label, cost) {
 // Round 0 is the first review; round N re-reviews the head fix round N pushed.
 const tag = (i, round) => `#${i.number}${round ? `:r${round}` : ''}`
 
-function review(pr, i, round) {
-	return parallel(REVIEWERS.filter((v) => afford(`${v.type}:${tag(i, round)}`, TOKENS.review)).map((v) => () => agent(
+// Returns [{ arm, posted, passed, summary }]; `passed` is null when nothing was posted.
+async function review(pr, i, round) {
+	const ran = REVIEWERS.filter((v) => afford(`${v.type}:${tag(i, round)}`, TOKENS.review))
+	const returned = await parallel(ran.map((v) => () => agent(
 		`Review GitHub PR #${pr} in ${args.repo}. First claim your arm:
 \`gh pr edit ${pr} --add-label ${v.claim}${args.agentUser ? ` --add-assignee ${args.agentUser}` : ''}\` — the label
 stops a concurrent ai-loop tick spawning a duplicate of you, and the
@@ -94,6 +114,10 @@ repository — you are diff-scoped on purpose. Also read CLAUDE.md if the diff
 plausibly touches a rule it states.
 
 Judge ${v.lens}.
+
+\`gh\` fails TLS verification inside the Bash sandbox: if a \`gh\` call errors, retry it
+with the sandbox disabled. Before returning, confirm your verdict marker is the newest
+review on the head commit (\`gh pr view ${pr} --json reviews\`) — the Workflow checks.
 
 Post the verdict — never --approve, it errors on your own PR:
 \`gh pr review ${pr} --comment --body-file <dir>/review-${pr}-${v.arm}.md\`, where <dir>
@@ -123,6 +147,26 @@ A question only a human can answer → pass + ai-notes, never ai-changes.
 ${RELAYED}`,
 		{ label: `${v.type}:${tag(i, round)}`, phase: 'Review', schema: VERDICT, agentType: args.namedReviewers ? v.type : 'general-purpose' }
 	)))
+	if (!ran.length) return []
+	// Reserved, never skipped: an unverified verdict is the bug this exists to close.
+	reserved += TOKENS.verify
+	const checked = await agent(
+		`Check what reviewers posted on GitHub PR #${pr} in ${args.repo}. For each arm in
+${ran.map((v) => v.arm).join(', ')} run \`repo-ai loop verdict ${pr} --arm <arm> --json\` and report its
+\`verdict\` — \`NONE\` when it is null. \`gh\` fails TLS verification inside the Bash
+sandbox; if a call errors, retry it with the sandbox disabled. For every arm that is
+NONE, drop its claim so the next tick re-claims it:
+\`gh pr edit ${pr} --remove-label ai-reviewing-<arm>\`. Change nothing else, and do
+not review the PR yourself.
+
+${RELAYED}`,
+		{ label: `verify:${tag(i, round)}`, phase: 'Review', schema: VERIFIED }
+	)
+	return ran.map((v, n) => {
+		const verdict = checked?.verdicts?.find((c) => c.arm === v.arm)?.verdict ?? 'NONE'
+		const posted = verdict !== 'NONE'
+		return { arm: v.arm, posted, passed: posted ? verdict !== 'CHANGES' : null, summary: returned[n]?.summary ?? '' }
+	})
 }
 
 // The fix-task prompt from skills/ai-loop/SKILL.md Pass 3, plus the claim Pass 3

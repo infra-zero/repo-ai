@@ -53,7 +53,8 @@ function run(
 	name: string,
 	args: unknown,
 	reply: (label: string) => unknown,
-	budget: unknown = UNMETERED_BUDGET
+	budget: unknown = UNMETERED_BUDGET,
+	verify?: (label: string) => unknown
 ) {
 	const spawned: { label: string; phase: string; agentType?: string }[] = []
 	const logs: string[] = []
@@ -61,6 +62,19 @@ function run(
 	const agent = async (prompt: string, o: { label: string; phase: string; agentType?: string }) => {
 		prompts.push(prompt)
 		spawned.push({ label: o.label, phase: o.phase, agentType: o.agentType })
+		if (o.label.startsWith('verify:') && name === 'ai-loop-pickup') {
+			if (verify) return verify(o.label)
+			// Default: the marker on the PR agrees with what each reviewer returned.
+			const rest = o.label.slice(7)
+			const arm = (t: string) =>
+				(reply(`${t}:${rest}`) as { passed: boolean }).passed ? 'PASS' : 'CHANGES'
+			return {
+				verdicts: [
+					{ arm: 'code', verdict: arm('code-reviewer') },
+					{ arm: 'sec', verdict: arm('security-expert') },
+				],
+			}
+		}
 		return reply(o.label)
 	}
 	const parallel = (thunks: (() => Promise<unknown>)[]) => Promise.all(thunks.map((t) => t()))
@@ -148,6 +162,21 @@ describe('ai-loop-recover', () => {
 		expect(logs.join()).toContain('8-task cap')
 	})
 
+	it('verifies a review that names its PR, and flags an unposted one (#235)', async () => {
+		const { value, spawned } = await run(
+			'ai-loop-recover',
+			{ fixes: [], reviews: [{ label: 'code:#58', pr: 58, arm: 'code', prompt: 'p' }] },
+			(label) =>
+				label.startsWith('verify:')
+					? { verdicts: [{ arm: 'code', verdict: 'NONE' }] }
+					: { verdict: 'PASS' }
+		)
+		expect(spawned.map((s) => s.label)).toEqual(['code:#58', 'verify:code:#58'])
+		expect((value as { tasks: unknown[] }).tasks).toEqual([
+			{ label: 'code:#58', result: { verdict: 'PASS' }, posted: false, verdicts: ['NONE'] },
+		])
+	})
+
 	it('takes its task cap from args.maxTasksPerTick (#158)', async () => {
 		const reviews = Array.from({ length: 4 }, (_, n) => ({ label: `code:#${n}`, prompt: 'p' }))
 		const { spawned, logs } = await run(
@@ -212,14 +241,22 @@ describe('ai-loop-pickup', () => {
 			'impl:#1',
 			'impl:#2',
 			'security-expert:#1',
+			'verify:#1',
 		])
-		expect(spawned.filter((s) => s.phase === 'Review').map((s) => s.agentType)).toEqual([
-			'general-purpose',
-			'general-purpose',
-		])
+		expect(
+			spawned.filter((s) => s.phase === 'Review' && s.label !== 'verify:#1').map((s) => s.agentType)
+		).toEqual(['general-purpose', 'general-purpose'])
 		expect(value).toEqual({
 			issues: [
-				{ issue: 1, pr: 10, reviews: [{ passed: true }, { passed: true }], fixRounds: 0 },
+				{
+					issue: 1,
+					pr: 10,
+					reviews: [
+						{ arm: 'code', posted: true, passed: true, summary: '' },
+						{ arm: 'sec', posted: true, passed: true, summary: '' },
+					],
+					fixRounds: 0,
+				},
 				{ issue: 2, pr: null },
 			],
 			skipped: [],
@@ -257,13 +294,45 @@ describe('ai-loop-pickup', () => {
 			'Implement impl:#1',
 			'Review code-reviewer:#1',
 			'Review security-expert:#1',
+			'Review verify:#1',
 			'Fix fix:#1:r1',
 			'Review code-reviewer:#1:r1',
 			'Review security-expert:#1:r1',
+			'Review verify:#1:r1',
 		])
-		expect(prompts[3]).toContain('--add-label ai-fixing')
-		expect(prompts[3]).toContain('git -C "/w"')
+		expect(prompts[4]).toContain('--add-label ai-fixing')
+		expect(prompts[4]).toContain('git -C "/w"')
 		expect(value).toMatchObject({ issues: [{ issue: 1, pr: 10, fixRounds: 1 }] })
+	})
+
+	it('reports an unposted review as unposted, and runs no fixer on its say-so (#235)', async () => {
+		const { value, spawned, prompts } = await run(
+			'ai-loop-pickup',
+			one,
+			(label) => (label === 'impl:#1' ? { pr: 10 } : { passed: false, summary: 'x' }),
+			UNMETERED_BUDGET,
+			() => ({
+				verdicts: [
+					{ arm: 'code', verdict: 'NONE' },
+					{ arm: 'sec', verdict: 'PASS' },
+				],
+			})
+		)
+		expect(spawned.filter((s) => s.phase === 'Fix')).toEqual([])
+		expect(prompts.find((p) => p.includes('Check what reviewers posted'))).toContain(
+			'--remove-label ai-reviewing-<arm>'
+		)
+		expect(value).toMatchObject({
+			issues: [
+				{
+					reviews: [
+						{ arm: 'code', posted: false, passed: null },
+						{ arm: 'sec', posted: true, passed: true },
+					],
+					fixRounds: 0,
+				},
+			],
+		})
 	})
 
 	it('stops after 2 fix rounds of CHANGES, with no third fixer', async () => {
@@ -278,7 +347,7 @@ describe('ai-loop-pickup', () => {
 			'fix:#1:r1',
 			'fix:#1:r2',
 		])
-		expect(spawned).toHaveLength(9)
+		expect(spawned).toHaveLength(12)
 		expect(value).toMatchObject({
 			issues: [{ fixRounds: 2, reviews: [{ passed: false }, { passed: false }] }],
 		})
@@ -302,7 +371,7 @@ describe('ai-loop-pickup', () => {
 			{ ...one, budgetTokens: 80_000 },
 			(label) => (label === 'impl:#1' ? { pr: 10 } : { passed: false })
 		)
-		expect(spawned.map((s) => s.phase)).toEqual(['Implement', 'Review', 'Review'])
+		expect(spawned.map((s) => s.phase)).toEqual(['Implement', 'Review', 'Review', 'Review'])
 		expect(logs.join()).toContain('skipped fix:#1:r1 — token budget exhausted')
 		expect(value).toMatchObject({ issues: [{ fixRounds: 0 }], skipped: ['fix:#1:r1'] })
 	})
@@ -319,7 +388,7 @@ describe('ai-loop-pickup', () => {
 						: { passed: label.includes(':r1') },
 			{ total: null, spent: () => 0, remaining: () => Number.POSITIVE_INFINITY }
 		)
-		expect(spawned).toHaveLength(18)
+		expect(spawned).toHaveLength(24)
 		expect(logs).toEqual([])
 		expect(value).toMatchObject({ skipped: [] })
 	})
@@ -371,7 +440,7 @@ it("tells every agent in both scripts that a relayed message isn't its task", as
 		},
 		() => ({ verdict: 'PASS' })
 	)
-	expect(pickup.prompts).toHaveLength(3)
+	expect(pickup.prompts).toHaveLength(4)
 	for (const p of [...pickup.prompts, ...recover.prompts]) {
 		expect(p.split(relayed)).toHaveLength(2)
 	}
