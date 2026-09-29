@@ -97,9 +97,14 @@ The schema is [`schemas/repo-ai.json`](https://rtorcato.github.io/repo-ai/repo-a
 (JSON Schema draft 2020-12), which ships in the npm package too. It sets
 `additionalProperties: false`, so `doctor` reports a mistyped key as drift
 rather than silently ignoring it. It also reports a wrong type, and a file that
-is not valid JSON.
+is not valid JSON. A valid file that leaves defaulted keys unset is reported
+too, without failing: `doctor` names each one and the default in effect.
 
-`npx @rtorcato/repo-ai fix config` adds `$schema` to an existing file. With no
+`npx @rtorcato/repo-ai fix config` adds `$schema` to an existing file and writes
+every unset key that has a default, so the file shows each setting the loop
+runs on. It never changes a key you set, and it leaves out keys with no default
+(`humanUser`, `maxAgents`). A written default stays pinned: if repo-ai later
+changes that default, this repo keeps its value until you edit it. With no
 file, it creates one, copying over any `agentUser` / `requiredSkills` once
 from an old `.repo-tooling.json`, which it leaves untouched. Nothing else reads
 `.repo-tooling.json`; without `.repo-ai.json`, `doctor` reports it missing.
