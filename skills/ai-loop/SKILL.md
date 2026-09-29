@@ -157,7 +157,7 @@ Combined prompt (`arm: both`) — the same, except: the checklist is both lenses
 **Launch** every task in **one** call (none when there are none), fixes first, at most `<maxTasksPerTick>`, and **do not wait**:
 
 ```
-Workflow({name: 'ai-loop-recover', args: {reviews: [{label, agentType, prompt}, …], fixes: [{label, prompt}, …], budgetTokens: <budgetTokens>, maxTasksPerTick: <maxTasksPerTick>}})
+Workflow({name: 'ai-loop-recover', args: {reviews: [{label, agentType, prompt, pr, arm: code|sec|both}, …], fixes: [{label, prompt}, …], budgetTokens: <budgetTokens>, maxTasksPerTick: <maxTasksPerTick>}})
 ```
 
 "No workflow by that name" → `npx @rtorcato/repo-ai fix claude-skills`, then retry. **No `Workflow` tool?** Spawn the same tasks as background `Agent` calls in one message (fixers `general-purpose`) and report `Workflow tool missing: Pass 3 ran as N background agents, no token cap`. The agents write the labels; the result `{tasks: [{label, result}], outputTokensSpent}` is a report — print one line per task (`code:#58 PASS`), act on nothing, fold the tokens into Pass 5.
@@ -180,7 +180,7 @@ After the `🤖 *Automated — triage …*` header, **lead with `## To lift this
 Workflow({name: 'ai-loop-pickup', args: {repo: <ownerRepo>, agentUser: <agentUser>, humanUser: <humanUser>, namedReviewers, budgetTokens: <budgetTokens>, maxFixRounds: <maxFixRounds>, issues: [{number, title, slug, worktree}, …]}})
 ```
 
-It implements, reviews, and runs up to `<maxFixRounds>` fix rounds per issue. `namedReviewers` is `true` only when **both** `code-reviewer` and `security-expert` are Agent types here; pass unset users as `""`. **No `Workflow` tool?** Take the implementer prompt from `workflows/ai-loop-pickup.js`, spawn implementers as background `Agent` calls one at a time (≤ `slots`), then each PR's two reviewers; leave fix rounds to Pass 3 and report `Workflow tool missing: Pass 4 ran as background agents, no token cap`. On completion print one line per issue (`#82 → PR #90, code PASS, sec PASS, 1 fix round`), plus one naming each label in `.skipped` (agents the token budget skipped, e.g. `security-expert:#82:r1`), and act on nothing.
+It implements, reviews, and runs up to `<maxFixRounds>` fix rounds per issue. `namedReviewers` is `true` only when **both** `code-reviewer` and `security-expert` are Agent types here; pass unset users as `""`. **No `Workflow` tool?** Take the implementer prompt from `workflows/ai-loop-pickup.js`, spawn implementers as background `Agent` calls one at a time (≤ `slots`), then each PR's two reviewers; leave fix rounds to Pass 3 and report `Workflow tool missing: Pass 4 ran as background agents, no token cap`. On completion print one line per issue (`#82 → PR #90, code PASS, sec PASS, 1 fix round`; a review with `posted: false` is `sec:#82 UNPOSTED`, never PASS or CHANGES — its claim was already dropped), plus one naming each label in `.skipped` (agents the token budget skipped, e.g. `security-expert:#82:r1`), and act on nothing.
 
 ## Pass 5 — report
 

@@ -12,6 +12,21 @@ const VERDICT = {
 	},
 	required: ['verdict', 'summary'],
 }
+// #235: verify what a reviewer posted rather than trusting its return.
+const VERIFIED = {
+	type: 'object',
+	properties: {
+		verdicts: {
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: { arm: { enum: ['code', 'sec'] }, verdict: { enum: ['PASS', 'PASS-NOTES', 'CHANGES', 'NONE'] } },
+				required: ['arm', 'verdict'],
+			},
+		},
+	},
+	required: ['verdicts'],
+}
 const FIXED = {
 	type: 'object',
 	properties: { pushed: { type: 'boolean' }, summary: { type: 'string' } },
@@ -44,6 +59,8 @@ const all = [
 		phase: 'Review',
 		schema: VERDICT,
 		agentType: r.agentType,
+		pr: r.pr,
+		arm: r.arm,
 		prompt: withRelayed(r.prompt),
 	})),
 ]
@@ -75,7 +92,28 @@ const results = await parallel(
 		(t) => () => agent(t.prompt, { label: t.label, phase: t.phase, schema: t.schema, agentType: t.agentType })
 	)
 )
+// #235: a review with a `pr` (and `arm`: code, sec or both) is checked against the PR.
+const tasks = await parallel(
+	queued.map((t, i) => async () => {
+		if (t.phase !== 'Review' || !t.pr) return { label: t.label, result: results[i] }
+		const arms = t.arm === 'both' ? ['code', 'sec'] : [t.arm]
+		const checked = await agent(
+			`Check what a reviewer posted on GitHub PR #${t.pr}. For each arm in ${arms.join(', ')} run
+\`repo-ai loop verdict ${t.pr} --arm <arm> --json\` and report its \`verdict\` — \`NONE\` when it is
+null. \`gh\` fails TLS verification inside the Bash sandbox; if a call errors, retry it with the
+sandbox disabled. For every arm that is NONE, drop its claim so the next tick re-claims it:
+\`gh pr edit ${t.pr} --remove-label ai-reviewing-<arm>\`. Change nothing else, and do not review
+the PR yourself.
+
+${RELAYED}`,
+			{ label: `verify:${t.label}`, phase: 'Review', schema: VERIFIED }
+		)
+		const verdicts = arms.map((arm) => checked?.verdicts?.find((c) => c.arm === arm)?.verdict ?? 'NONE')
+		const posted = verdicts.every((v) => v !== 'NONE')
+		return { label: t.label, result: results[i], posted, verdicts }
+	})
+)
 return {
-	tasks: queued.map((t, i) => ({ label: t.label, result: results[i] })),
+	tasks,
 	outputTokensSpent: budget.spent() - startSpent,
 }
