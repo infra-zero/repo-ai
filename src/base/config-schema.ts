@@ -17,6 +17,7 @@ interface PropertySchema {
 	type: string
 	minimum?: number
 	items?: { type: string }
+	default?: unknown
 }
 
 // ponytail: dist/base and src/base both sit two levels below the package root.
@@ -58,6 +59,19 @@ export function validateConfig(value: unknown): string[] {
 	return errors
 }
 
+/**
+ * Keys with a schema `default` that `value` leaves unset (#230), in schema
+ * order. Keys with no default (`humanUser`, `maxAgents`) never appear: writing
+ * one would assert a value nobody chose.
+ */
+export function unsetDefaults(value: Record<string, unknown>): Record<string, unknown> {
+	return Object.fromEntries(
+		Object.entries(schema.properties)
+			.filter(([key, prop]) => prop.default !== undefined && !(key in value))
+			.map(([key, prop]) => [key, prop.default])
+	)
+}
+
 /** Null when there is no `.repo-ai.json` to check. */
 export async function checkConfigSchema(dir: string): Promise<CheckResult | null> {
 	const file = path.join(dir, CONFIG_FILE)
@@ -70,7 +84,18 @@ export async function checkConfigSchema(dir: string): Promise<CheckResult | null
 		errors = [`not valid JSON: ${(err as Error).message}`]
 	}
 	if (errors.length === 0) {
-		return { check: 'Loop config schema', status: 'ok', detail: `${CONFIG_FILE} is valid` }
+		const unset = Object.entries(unsetDefaults(JSON.parse(raw)))
+		if (unset.length === 0) {
+			return { check: 'Loop config schema', status: 'ok', detail: `${CONFIG_FILE} is valid` }
+		}
+		// Valid, so never a failure — but a file showing only agentUser looked
+		// complete while every tuning knob sat invisible (#230).
+		return {
+			check: 'Loop config schema',
+			status: 'optional-missing',
+			detail: `${CONFIG_FILE} is valid; unset, so on the default: ${unset.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')}`,
+			hint: 'Run `npx @rtorcato/repo-ai fix config` to write them into the file',
+		}
 	}
 	return {
 		check: 'Loop config schema',
@@ -81,7 +106,10 @@ export async function checkConfigSchema(dir: string): Promise<CheckResult | null
 }
 
 /**
- * `fix config`: stamp `$schema` into `.repo-ai.json`, first in key order. With
+ * `fix config`: stamp `$schema` into `.repo-ai.json`, first in key order, and
+ * write every defaulted key the file leaves unset (#230), existing keys never
+ * touched. Pinning a default means a later change to it skips this repo —
+ * chosen over an invisible knob. With
  * no file yet, create one, migrating `agentUser` / `requiredSkills` once from
  * the old `.repo-tooling.json` `rules.aiLoop.agentUser` / `rules.requiredSkills`
  * (flat pre-v4 `aiLoop.agentUser` too). That file is only read, never changed;
@@ -100,7 +128,9 @@ export async function writeConfigSchema(dir: string): Promise<string[]> {
 			)
 		}
 		current = parsed
-		if (current.$schema === SCHEMA_URL) return []
+		if (current.$schema === SCHEMA_URL && Object.keys(unsetDefaults(current)).length === 0) {
+			return []
+		}
 	} else {
 		const old = await fs.readJson(path.join(dir, '.repo-tooling.json')).catch(() => null)
 		current = {
@@ -109,6 +139,6 @@ export async function writeConfigSchema(dir: string): Promise<string[]> {
 		}
 	}
 	const { $schema: _, ...rest } = current
-	await fs.writeJson(file, { $schema: SCHEMA_URL, ...rest }, { spaces: 2 })
+	await fs.writeJson(file, { $schema: SCHEMA_URL, ...rest, ...unsetDefaults(rest) }, { spaces: 2 })
 	return [file]
 }

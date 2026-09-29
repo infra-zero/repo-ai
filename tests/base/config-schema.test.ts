@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
 	checkConfigSchema,
 	SCHEMA_URL,
+	unsetDefaults,
 	validateConfig,
 	writeConfigSchema,
 } from '../../src/base/config-schema.js'
@@ -43,11 +44,22 @@ describe('validateConfig', () => {
 })
 
 describe('checkConfigSchema', () => {
-	it('is silent with no .repo-ai.json, ok with a valid one', async () => {
+	it('is silent with no .repo-ai.json, ok with a complete one', async () => {
 		const dir = newTmpDir()
 		expect(await checkConfigSchema(dir)).toBeNull()
-		fs.outputJsonSync(join(dir, '.repo-ai.json'), { agentUser: 'bot' })
+		fs.outputJsonSync(join(dir, '.repo-ai.json'), { agentUser: 'bot', ...unsetDefaults({}) })
 		expect((await checkConfigSchema(dir))?.status).toBe('ok')
+	})
+
+	// #230: valid but leaving the tuning keys unset looked complete.
+	it('names the unset defaulted keys without failing', async () => {
+		const dir = newTmpDir()
+		fs.outputJsonSync(join(dir, '.repo-ai.json'), { agentUser: 'bot', maxInFlight: 3 })
+		const result = await checkConfigSchema(dir)
+		expect(result?.status).toBe('optional-missing')
+		expect(result?.detail).toMatch(/idleMinutes=30/)
+		expect(result?.detail).not.toMatch(/maxInFlight|agentUser|humanUser|maxAgents/)
+		expect(result?.hint).toMatch(/fix config/)
 	})
 
 	it('flags a typo and unparseable JSON as drift', async () => {
@@ -65,11 +77,25 @@ describe('writeConfigSchema', () => {
 		const file = join(dir, '.repo-ai.json')
 		fs.outputJsonSync(file, { agentUser: 'bot', $schema: 'old' })
 		expect(await writeConfigSchema(dir)).toEqual([file])
-		expect(Object.entries(fs.readJsonSync(file))).toEqual([
+		expect(Object.entries(fs.readJsonSync(file)).slice(0, 2)).toEqual([
 			['$schema', SCHEMA_URL],
 			['agentUser', 'bot'],
 		])
 		expect(await writeConfigSchema(dir)).toEqual([])
+	})
+
+	// #230: fill every unset defaulted key, never touch a set one.
+	it('writes the unset defaults, keeping values already set', async () => {
+		const dir = newTmpDir()
+		const file = join(dir, '.repo-ai.json')
+		fs.outputJsonSync(file, { $schema: SCHEMA_URL, agentUser: 'bot', maxInFlight: 3 })
+		expect(await writeConfigSchema(dir)).toEqual([file])
+		const written = fs.readJsonSync(file)
+		expect(written).toMatchObject({ agentUser: 'bot', maxInFlight: 3, idleMinutes: 30 })
+		expect(written).not.toHaveProperty('humanUser')
+		expect(written).not.toHaveProperty('maxAgents')
+		expect(unsetDefaults(written)).toEqual({})
+		expect(await checkConfigSchema(dir)).toMatchObject({ status: 'ok' })
 	})
 
 	it('creates the file, migrating .repo-tooling.json settings and leaving it alone', async () => {
@@ -81,6 +107,7 @@ describe('writeConfigSchema', () => {
 			$schema: SCHEMA_URL,
 			agentUser: 'legacy-bot',
 			requiredSkills: ['ai-loop'],
+			...unsetDefaults({}),
 		})
 		expect(fs.readJsonSync(join(dir, '.repo-tooling.json'))).toEqual(old)
 	})
