@@ -180,6 +180,7 @@ interface Pr {
 	number: number
 	title: string
 	headRefName: string
+	baseRefName: string
 	headRefOid?: string
 	labels: { name: string }[]
 	autoMergeRequest: unknown
@@ -409,7 +410,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		})
 	}
 
-	const prs = await json<Pr[]>([
+	const allPrs = await json<Pr[]>([
 		'pr',
 		'list',
 		'--state',
@@ -417,8 +418,16 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		'--limit',
 		LIST_CEILING,
 		'--json',
-		'number,title,headRefName,headRefOid,labels,autoMergeRequest,author,body,statusCheckRollup',
+		'number,title,headRefName,baseRefName,headRefOid,labels,autoMergeRequest,author,body,statusCheckRollup',
 	])
+	// Stacked PRs (base isn't the default branch) are out of scope (#233).
+	const prs = (allPrs ?? []).filter((p) => {
+		if (p.baseRefName === env.defaultBranch) return true
+		result.warnings.push(
+			`#${p.number} targets ${p.baseRefName}, not ${env.defaultBranch} — outside the loop`
+		)
+		return false
+	})
 	const wip = await json<{ number: number; body?: string }[]>([
 		'issue',
 		'list',
