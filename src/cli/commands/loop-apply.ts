@@ -175,15 +175,19 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 		return r.ok
 	}
 	const sendBack = async (s: SendBack) => {
+		// Only a passed PR goes `DIRTY`: keep its pass (re-granting what `merge-ready` superseded)
+		// so a conflict fix that leaves the diff unchanged skips re-review (#217).
+		const labels =
+			s.label === 'ai-conflicts'
+				? ['--add-label', 'ai-ok-code', '--add-label', 'ai-ok-sec', '--remove-label', 'ai-review']
+				: [...PASS_LABELS, '--remove-label', 'ai-notes']
 		const ok = await run(1, 'send-back', s.pr, [
 			'pr',
 			'edit',
 			String(s.pr),
 			'--add-label',
 			s.label,
-			...PASS_LABELS,
-			'--remove-label',
-			'ai-notes',
+			...labels,
 			'--remove-label',
 			'merge-ready',
 		])

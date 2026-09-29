@@ -251,7 +251,7 @@ A PR moves through a few label combinations. Read them as "whose turn is it":
 | `ai-changes` | A reviewer asked for a change, or CI failed | the loop (a fixer is next) |
 | `ai-changes` `ai-fixing` | A fixer is pushing a fix; both reviews run again afterwards | the fixer |
 | `ai-conflicts` | The branch conflicts with `main` | the loop (a fixer merges `main` in next, for free) |
-| `ai-conflicts` `ai-fixing` | A fixer is rebasing onto `main`; both reviews run again afterwards | the fixer |
+| `ai-conflicts` `ai-fixing` | A fixer is merging `main` in; the reviews run again only if that changed the PR's own diff (#217) | the fixer |
 | `merge-ready` | Reviewed, green, mergeable | **you** |
 | `merge-ready` `ai-notes` | Same, but read the reviewer's `### Before merging` first | **you** |
 
@@ -454,7 +454,9 @@ reports each in `.applied[]`, and returns the comments still owed in `.comments[
   GitHub resyncs it. Until the PR catches up, the tick reads nothing else of it —
   no checks, no verdicts. Never while `ai-fixing` is claimed (#219).
 - **Send back** — `.sendBacks[]`: `ci-red` or `BLOCKED` becomes `ai-changes`,
-  `DIRTY` becomes `ai-conflicts` (off the round cap, #176); every review label is dropped.
+  `DIRTY` becomes `ai-conflicts` (off the round cap, #176). `ai-changes` drops every
+  review label; `ai-conflicts` keeps the pass and `ai-notes`, which the fixer strips
+  only if merging `main` in changed the PR's own diff (#217).
 - **Clean up** — removes `.toClean[]` worktrees (PR closed, or its squash on the
   default branch), relabels their issues and closed `ai-wip` leftovers, runs
   `loop guard --removed`, and applies the label side of every `.stalled[]` verdict.

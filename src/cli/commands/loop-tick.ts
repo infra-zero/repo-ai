@@ -749,7 +749,8 @@ function turns(
 		const labels = new Set(p.labels.map((l) => l.name))
 		const passed =
 			(labels.has('ai-ok-code') && labels.has('ai-ok-sec')) || labels.has('merge-ready')
-		if (passed && !sentBack.has(p.number)) ci++
+		// An `ai-conflicts` PR keeps its pass labels but waits on a fixer (#217).
+		if (passed && !labels.has('ai-conflicts') && !sentBack.has(p.number)) ci++
 		else agents++
 	}
 	const withPr = new Set(loopPrs.map((p) => issueOf(p.headRefName)))

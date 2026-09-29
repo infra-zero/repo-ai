@@ -86,6 +86,17 @@ const PASS = [
 	'ai-ok-sec',
 ]
 const SEND_BACK = [...PASS, '--remove-label', 'ai-notes', '--remove-label', 'merge-ready']
+// A conflict send-back keeps the pass and `ai-notes` (#217).
+const KEEP_PASS = [
+	'--add-label',
+	'ai-ok-code',
+	'--add-label',
+	'ai-ok-sec',
+	'--remove-label',
+	'ai-review',
+	'--remove-label',
+	'merge-ready',
+]
 
 describe('runLoopApply transitions (#147)', () => {
 	it.each<{
@@ -168,7 +179,7 @@ describe('runLoopApply transitions (#147)', () => {
 			fail: ['pr update-branch'],
 			calls: [
 				['pr', 'update-branch', '14'],
-				['pr', 'edit', '14', '--add-label', 'ai-conflicts', ...SEND_BACK],
+				['pr', 'edit', '14', '--add-label', 'ai-conflicts', ...KEEP_PASS],
 			],
 			comments: [{ kind: 'send-back', pr: 14, sendBack: { reason: 'DIRTY' } }],
 			errors: 0,
