@@ -38,8 +38,8 @@ importers:
         specifier: 'link:'
         version: 'link:'
       '@rtorcato/repo-tooling':
-        specifier: ^3.44.0
-        version: 3.44.0(@biomejs/biome@2.5.14)(@commitlint/cli@21.2.3(@types/node@26.6.2)(conventional-commits-parser@7.1.2)(typescript@7.0.2))(@commitlint/config-conventional@21.2.3)(@commitlint/types@21.2.3)(@semantic-release/commit-analyzer@13.0.1(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/github@12.0.10(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/npm@13.2.0(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/release-notes-generator@14.1.1(semantic-release@25.0.9(typescript@7.0.2)))(@types/node@26.6.2)(conventional-changelog-conventionalcommits@10.4.0)(semantic-release@25.0.9(typescript@7.0.2))(tslib@2.8.1)(typescript@7.0.2)(vitest@5.0.1(@types/node@26.6.2)(vite@8.3.0(@types/node@26.6.2)(jiti@2.6.1)(terser@5.51.2)))
+        specifier: ^5.1.4
+        version: 5.1.4(@biomejs/biome@2.5.14)(@commitlint/cli@21.2.3(@types/node@26.6.2)(conventional-commits-parser@7.1.2)(typescript@7.0.2))(@commitlint/config-conventional@21.2.3)(@commitlint/types@21.2.3)(@semantic-release/commit-analyzer@13.0.1(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/github@12.0.10(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/npm@13.2.0(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/release-notes-generator@14.1.1(semantic-release@25.0.9(typescript@7.0.2)))(@types/node@26.6.2)(conventional-changelog-conventionalcommits@10.4.0)(semantic-release@25.0.9(typescript@7.0.2))(tslib@2.8.1)(typescript@7.0.2)(vitest@5.0.1(@types/node@26.6.2)(vite@8.3.0(@types/node@26.6.2)(jiti@2.6.1)(terser@5.51.2)))
       '@semantic-release/commit-analyzer':
         specifier: ^13.0.1
         version: 13.0.1(semantic-release@25.0.9(typescript@7.0.2))
@@ -120,8 +120,8 @@ importers:
         specifier: ^1.49.0
         version: 1.63.0
       '@rtorcato/repo-tooling':
-        specifier: ^3.44.0
-        version: 3.44.0(@biomejs/biome@2.5.14)(@commitlint/cli@21.2.3(@types/node@26.6.2)(conventional-commits-parser@7.1.2)(typescript@7.0.2))(@commitlint/config-conventional@21.2.3)(@commitlint/types@21.2.3)(@semantic-release/commit-analyzer@13.0.1(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/github@12.0.10(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/npm@13.2.0(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/release-notes-generator@14.1.1(semantic-release@25.0.9(typescript@7.0.2)))(@types/node@26.6.2)(conventional-changelog-conventionalcommits@10.4.0)(semantic-release@25.0.9(typescript@7.0.2))(tslib@2.8.1)(typescript@7.0.2)(vitest@5.0.1(@types/node@26.6.2)(vite@8.3.0(@types/node@26.6.2)(jiti@2.6.1)(terser@5.51.2)))
+        specifier: ^5.1.4
+        version: 5.1.4(@biomejs/biome@2.5.14)(@commitlint/cli@21.2.3(@types/node@26.6.2)(conventional-commits-parser@7.1.2)(typescript@7.0.2))(@commitlint/config-conventional@21.2.3)(@commitlint/types@21.2.3)(@semantic-release/commit-analyzer@13.0.1(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/github@12.0.10(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/npm@13.2.0(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/release-notes-generator@14.1.1(semantic-release@25.0.9(typescript@7.0.2)))(@types/node@26.6.2)(conventional-changelog-conventionalcommits@10.4.0)(semantic-release@25.0.9(typescript@7.0.2))(tslib@2.8.1)(typescript@7.0.2)(vitest@5.0.1(@types/node@26.6.2)(vite@8.3.0(@types/node@26.6.2)(jiti@2.6.1)(terser@5.51.2)))
       '@rtorcato/shared-docs':
         specifier: ^1.12.0
         version: 1.12.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2123,8 +2123,8 @@ packages:
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
 
-  '@rtorcato/repo-tooling@3.44.0':
-    resolution: {integrity: sha512-xdI9Mm3TsnerxwJ1XpxUwKXLZHCRJqp6PC6CEhNIpN+5gk8+oU13u4TcZSCzKrnM6f+CR0tk3ZVNkby2cQeDtw==}
+  '@rtorcato/repo-tooling@5.1.4':
+    resolution: {integrity: sha512-nFlhyM+eoQCgHMiLDx5GZ8LvEWtqExlPRS9VrFC9U4tYoT07eKv207Vww2Eiom8fJeF7zDx+acy5AbDITOlE/Q==}
     engines: {node: '>=22'}
     hasBin: true
     peerDependencies:
@@ -10326,7 +10326,7 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
-  '@rtorcato/repo-tooling@3.44.0(@biomejs/biome@2.5.14)(@commitlint/cli@21.2.3(@types/node@26.6.2)(conventional-commits-parser@7.1.2)(typescript@7.0.2))(@commitlint/config-conventional@21.2.3)(@commitlint/types@21.2.3)(@semantic-release/commit-analyzer@13.0.1(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/github@12.0.10(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/npm@13.2.0(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/release-notes-generator@14.1.1(semantic-release@25.0.9(typescript@7.0.2)))(@types/node@26.6.2)(conventional-changelog-conventionalcommits@10.4.0)(semantic-release@25.0.9(typescript@7.0.2))(tslib@2.8.1)(typescript@7.0.2)(vitest@5.0.1(@types/node@26.6.2)(vite@8.3.0(@types/node@26.6.2)(jiti@2.6.1)(terser@5.51.2)))':
+  '@rtorcato/repo-tooling@5.1.4(@biomejs/biome@2.5.14)(@commitlint/cli@21.2.3(@types/node@26.6.2)(conventional-commits-parser@7.1.2)(typescript@7.0.2))(@commitlint/config-conventional@21.2.3)(@commitlint/types@21.2.3)(@semantic-release/commit-analyzer@13.0.1(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/github@12.0.10(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/npm@13.2.0(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/release-notes-generator@14.1.1(semantic-release@25.0.9(typescript@7.0.2)))(@types/node@26.6.2)(conventional-changelog-conventionalcommits@10.4.0)(semantic-release@25.0.9(typescript@7.0.2))(tslib@2.8.1)(typescript@7.0.2)(vitest@5.0.1(@types/node@26.6.2)(vite@8.3.0(@types/node@26.6.2)(jiti@2.6.1)(terser@5.51.2)))':
     dependencies:
       chalk: 6.0.0
       commander: 15.0.0
