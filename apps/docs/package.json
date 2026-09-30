@@ -28,7 +28,7 @@
 		"@docusaurus/tsconfig": "^3.10.2",
 		"@docusaurus/types": "^3.10.2",
 		"@playwright/test": "^1.49.0",
-		"@rtorcato/repo-tooling": "^3.44.0",
+		"@rtorcato/repo-tooling": "^5.1.4",
 		"@rtorcato/shared-docs": "^1.7.0",
 		"@types/react": "^19.2.18",
 		"typescript": "~7.0.2"
