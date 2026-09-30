@@ -61,7 +61,7 @@
 		"type": "git",
 		"url": "https://github.com/rtorcato/repo-ai.git"
 	},
-	"homepage": "https://rtorcato.github.io/repo-ai/",
+	"homepage": "https://docs.torcato.dev/repo-ai/",
 	"bugs": {
 		"url": "https://github.com/rtorcato/repo-ai/issues"
 	},

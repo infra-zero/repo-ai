@@ -9,7 +9,7 @@ The **ai-loop** pipeline: a label-driven loop that takes an `ai-ready` GitHub is
 
 This package holds the moving parts: the Claude Code skills, the `loop` commands they call, and a `doctor`/`fix` pair for the loop's setup. It was split out of [`@rtorcato/repo-tooling`](https://github.com/rtorcato/repo-tooling) so the tooling can be used without the loop.
 
-New here? [Getting started](https://rtorcato.github.io/repo-ai/docs/getting-started) is the one-page walkthrough from zero to a first handed-over PR. See [the docs site](https://rtorcato.github.io/repo-ai/docs/ai-loop) for how the pipeline works.
+New here? [Getting started](https://docs.torcato.dev/repo-ai/docs/getting-started) is the one-page walkthrough from zero to a first handed-over PR. See [the docs site](https://docs.torcato.dev/repo-ai/docs/ai-loop) for how the pipeline works.
 
 ## Requirements
 
@@ -32,7 +32,7 @@ Workflow runs show in `/workflows`. If you edit the scripts in `workflows/`, loa
 npx @rtorcato/repo-ai setup
 ```
 
-> **⚠️ Costs and liability.** By installing or using repo-ai, you accept these risks and responsibilities. repo-ai runs AI agents unattended, and they spend your Anthropic credits or plan limits and your GitHub Actions minutes. The loop's limits are best-effort, not a spending guarantee. Set spend limits with your provider, and stop the loop when you aren't watching it. Agents can be wrong, so you review and merge every change. Provided as is under the MIT license, with no warranty; the authors aren't liable for costs, damages or changes made by agents. Not affiliated with Anthropic or GitHub. Read the full [Risks and responsibilities](https://rtorcato.github.io/repo-ai/docs/risks).
+> **⚠️ Costs and liability.** By installing or using repo-ai, you accept these risks and responsibilities. repo-ai runs AI agents unattended, and they spend your Anthropic credits or plan limits and your GitHub Actions minutes. The loop's limits are best-effort, not a spending guarantee. Set spend limits with your provider, and stop the loop when you aren't watching it. Agents can be wrong, so you review and merge every change. Provided as is under the MIT license, with no warranty; the authors aren't liable for costs, damages or changes made by agents. Not affiliated with Anthropic or GitHub. Read the full [Risks and responsibilities](https://docs.torcato.dev/repo-ai/docs/risks).
 
 `setup` shows this notice first and asks `Continue? (y/N)`, once per machine (recorded in `~/.config/repo-ai/acknowledged`) and again if the text changes; `--yes` or `--json` counts as acceptance.
 

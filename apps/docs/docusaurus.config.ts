@@ -13,7 +13,7 @@ const config: Config = {
 		'Turns ai-ready GitHub issues into reviewed PRs — one worktree per issue, two agent reviewers.',
 	favicon: 'img/favicon.svg',
 
-	url: 'https://rtorcato.github.io',
+	url: 'https://docs.torcato.dev',
 	baseUrl: '/repo-ai/',
 
 	organizationName: 'rtorcato',
@@ -113,7 +113,7 @@ const config: Config = {
 						{ label: 'GitHub', href: 'https://github.com/rtorcato/repo-ai' },
 						{ label: 'npm', href: 'https://www.npmjs.com/package/@rtorcato/repo-ai' },
 						{ label: 'Issues', href: 'https://github.com/rtorcato/repo-ai/issues' },
-						{ label: 'repo-tooling', href: 'https://rtorcato.github.io/repo-tooling/' },
+						{ label: 'repo-tooling', href: 'https://docs.torcato.dev/repo-tooling/' },
 					],
 				},
 				{ title: 'Projects', items: PROJECT_FAMILY },

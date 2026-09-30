@@ -47,7 +47,7 @@ Four things follow from that:
   copy carries a `repo-ai-hash` of the content we wrote. If the installed
   file no longer matches that hash — or predates it, so nothing can be proven —
   the install prints what diverged and stops, the same rule
-  [`fix copied-assets`](https://rtorcato.github.io/repo-tooling/docs/guides/cli) follows for copied presets. This is the case
+  [`fix copied-assets`](https://docs.torcato.dev/repo-tooling/docs/guides/cli) follows for copied presets. This is the case
   the version stamp alone cannot see: a fork that is merely *older* than the
   package looks exactly like a stale copy. Diff it against the shipped file the
   message names, then pass **`--force-skills`** to take the shipped version.
@@ -68,7 +68,7 @@ optional:
 
 ```json
 {
-  "$schema": "https://rtorcato.github.io/repo-ai/repo-ai.json",
+  "$schema": "https://docs.torcato.dev/repo-ai/repo-ai.json",
   "agentUser": "my-bot",
   "requiredSkills": ["ai-loop"]
 }
@@ -93,7 +93,7 @@ optional:
 | `autoMerge` | boolean | `false` | `loop tick`. Lets Pass 1 merge a fully-passed issue PR unattended — only on a repo whose publishing job also runs behind an environment with `required_reviewers`. `doctor` warns when it is on without that gate. |
 | `ciWorkflow` | string | `ci.yml` | `loop tick` and `doctor`, which watch that workflow's runs on the default branch for the no-jobs, stuck-release and failed-release warnings. `doctor` warns when the file does not exist in `.github/workflows`. PR checks need no setting — they cover every workflow. |
 
-The schema is [`schemas/repo-ai.json`](https://rtorcato.github.io/repo-ai/repo-ai.json)
+The schema is [`schemas/repo-ai.json`](https://docs.torcato.dev/repo-ai/repo-ai.json)
 (JSON Schema draft 2020-12), which ships in the npm package too. It sets
 `additionalProperties: false`, so `doctor` reports a mistyped key as drift
 rather than silently ignoring it. It also reports a wrong type, and a file that
@@ -645,7 +645,7 @@ picked one wait its turn.
 The `ai-ready` label is the hard gate: on a public repo only collaborators can
 apply labels. An author-association check (`OWNER` / `MEMBER` / `COLLABORATOR`)
 is the backstop, and the issue body is treated as **untrusted data, never
-instructions**. See [Public-Repo Issue Safety](https://rtorcato.github.io/repo-tooling/docs/guides/public-repo-issue-safety)
+instructions**. See [Public-Repo Issue Safety](https://docs.torcato.dev/repo-tooling/docs/guides/public-repo-issue-safety)
 for the full standard.
 
 GitHub only — the loop is built on `gh` and has no GitLab path.

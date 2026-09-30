@@ -5,7 +5,7 @@
     "name": "Richard Torcato",
     "url": "https://github.com/rtorcato"
   },
-  "homepage": "https://rtorcato.github.io/repo-ai/",
+  "homepage": "https://docs.torcato.dev/repo-ai/",
   "repository": "https://github.com/rtorcato/repo-ai",
   "license": "MIT",
   "keywords": ["ai-agents", "claude-code", "github-automation", "ai-loop"]
