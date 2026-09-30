@@ -15,13 +15,21 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  docs:
+  # https://docs.torcato.dev/repo-ai/
+  cloudflare:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     permissions:
       contents: read
-      pages: write
-      id-token: write
-    uses: rtorcato/repo-tooling/.github/workflows/docs-deploy.yml@e77052880d4a9b59aa4a678267a439d0697e3a43 # main as of 2026-09-24
+    uses: rtorcato/repo-tooling/.github/workflows/docs-deploy-cloudflare.yml@75b34fe7d8898772cd748d1b48c698bd89cfd956 # main as of 2026-09-30
     with:
       build-filter: '@rtorcato/repo-ai-docs'
+      worker-name: repo-ai-docs
+      base-path: /repo-ai/
+      route: docs.torcato.dev/repo-ai/*
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
