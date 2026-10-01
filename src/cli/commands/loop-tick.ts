@@ -133,7 +133,7 @@ export interface LoopTickResult {
 	/** Pass 1 — flag only, never send back. */
 	dependabotCiRed: number[]
 	/** Red or DIRTY Dependabot PRs in the loop: asked to `@dependabot recreate`, never sent to a fixer (#240). */
-	dependabotRecreate: number[]
+	dependabotRecreate: { pr: number; head: string }[]
 	/** Pass 2 — worktrees for `loop apply` to remove, and issues to relabel. */
 	toClean: CleanupEntry[]
 	/** Pass 2 — `loop reap`'s verdicts, to apply. */
@@ -167,6 +167,9 @@ export interface LoopTickResult {
 	exitCode: 0 | 1 | 2
 }
 
+/** Hidden marker on the `@dependabot recreate` comment, so a head is asked once. */
+export const recreateMarker = (head: string) => `<!-- ai-loop:recreate:${head} -->`
+
 export interface LoopTickOptions {
 	root?: string
 	json?: boolean
@@ -189,6 +192,7 @@ interface Pr {
 	author: { login: string } | null
 	body: string | null
 	statusCheckRollup?: { conclusion?: string | null }[] | null
+	comments?: { body: string }[]
 }
 
 interface RestIssue {
@@ -421,7 +425,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		'--limit',
 		LIST_CEILING,
 		'--json',
-		'number,title,headRefName,baseRefName,headRefOid,labels,autoMergeRequest,author,body,statusCheckRollup',
+		'number,title,headRefName,baseRefName,headRefOid,labels,autoMergeRequest,author,body,statusCheckRollup,comments',
 	])
 	// Stacked PRs (base isn't the default branch) are out of scope (#233).
 	const prs = (allPrs ?? []).filter((p) => {
@@ -453,6 +457,12 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		const issue = issueOf(pr.headRefName)
 
 		const isDep = pr.headRefName.startsWith('dependabot/')
+		// One recreate per head SHA: Dependabot's force-push is a new head, so a still-red PR is not re-asked every tick.
+		const recreate = () => {
+			const head = pr.headRefOid ?? ''
+			if (!(pr.comments ?? []).some((c) => c.body.includes(recreateMarker(head))))
+				result.dependabotRecreate.push({ pr: pr.number, head })
+		}
 		// Dependabot joins the loop once something labels it `ai-review` (#240); until then it is skipped.
 		if (isDep && !(has('merge-ready') || [...labels].some((l) => l.startsWith('ai-')))) {
 			const red = (pr.statusCheckRollup ?? []).some((c) => c.conclusion === 'FAILURE')
@@ -530,7 +540,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 				if (first) {
 					result.rerunFailed.push({ pr: pr.number, issue, runIds })
 				} else if (isDep) {
-					result.dependabotRecreate.push(pr.number)
+					recreate()
 				} else {
 					result.sendBacks.push({
 						pr: pr.number,
@@ -571,7 +581,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 			} else if (s === 'BLOCKED' && pending) {
 				// Required checks still running: the next tick sees them land.
 			} else if (isDep && SEND_BACK_STATES.has(s)) {
-				result.dependabotRecreate.push(pr.number)
+				recreate()
 			} else if (SEND_BACK_STATES.has(s)) {
 				result.sendBacks.push({
 					pr: pr.number,
@@ -682,9 +692,8 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	const inFlight = (wip ?? []).filter((i) => !freed.has(i.number)).length
 	result.slots = wip ? Math.max(0, env.maxInFlight - inFlight) : 0
 
-	const loopPrs = (prs ?? []).filter(
-		(p) =>
-			p.labels.some((l) => l.name === 'merge-ready' || l.name.startsWith('ai-'))
+	const loopPrs = (prs ?? []).filter((p) =>
+		p.labels.some((l) => l.name === 'merge-ready' || l.name.startsWith('ai-'))
 	)
 	result.liveAgents = liveAgents(loopPrs, wip ?? [], freed, result.stalled)
 	if (config.maxAgents !== undefined) capAgents(result, config.maxAgents)
@@ -820,7 +829,10 @@ export function summarize(r: LoopTickResult, t: Turns): string {
 	const blocked =
 		r.stalled.filter((s) => s.action === 'block').length +
 		r.fixRounds.filter((f) => f.action === 'block').length
-	const ciRed = r.sendBacks.filter((s) => s.reason === 'ci-red').length + r.dependabotCiRed.length + r.dependabotRecreate.length
+	const ciRed =
+		r.sendBacks.filter((s) => s.reason === 'ci-red').length +
+		r.dependabotCiRed.length +
+		r.dependabotRecreate.length
 	const merge = r.handoffs.length
 	const saved = r.reviewsToSpawn.filter((s) => s.arm === 'both').length
 	const segments: [number | boolean, string][] = [

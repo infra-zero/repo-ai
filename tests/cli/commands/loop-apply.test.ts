@@ -191,6 +191,15 @@ describe('runLoopApply transitions (#147)', () => {
 			comments: [{ kind: 'send-back', pr: 12, sendBack }],
 		},
 		{
+			name: 'asks Dependabot to recreate and drops the stale verdicts (#240)',
+			work: { dependabotRecreate: [{ pr: 15, head: 'abc' }] },
+			calls: [
+				['pr', 'comment', '15', '--body', '@dependabot recreate\n<!-- ai-loop:recreate:abc -->'],
+				['pr', 'edit', '15', '--remove-label', 'ai-ok-code', '--remove-label', 'ai-ok-sec'],
+			],
+			errors: 0,
+		},
+		{
 			name: 'reruns a first-attempt ci-red run instead of spending a fix round (#202)',
 			work: { rerunFailed: [{ pr: 10, issue: 1, runIds: [555, 666] }] },
 			calls: [

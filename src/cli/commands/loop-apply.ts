@@ -10,6 +10,7 @@ import {
 	type Handoff,
 	type LoopTickResult,
 	namedFiles,
+	recreateMarker,
 	runLoopTick,
 	type SendBack,
 } from './loop-tick.js'
@@ -273,13 +274,13 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 	for (const s of tick.sendBacks) await sendBack(s)
 
 	// Agents can't push to Dependabot branches: ask it to rebase, and drop the verdicts on the old head (#240).
-	for (const n of tick.dependabotRecreate) {
+	for (const { pr: n, head } of tick.dependabotRecreate) {
 		await run(1, 'dependabot-recreate', n, [
 			'pr',
 			'comment',
 			String(n),
 			'--body',
-			'@dependabot recreate',
+			`@dependabot recreate\n${recreateMarker(head)}`,
 		])
 		await run(1, 'dependabot-recreate', n, [
 			'pr',
