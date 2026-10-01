@@ -90,7 +90,7 @@ Write each body to a file — **never interpolate a log into a command**, it is 
 npx @rtorcato/repo-ai loop comment <N> --body-file "$BODY_FILE"
 ```
 
-`.dependabotRecreate` (red or `DIRTY` Dependabot PRs in the loop) gets `@dependabot recreate` from `loop apply`, never a fixer. `.dependabotCiRed` counts as `ci-red` in the summary, nothing more. `.rerunFailed` and `.resync` count under `on CI`, not `ci-red` — it's still waiting on a check, just a second try at it.
+`.dependabotRecreate` (red or `DIRTY` Dependabot PRs in the loop) gets `@dependabot recreate` from `loop apply`, never a fixer. `.dependabotStalled` (a recreate with no new head after `dependabotStallMinutes`) is handed to `<humanUser>` with a decision comment, its passes dropped, and shows as `⚠dependabot-stalled`. `.dependabotCiRed` counts as `ci-red` in the summary, nothing more. `.rerunFailed` and `.resync` count under `on CI`, not `ci-red` — it's still waiting on a check, just a second try at it.
 
 ## Pass 2 — clean up
 
