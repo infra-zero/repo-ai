@@ -499,3 +499,44 @@ describe('runLoopApply claims (#148)', () => {
 		expect(pickupSlug(9, '!!!')).toBe('ai-9-issue')
 	})
 })
+
+describe('runLoopApply stacking (#253)', () => {
+	const retarget = { pr: 60, issue: 6, parent: 50, passed: false, body: 'b\nStacked on #50' }
+	const edit = ['pr', 'edit', '60', '--base', 'main', '--body', 'b\nWas stacked on #50']
+
+	it('retargets onto the default branch and merges it in', async () => {
+		const fake = fakeGh()
+		await runLoopApply({ tick: tick(checkout(newTmpDir()), { retarget: [retarget] }), gh: fake.gh })
+		expect(fake.calls).toEqual([edit, ['pr', 'update-branch', '60']])
+	})
+
+	it('sends a conflicted retarget back as ai-conflicts without granting a pass', async () => {
+		const fake = fakeGh(['pr update-branch'])
+		await runLoopApply({ tick: tick(checkout(newTmpDir()), { retarget: [retarget] }), gh: fake.gh })
+		expect(fake.calls[2]).toEqual([
+			'pr',
+			'edit',
+			'60',
+			'--add-label',
+			'ai-conflicts',
+			'--remove-label',
+			'ai-review',
+			'--remove-label',
+			'merge-ready',
+		])
+	})
+
+	it('branches a stacked pickup from its parent PR', async () => {
+		const root = checkout(newTmpDir())
+		git(root, 'push', '-q', 'origin', 'HEAD:ai-5-parent')
+		git(root, 'fetch', '-q', 'origin')
+		const pickups = [
+			{ number: 6, title: 'feat: child', body: '', base: 'ai-5-parent', stackedOn: 50 },
+		]
+		const r = await runLoopApply({ tick: tick(root, { pickups, slots: 1 }), gh: fakeGh().gh })
+		expect(r.errors).toEqual([])
+		expect(r.claimed.pickups).toMatchObject([
+			{ number: 6, slug: 'ai-6-child', base: 'ai-5-parent', stackedOn: 50 },
+		])
+	})
+})
