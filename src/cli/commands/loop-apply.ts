@@ -56,6 +56,7 @@ export interface Applied {
 		| 'update-branch'
 		| 'rerun'
 		| 'resync'
+		| 'dependabot-recreate'
 		| 'send-back'
 		| 'relabel'
 		| 'stall'
