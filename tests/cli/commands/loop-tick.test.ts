@@ -5,6 +5,7 @@ import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
 import type { GhExec } from '../../../src/base/gh.js'
 import {
+	dependsOn,
 	isDocsOnly,
 	recreateMarker,
 	problemLines,
@@ -109,6 +110,10 @@ interface World {
 	releaseFailed?: boolean
 	/** Branch → its head, when it differs from the PR's `head` (#219). */
 	branchHeads?: Record<string, { sha: string; minutesAgo: number }>
+	/** `gh issue view <n> --json state` (#253); unset reads OPEN. */
+	issueStates?: Record<number, string>
+	/** `gh pr view <n> --json state` (#253); unset reads OPEN. */
+	prStates?: Record<number, string>
 }
 
 function fakeGh(w: World): GhExec {
@@ -212,6 +217,9 @@ function fakeGh(w: World): GhExec {
 				)
 			)
 		if (a === 'issue' && args.includes('ai-suggested')) return ok(w.suggested ?? [])
+		if (a === 'issue' && b === 'view') return ok(`${w.issueStates?.[Number(args[2])] ?? 'OPEN'}\n`)
+		if (a === 'pr' && b === 'view' && args.includes('state'))
+			return ok(`${w.prStates?.[Number(args[2])] ?? 'OPEN'}\n`)
 		if (a === 'pr' && b === 'list') return ok(args.includes('--head') ? [] : (w.prs ?? []))
 		if (a === 'pr' && b === 'checks') {
 			const n = Number(args[2])
@@ -1160,6 +1168,78 @@ describe('stacked PRs (#233)', () => {
 		})
 		expect(r.fixRounds).toEqual([])
 		expect(r.warnings).toContain('#30 targets feat/parent, not main — outside the loop')
+	})
+})
+
+describe('stacked loop PRs (#253)', () => {
+	const issue = (number: number, body: string) => ({
+		number,
+		title: `issue ${number}`,
+		body,
+		labels: [],
+		author_association: 'OWNER',
+	})
+	const tickWith = async (w: World) =>
+		runLoopTick({ root: checkout(newTmpDir()), gh: fakeGh(w), env: {}, now: NOW })
+
+	it('reads Depends on #N, deduped, same-repo only', () => {
+		expect(
+			dependsOn('Depends on #5.\ndepends on #5, Depends on other/repo#6, Depends on #7')
+		).toEqual([5, 7])
+	})
+
+	it("stacks a pickup on its parent issue's open PR", async () => {
+		const r = await tickWith({
+			prs: [pr(50, 'ai-5-parent', ['ai-review'])],
+			queue: [issue(6, 'Depends on #5')],
+		})
+		expect(r.pickups).toMatchObject([{ number: 6, base: 'ai-5-parent', stackedOn: 50 }])
+	})
+
+	it('branches from the default branch once the parent issue is closed', async () => {
+		const r = await tickWith({ queue: [issue(6, 'Depends on #5')], issueStates: { 5: 'CLOSED' } })
+		expect(r.pickups).toEqual([{ number: 6, title: 'issue 6', body: 'Depends on #5' }])
+	})
+
+	it('waits on a parent with no PR, or one that is itself stacked', async () => {
+		const r = await tickWith({
+			prs: [pr(50, 'ai-5-parent', ['ai-review'], { base: 'ai-4-grand' })],
+			queue: [issue(6, 'Depends on #5'), issue(7, 'Depends on #8')],
+		})
+		expect(r.pickups).toEqual([])
+		expect(r.skippedPickups.map((s) => s.reason)).toEqual([
+			'depends on #5, whose PR #50 is itself stacked — waits for it to merge',
+			'depends on #8, which has no open PR yet',
+		])
+	})
+
+	it('keeps a loop PR stacked on a loop branch in the tick, never handing it off', async () => {
+		const r = await tickWith({
+			prs: [
+				pr(50, 'ai-5-parent', ['ai-review']),
+				pr(60, 'ai-6-child', ['ai-ok-code', 'ai-ok-sec', 'merge-ready'], {
+					base: 'ai-5-parent',
+					body: 'Stacked on #50',
+				}),
+			],
+			merge: { 60: 'CLEAN' },
+		})
+		expect(r.warnings).toEqual([])
+		expect(r.handoffs).toEqual([])
+		expect(r.stripMergeReady).toEqual([60])
+	})
+
+	it('retargets a stacked PR once its parent merged', async () => {
+		const r = await tickWith({
+			prs: [
+				pr(60, 'ai-6-child', ['ai-review'], { base: 'ai-5-parent', body: 'x\nStacked on #50' }),
+			],
+			prStates: { 50: 'MERGED' },
+		})
+		expect(r.retarget).toEqual([
+			{ pr: 60, issue: 6, parent: 50, passed: false, body: 'x\nStacked on #50' },
+		])
+		expect(r.reviewsToSpawn).toEqual([])
 	})
 })
 

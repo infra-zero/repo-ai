@@ -99,6 +99,18 @@ export interface Resync {
 	tree: string
 }
 
+/** Pass 1 — a stacked PR whose parent merged: retarget it and merge the default branch in (#253). */
+export interface Retarget {
+	pr: number
+	issue: number | null
+	/** The merged parent PR. */
+	parent: number
+	/** Both reviews passed: a conflict send-back keeps the pass. */
+	passed: boolean
+	/** The PR body, its `Stacked on #` marker to flip so the retarget runs once. */
+	body: string
+}
+
 export interface FixRound {
 	pr: number
 	issue: number | null
@@ -126,6 +138,7 @@ export interface LoopTickResult {
 	rerunFailed: RerunFailed[]
 	/** Pass 1 — the PR's head lags its branch: push an empty commit so GitHub resyncs it (#219). */
 	resync: Resync[]
+	retarget: Retarget[]
 	/** Pass 1 — passed but `BEHIND`: `gh pr update-branch`; send back only if that fails (#51). */
 	updateBranches: { pr: number; issue: number | null }[]
 	/** Pass 1 — `merge-ready` that no longer holds (not CLEAN, or `ai-changes`). */
@@ -149,7 +162,8 @@ export interface LoopTickResult {
 	liveAgents: number
 	/** Pass 4 — free slots, and every eligible issue in queue order. */
 	slots: number
-	pickups: { number: number; title: string; body: string }[]
+	/** `base`/`stackedOn`: branch from the parent's open PR and target it (#253). */
+	pickups: { number: number; title: string; body: string; base?: string; stackedOn?: number }[]
 	/** `ai-ready` issues the tick left out of `pickups`, with why (#244). */
 	skippedPickups: { number: number; reason: string }[]
 	summary: string
@@ -265,6 +279,14 @@ export function namedFiles(body: string): string[] {
  */
 const SHARED_DOCS = new Set(['skill.md', 'ai-loop.md', 'readme.md', 'commands.md'])
 
+/** `Depends on #N` in an issue body — same-repo issue numbers only (#253). */
+export function dependsOn(body: string): number[] {
+	return [...new Set([...body.matchAll(/\bDepends on #(\d+)\b/gi)].map((m) => Number(m[1])))]
+}
+
+/** The line a stacked loop PR's body carries, naming its parent PR (#253). */
+export const STACKED = /^Stacked on #(\d+)/m
+
 const issueOf = (head: string) => Number(head.match(/^(?:worktree-)?ai-(\d+)-/)?.[1]) || null
 
 /** The workflow run id out of a check's `link` (`…/actions/runs/<id>/job/<id>`), or `null`. */
@@ -285,6 +307,7 @@ export function emptyTick(env: LoopEnv): LoopTickResult {
 		sendBacks: [],
 		rerunFailed: [],
 		resync: [],
+		retarget: [],
 		updateBranches: [],
 		stripMergeReady: [],
 		dependabotCiRed: [],
@@ -445,9 +468,11 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		'--json',
 		'number,title,headRefName,baseRefName,headRefOid,labels,autoMergeRequest,author,body,statusCheckRollup,comments',
 	])
-	// Stacked PRs (base isn't the default branch) are out of scope (#233).
+	// Stacked PRs (base isn't the default branch) are out of scope (#233) — except the
+	// loop's own, a loop branch on a loop branch (#253).
 	const prs = (allPrs ?? []).filter((p) => {
 		if (p.baseRefName === env.defaultBranch) return true
+		if (issueOf(p.headRefName) && issueOf(p.baseRefName)) return true
 		result.warnings.push(
 			`#${p.number} targets ${p.baseRefName}, not ${env.defaultBranch} — outside the loop`
 		)
@@ -503,6 +528,22 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		const passed = (has('ai-ok-code') && has('ai-ok-sec')) || has('merge-ready')
 		if (pr.autoMergeRequest && !passed) result.disarm.push(pr.number)
 		const claimed = has('ai-reviewing-code') || has('ai-reviewing-sec')
+
+		// A stacked PR whose parent merged: retarget it before anything else reads it (#253).
+		const parent = Number((pr.body ?? '').match(STACKED)?.[1]) || null
+		if (parent && !(allPrs ?? []).some((p) => p.number === parent)) {
+			const r = await gh(['pr', 'view', String(parent), '--json', 'state', '-q', '.state'])
+			if (!r.ok) errors.push(`gh pr view ${parent} failed: ${r.stderr.trim()}`)
+			const state = r.stdout.trim()
+			if (state === 'MERGED') {
+				result.retarget.push({ pr: pr.number, issue, parent, passed, body: pr.body ?? '' })
+				continue
+			}
+			if (state === 'CLOSED')
+				result.warnings.push(
+					`#${pr.number} is stacked on #${parent}, which closed unmerged — needs a human`
+				)
+		}
 
 		// A push that reached the branch but not the PR: no CI starts and the old head's
 		// verdicts look current, so nothing below reads this PR until it catches up (#219).
@@ -577,6 +618,11 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		if (has('ai-changes') || has('ai-conflicts')) {
 			if (has('merge-ready')) result.stripMergeReady.push(pr.number)
 		} else if (passed) {
+			// It would merge into the parent's branch, not the default: no handoff until retargeted (#253).
+			if (pr.baseRefName !== env.defaultBranch) {
+				if (has('merge-ready')) result.stripMergeReady.push(pr.number)
+				continue
+			}
 			const view = await json<{ mergeStateStatus: string }>([
 				'pr',
 				'view',
@@ -697,6 +743,26 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		.filter((i) => !i.labels.some((l) => ['ai-wip', 'ai-blocked', 'holding'].includes(l.name)))
 		// Bugs first; sort is stable, so the API's order holds within each group (#108).
 		.sort((a, b) => Number(isBug(b)) - Number(isBug(a)))
+	// One level deep: stack on a parent's open PR only when that PR targets the default branch (#253).
+	const stackFor = async (
+		body: string
+	): Promise<string | { base?: string; stackedOn?: number }> => {
+		let stack: { base: string; stackedOn: number } | undefined
+		for (const n of dependsOn(body)) {
+			const parent = (allPrs ?? []).find((p) => issueOf(p.headRefName) === n)
+			if (parent) {
+				if (parent.baseRefName !== env.defaultBranch)
+					return `depends on #${n}, whose PR #${parent.number} is itself stacked — waits for it to merge`
+				if (stack) return `depends on more than one open PR — stacks on one parent only`
+				stack = { base: parent.headRefName, stackedOn: parent.number }
+				continue
+			}
+			const r = await gh(['issue', 'view', String(n), '--json', 'state', '-q', '.state'])
+			if (!r.ok) return `could not read #${n}: ${r.stderr.trim()}`
+			if (r.stdout.trim() !== 'CLOSED') return `depends on #${n}, which has no open PR yet`
+		}
+		return stack ?? {}
+	}
 	for (const { number, title, body, author_association } of candidates) {
 		// The label is the hard gate; association is the backstop.
 		if (!TRUSTED.has(author_association)) {
@@ -714,7 +780,12 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 			})
 			continue
 		}
-		result.pickups.push({ number, title, body: body ?? '' })
+		const stack = await stackFor(body ?? '')
+		if (typeof stack === 'string') {
+			result.skippedPickups.push({ number, reason: stack })
+			continue
+		}
+		result.pickups.push({ number, title, body: body ?? '', ...stack })
 	}
 
 	// Slots count what is still in flight once this tick's cleanup and reaping land.
@@ -797,7 +868,11 @@ function turns(
 	])
 	const sentBack = new Set(r.sendBacks.map((s) => s.pr))
 	// A rerun or a resync is waiting on CI, same as a passed PR waiting on checks (#202, #219).
-	const rerunning = new Set([...r.rerunFailed.map((f) => f.pr), ...r.resync.map((f) => f.pr)])
+	const rerunning = new Set([
+		...r.rerunFailed.map((f) => f.pr),
+		...r.resync.map((f) => f.pr),
+		...r.retarget.map((f) => f.pr),
+	])
 	let agents = 0
 	let ci = 0
 	for (const p of loopPrs) {

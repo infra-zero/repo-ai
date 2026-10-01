@@ -652,8 +652,27 @@ hand. Branch protection and required checks still apply to every layer. Merge
 the layers bottom-up, one at a time, and note in B's PR that it depends on A.
 
 Stacked PRs are in public preview, and merge queue support is still rolling out.
-The loop itself doesn't stack: Pass 4 still makes an issue that overlaps a
-picked one wait its turn.
+
+### Dependent issues in the loop
+
+The loop stacks one level deep on its own (#253). Put `Depends on #N` in an
+`ai-ready` issue's body, where #N is an issue in the same repo:
+
+- **#N has an open loop PR that targets the default branch:** Pass 4 branches
+  the worktree from that PR's branch. The new PR targets that branch and says
+  `Stacked on #<parent PR>` in its body.
+- **#N is closed:** the pickup branches from the default branch as usual.
+- **#N has no open PR yet, or its PR is itself stacked:** the pickup waits.
+  `skippedPickups` names it, and a later tick picks it up.
+
+A stacked PR is reviewed and fixed like any other, but it is never marked
+`merge-ready`. Merging it would land it in the parent's branch. When the
+parent merges, `loop apply` retargets the child to the default branch, then
+merges the default branch in with `gh pr update-branch`. It never rebases or
+force-pushes. If the squash merge left conflicts, the child goes back as
+`ai-conflicts` for a fixer to merge by hand.
+
+Stacked PRs a human opened stay outside the loop.
 
 ## Safety
 

@@ -12,6 +12,7 @@ import {
 	namedFiles,
 	recreateMarker,
 	runLoopTick,
+	STACKED,
 	type SendBack,
 } from './loop-tick.js'
 import { runLoopWorktreeAdd } from './loop-worktree.js'
@@ -57,6 +58,7 @@ export interface Applied {
 		| 'update-branch'
 		| 'rerun'
 		| 'resync'
+		| 'retarget'
 		| 'dependabot-recreate'
 		| 'send-back'
 		| 'relabel'
@@ -88,6 +90,9 @@ export interface Claimed {
 		slug: string
 		worktree: string
 		needsInstall: boolean
+		/** Stacked (#253): open the PR with `--base <base>` and a `Stacked on #<stackedOn>` line. */
+		base?: string
+		stackedOn?: number
 	}[]
 }
 
@@ -176,13 +181,16 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 			result.errors.push(`gh ${args.slice(0, 2).join(' ')} ${n} failed: ${r.stderr.trim()}`)
 		return r.ok
 	}
-	const sendBack = async (s: SendBack) => {
-		// Only a passed PR goes `DIRTY`: keep its pass (re-granting what `merge-ready` superseded)
-		// so a conflict fix that leaves the diff unchanged skips re-review (#217).
+	const sendBack = async (s: SendBack, passed = true) => {
+		// A passed PR going `DIRTY` keeps its pass (re-granting what `merge-ready` superseded)
+		// so a conflict fix that leaves the diff unchanged skips re-review (#217). Only a
+		// retargeted stacked PR (#253) can conflict unpassed: it grants nothing.
 		const labels =
-			s.label === 'ai-conflicts'
-				? ['--add-label', 'ai-ok-code', '--add-label', 'ai-ok-sec', '--remove-label', 'ai-review']
-				: [...PASS_LABELS, '--remove-label', 'ai-notes']
+			s.label !== 'ai-conflicts'
+				? [...PASS_LABELS, '--remove-label', 'ai-notes']
+				: passed
+					? ['--add-label', 'ai-ok-code', '--add-label', 'ai-ok-sec', '--remove-label', 'ai-review']
+					: ['--remove-label', 'ai-review']
 		const ok = await run(1, 'send-back', s.pr, [
 			'pr',
 			'edit',
@@ -269,6 +277,27 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 			'-f',
 			`sha=${sha}`,
 		])
+	}
+
+	// Its parent merged: target the default branch and merge it in — never a rebase or force-push (#253).
+	// Flipping the marker makes this run once; a squash conflict is an `ai-conflicts` send-back.
+	for (const x of tick.retarget) {
+		const ok = await run(1, 'retarget', x.pr, [
+			'pr',
+			'edit',
+			String(x.pr),
+			'--base',
+			tick.env.defaultBranch,
+			'--body',
+			x.body.replace(STACKED, 'Was stacked on #$1'),
+		])
+		if (!ok) continue
+		const merged = await run(1, 'update-branch', x.pr, ['pr', 'update-branch', String(x.pr)], true)
+		if (!merged)
+			await sendBack(
+				{ pr: x.pr, issue: x.issue, reason: 'DIRTY', label: 'ai-conflicts', failing: [] },
+				x.passed
+			)
 	}
 
 	for (const s of tick.sendBacks) await sendBack(s)
@@ -452,7 +481,11 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 		const slug = pickupSlug(p.number, p.title)
 		const wt = await runLoopWorktreeAdd(slug, {
 			...seams,
-			base: tick.env.defaultBranch ? `origin/${tick.env.defaultBranch}` : undefined,
+			base: p.base
+				? `origin/${p.base}`
+				: tick.env.defaultBranch
+					? `origin/${tick.env.defaultBranch}`
+					: undefined,
 			git: options.git,
 			gh: options.gh,
 		})
@@ -479,6 +512,7 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 			slug,
 			worktree: wt.worktree,
 			needsInstall: wt.needsInstall,
+			...(p.base ? { base: p.base, stackedOn: p.stackedOn } : {}),
 		})
 	}
 	return result
