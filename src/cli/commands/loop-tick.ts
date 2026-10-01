@@ -150,6 +150,8 @@ export interface LoopTickResult {
 	/** Pass 4 — free slots, and every eligible issue in queue order. */
 	slots: number
 	pickups: { number: number; title: string; body: string }[]
+	/** `ai-ready` issues the tick left out of `pickups`, with why (#244). */
+	skippedPickups: { number: number; reason: string }[]
 	summary: string
 	errors: string[]
 	/**
@@ -230,6 +232,21 @@ export function isDocsOnly(files: string[]): boolean {
 }
 
 /**
+ * `loop tier <pr>` — the review tier from the PR's changed paths, never an agent's judgment (#241).
+ * `both`: one combined reviewer. `split`: code + security, also on any failure.
+ */
+export async function loopTierCommand(
+	pr: string,
+	options: { dir?: string; json?: boolean }
+): Promise<void> {
+	const r = await realGhExec(['pr', 'diff', pr, '--name-only'], undefined, options.dir)
+	const tier = r.ok && isDocsOnly(r.stdout.split('\n').filter(Boolean)) ? 'both' : 'split'
+	if (options.json) console.log(JSON.stringify({ pr: Number(pr), tier }))
+	else console.log(tier)
+	if (!r.ok) console.error(`gh pr diff failed, defaulting to split: ${r.stderr.trim()}`)
+}
+
+/**
  * Basenames of the files an issue body names in backticks, lowercased: `src/a/loop-tick.ts`
  * and `loop-tick.ts` collide. Over-matching only delays a pickup a tick.
  */
@@ -281,6 +298,7 @@ export function emptyTick(env: LoopEnv): LoopTickResult {
 		liveAgents: 0,
 		slots: 0,
 		pickups: [],
+		skippedPickups: [],
 		summary: '',
 		errors: [],
 		staleInstall: [],
@@ -674,15 +692,30 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	const isBug = (i: RestIssue) => i.labels.some((l) => l.name === 'bug')
 	// A candidate sharing a file with an in-flight issue waits its turn (#120).
 	const busy = new Set((wip ?? []).flatMap((i) => namedFiles(i.body ?? '')))
-	result.pickups = (queue ?? [])
+	const candidates = (queue ?? [])
 		.filter((i) => !i.pull_request)
 		.filter((i) => !i.labels.some((l) => ['ai-wip', 'ai-blocked', 'holding'].includes(l.name)))
-		// The label is the hard gate; association is the backstop.
-		.filter((i) => TRUSTED.has(i.author_association))
 		// Bugs first; sort is stable, so the API's order holds within each group (#108).
 		.sort((a, b) => Number(isBug(b)) - Number(isBug(a)))
-		.filter((i) => !namedFiles(i.body ?? '').some((f) => busy.has(f)))
-		.map(({ number, title, body }) => ({ number, title, body: body ?? '' }))
+	for (const { number, title, body, author_association } of candidates) {
+		// The label is the hard gate; association is the backstop.
+		if (!TRUSTED.has(author_association)) {
+			result.skippedPickups.push({
+				number,
+				reason: `author association ${author_association} is not OWNER/MEMBER/COLLABORATOR`,
+			})
+			continue
+		}
+		const clash = namedFiles(body ?? '').find((f) => busy.has(f))
+		if (clash) {
+			result.skippedPickups.push({
+				number,
+				reason: `names ${clash}, which an ai-wip issue also names`,
+			})
+			continue
+		}
+		result.pickups.push({ number, title, body: body ?? '' })
+	}
 
 	// Slots count what is still in flight once this tick's cleanup and reaping land.
 	const freed = new Set([
@@ -873,6 +906,7 @@ export async function loopTickCommand(options: { root?: string; json?: boolean }
 		console.error(chalk.red(`✖ halt: ${result.halt}`))
 	} else {
 		console.log(result.summary)
+		for (const k of result.skippedPickups) console.log(`  skipped #${k.number}: ${k.reason}`)
 		for (const line of problemLines(result)) console.log(line)
 	}
 	process.exitCode = result.exitCode

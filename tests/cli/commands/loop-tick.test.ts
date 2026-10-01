@@ -647,6 +647,9 @@ describe('runLoopTick', () => {
 			}),
 		})
 		expect(r.pickups.map((p) => p.number)).toEqual([117])
+		expect(r.skippedPickups).toEqual([
+			{ number: 115, reason: 'names loop-tick.ts, which an ai-wip issue also names' },
+		])
 	})
 
 	it('does not serialise on shared docs every issue touches (#185)', async () => {
@@ -997,6 +1000,13 @@ describe('runLoopTick', () => {
 			}),
 		})
 		expect(r.summary).toBe('agents idle·1 on CI·2 to merge')
+	})
+})
+
+describe('isDocsOnly tiers (#241)', () => {
+	it('keeps lockfiles, manifests, workflows and scripts on the split review', () => {
+		for (const f of ['pnpm-lock.yaml', 'package.json', '.github/workflows/ci.yml', 'scripts/x.sh'])
+			expect(isDocsOnly(['README.md', f])).toBe(false)
 	})
 })
 
