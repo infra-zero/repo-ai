@@ -10,6 +10,7 @@ import {
 	type Handoff,
 	type LoopTickResult,
 	namedFiles,
+	recreateMarker,
 	runLoopTick,
 	type SendBack,
 } from './loop-tick.js'
@@ -56,6 +57,7 @@ export interface Applied {
 		| 'update-branch'
 		| 'rerun'
 		| 'resync'
+		| 'dependabot-recreate'
 		| 'send-back'
 		| 'relabel'
 		| 'stall'
@@ -270,6 +272,26 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 	}
 
 	for (const s of tick.sendBacks) await sendBack(s)
+
+	// Agents can't push to Dependabot branches: ask it to rebase, and drop the verdicts on the old head (#240).
+	for (const { pr: n, head } of tick.dependabotRecreate) {
+		await run(1, 'dependabot-recreate', n, [
+			'pr',
+			'comment',
+			String(n),
+			'--body',
+			`@dependabot recreate\n${recreateMarker(head)}`,
+		])
+		await run(1, 'dependabot-recreate', n, [
+			'pr',
+			'edit',
+			String(n),
+			'--remove-label',
+			'ai-ok-code',
+			'--remove-label',
+			'ai-ok-sec',
+		])
+	}
 
 	// Pass 2 — remove worktrees before relabelling, so a failed removal keeps its issue in flight.
 	const seams = { root, worktreeRoot: options.worktreeRoot, git: options.git, gh: options.gh }
