@@ -170,6 +170,7 @@ ${RELAYED}`,
 	)))
 	if (!ran.length) return []
 	// Reserved, never skipped: an unverified verdict is the bug this exists to close.
+	// #242: a one-command lookup, so pinned to haiku (it cost ~38k on Opus). TOKENS.verify counts output only.
 	reserved += TOKENS.verify
 	const checked = await agent(
 		`Check what reviewers posted on GitHub PR #${pr} in ${args.repo}. For each arm in
@@ -181,7 +182,7 @@ NONE, drop its claim so the next tick re-claims it:
 not review the PR yourself.
 
 ${RELAYED}`,
-		{ label: `verify:${tag(i, round)}`, phase: 'Review', schema: VERIFIED }
+		{ label: `verify:${tag(i, round)}`, phase: 'Review', schema: VERIFIED, model: 'haiku' }
 	)
 	return ran.flatMap((v, n) => v.arms.map((arm) => {
 		const verdict = checked?.verdicts?.find((c) => c.arm === arm)?.verdict ?? 'NONE'
