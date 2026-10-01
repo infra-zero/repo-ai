@@ -59,7 +59,13 @@ function run(
 	const spawned: { label: string; phase: string; agentType?: string }[] = []
 	const logs: string[] = []
 	const prompts: string[] = []
+	const tiers: string[] = []
 	const agent = async (prompt: string, o: { label: string; phase: string; agentType?: string }) => {
+		if (o.label.startsWith('tier:') && name === 'ai-loop-pickup') {
+			tiers.push(o.label)
+			const t = reply(o.label) as { tier?: string }
+			return t?.tier ? t : { tier: 'split' }
+		}
 		prompts.push(prompt)
 		spawned.push({ label: o.label, phase: o.phase, agentType: o.agentType })
 		if (o.label.startsWith('verify:') && name === 'ai-loop-pickup') {
@@ -101,7 +107,7 @@ function run(
 		budget,
 		noop
 	)
-	return result.then((value) => ({ value, spawned, logs, prompts }))
+	return result.then((value) => ({ value, spawned, logs, prompts, tiers }))
 }
 
 describe.each(SHIPPED_WORKFLOWS)('workflows/%s.js', (name) => {
@@ -272,6 +278,40 @@ describe('ai-loop-pickup', () => {
 			'--body-file <dir>/review-10-code.md'
 		)
 		expect(prompts.find((p) => p.includes(':sec:'))).toContain('--body-file <dir>/review-10-sec.md')
+	})
+
+	it('spawns one combined reviewer for a docs-only PR (#241)', async () => {
+		const { value, spawned, prompts } = await run(
+			'ai-loop-pickup',
+			one,
+			(label) =>
+				label === 'impl:#1'
+					? { pr: 10 }
+					: label.startsWith('tier:')
+						? { tier: 'both' }
+						: { passed: true },
+			undefined,
+			() => ({
+				verdicts: [
+					{ arm: 'code', verdict: 'PASS' },
+					{ arm: 'sec', verdict: 'PASS' },
+				],
+			})
+		)
+		expect(spawned.map((s) => s.label)).toEqual(['impl:#1', 'code-reviewer:#1', 'verify:#1'])
+		const p = prompts.find((x) => x.includes('verdict:code:')) ?? ''
+		expect(p).toContain('verdict:sec:')
+		expect(p).toContain('ai-ok-code --add-label ai-ok-sec')
+		expect(value).toMatchObject({
+			issues: [
+				{
+					reviews: [
+						{ arm: 'code', passed: true },
+						{ arm: 'sec', passed: true },
+					],
+				},
+			],
+		})
 	})
 
 	const one = {

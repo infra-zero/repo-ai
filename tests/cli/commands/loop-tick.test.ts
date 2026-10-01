@@ -978,6 +978,13 @@ describe('runLoopTick', () => {
 	})
 })
 
+describe('isDocsOnly tiers (#241)', () => {
+	it('keeps lockfiles, manifests, workflows and scripts on the split review', () => {
+		for (const f of ['pnpm-lock.yaml', 'package.json', '.github/workflows/ci.yml', 'scripts/x.sh'])
+			expect(isDocsOnly(['README.md', f])).toBe(false)
+	})
+})
+
 describe('isDocsOnly', () => {
 	it('takes markdown, docs pages and templates', () => {
 		expect(isDocsOnly(['a/b.md', 'x.mdx', '.github/PULL_REQUEST_TEMPLATE.md'])).toBe(true)
