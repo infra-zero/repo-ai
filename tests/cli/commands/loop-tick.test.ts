@@ -646,6 +646,9 @@ describe('runLoopTick', () => {
 			}),
 		})
 		expect(r.pickups.map((p) => p.number)).toEqual([117])
+		expect(r.skippedPickups).toEqual([
+			{ number: 115, reason: 'names loop-tick.ts, which an ai-wip issue also names' },
+		])
 	})
 
 	it('does not serialise on shared docs every issue touches (#185)', async () => {
