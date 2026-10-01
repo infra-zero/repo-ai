@@ -132,6 +132,8 @@ export interface LoopTickResult {
 	stripMergeReady: number[]
 	/** Pass 1 — flag only, never send back. */
 	dependabotCiRed: number[]
+	/** Red or DIRTY Dependabot PRs in the loop: asked to `@dependabot recreate`, never sent to a fixer (#240). */
+	dependabotRecreate: { pr: number; head: string }[]
 	/** Pass 2 — worktrees for `loop apply` to remove, and issues to relabel. */
 	toClean: CleanupEntry[]
 	/** Pass 2 — `loop reap`'s verdicts, to apply. */
@@ -148,6 +150,8 @@ export interface LoopTickResult {
 	/** Pass 4 — free slots, and every eligible issue in queue order. */
 	slots: number
 	pickups: { number: number; title: string; body: string }[]
+	/** `ai-ready` issues the tick left out of `pickups`, with why (#244). */
+	skippedPickups: { number: number; reason: string }[]
 	summary: string
 	errors: string[]
 	/**
@@ -164,6 +168,9 @@ export interface LoopTickResult {
 	releaseFailed: boolean
 	exitCode: 0 | 1 | 2
 }
+
+/** Hidden marker on the `@dependabot recreate` comment, so a head is asked once. */
+export const recreateMarker = (head: string) => `<!-- ai-loop:recreate:${head} -->`
 
 export interface LoopTickOptions {
 	root?: string
@@ -187,6 +194,7 @@ interface Pr {
 	author: { login: string } | null
 	body: string | null
 	statusCheckRollup?: { conclusion?: string | null }[] | null
+	comments?: { body: string }[]
 }
 
 interface RestIssue {
@@ -221,6 +229,21 @@ export function isDocsOnly(files: string[]): boolean {
 					f.startsWith('.github/ISSUE_TEMPLATE/'))
 		)
 	)
+}
+
+/**
+ * `loop tier <pr>` — the review tier from the PR's changed paths, never an agent's judgment (#241).
+ * `both`: one combined reviewer. `split`: code + security, also on any failure.
+ */
+export async function loopTierCommand(
+	pr: string,
+	options: { dir?: string; json?: boolean }
+): Promise<void> {
+	const r = await realGhExec(['pr', 'diff', pr, '--name-only'], undefined, options.dir)
+	const tier = r.ok && isDocsOnly(r.stdout.split('\n').filter(Boolean)) ? 'both' : 'split'
+	if (options.json) console.log(JSON.stringify({ pr: Number(pr), tier }))
+	else console.log(tier)
+	if (!r.ok) console.error(`gh pr diff failed, defaulting to split: ${r.stderr.trim()}`)
 }
 
 /**
@@ -265,6 +288,7 @@ export function emptyTick(env: LoopEnv): LoopTickResult {
 		updateBranches: [],
 		stripMergeReady: [],
 		dependabotCiRed: [],
+		dependabotRecreate: [],
 		toClean: [],
 		stalled: [],
 		decay: [],
@@ -274,6 +298,7 @@ export function emptyTick(env: LoopEnv): LoopTickResult {
 		liveAgents: 0,
 		slots: 0,
 		pickups: [],
+		skippedPickups: [],
 		summary: '',
 		errors: [],
 		staleInstall: [],
@@ -418,7 +443,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		'--limit',
 		LIST_CEILING,
 		'--json',
-		'number,title,headRefName,baseRefName,headRefOid,labels,autoMergeRequest,author,body,statusCheckRollup',
+		'number,title,headRefName,baseRefName,headRefOid,labels,autoMergeRequest,author,body,statusCheckRollup,comments',
 	])
 	// Stacked PRs (base isn't the default branch) are out of scope (#233).
 	const prs = (allPrs ?? []).filter((p) => {
@@ -449,7 +474,15 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		const has = (l: string) => labels.has(l)
 		const issue = issueOf(pr.headRefName)
 
-		if (pr.headRefName.startsWith('dependabot/')) {
+		const isDep = pr.headRefName.startsWith('dependabot/')
+		// One recreate per head SHA: Dependabot's force-push is a new head, so a still-red PR is not re-asked every tick.
+		const recreate = () => {
+			const head = pr.headRefOid ?? ''
+			if (!(pr.comments ?? []).some((c) => c.body.includes(recreateMarker(head))))
+				result.dependabotRecreate.push({ pr: pr.number, head })
+		}
+		// Dependabot joins the loop once something labels it `ai-review` (#240); until then it is skipped.
+		if (isDep && !(has('merge-ready') || [...labels].some((l) => l.startsWith('ai-')))) {
 			const red = (pr.statusCheckRollup ?? []).some((c) => c.conclusion === 'FAILURE')
 			if (pr.autoMergeRequest && red) result.dependabotCiRed.push(pr.number)
 			continue
@@ -524,6 +557,8 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 				for (const id of runIds) first &&= (await runAttempt(gh, ownerRepo, id)) === 1
 				if (first) {
 					result.rerunFailed.push({ pr: pr.number, issue, runIds })
+				} else if (isDep) {
+					recreate()
 				} else {
 					result.sendBacks.push({
 						pr: pr.number,
@@ -563,6 +598,8 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 				result.updateBranches.push({ pr: pr.number, issue })
 			} else if (s === 'BLOCKED' && pending) {
 				// Required checks still running: the next tick sees them land.
+			} else if (isDep && SEND_BACK_STATES.has(s)) {
+				recreate()
 			} else if (SEND_BACK_STATES.has(s)) {
 				result.sendBacks.push({
 					pr: pr.number,
@@ -655,15 +692,30 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	const isBug = (i: RestIssue) => i.labels.some((l) => l.name === 'bug')
 	// A candidate sharing a file with an in-flight issue waits its turn (#120).
 	const busy = new Set((wip ?? []).flatMap((i) => namedFiles(i.body ?? '')))
-	result.pickups = (queue ?? [])
+	const candidates = (queue ?? [])
 		.filter((i) => !i.pull_request)
 		.filter((i) => !i.labels.some((l) => ['ai-wip', 'ai-blocked', 'holding'].includes(l.name)))
-		// The label is the hard gate; association is the backstop.
-		.filter((i) => TRUSTED.has(i.author_association))
 		// Bugs first; sort is stable, so the API's order holds within each group (#108).
 		.sort((a, b) => Number(isBug(b)) - Number(isBug(a)))
-		.filter((i) => !namedFiles(i.body ?? '').some((f) => busy.has(f)))
-		.map(({ number, title, body }) => ({ number, title, body: body ?? '' }))
+	for (const { number, title, body, author_association } of candidates) {
+		// The label is the hard gate; association is the backstop.
+		if (!TRUSTED.has(author_association)) {
+			result.skippedPickups.push({
+				number,
+				reason: `author association ${author_association} is not OWNER/MEMBER/COLLABORATOR`,
+			})
+			continue
+		}
+		const clash = namedFiles(body ?? '').find((f) => busy.has(f))
+		if (clash) {
+			result.skippedPickups.push({
+				number,
+				reason: `names ${clash}, which an ai-wip issue also names`,
+			})
+			continue
+		}
+		result.pickups.push({ number, title, body: body ?? '' })
+	}
 
 	// Slots count what is still in flight once this tick's cleanup and reaping land.
 	const freed = new Set([
@@ -673,10 +725,8 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	const inFlight = (wip ?? []).filter((i) => !freed.has(i.number)).length
 	result.slots = wip ? Math.max(0, env.maxInFlight - inFlight) : 0
 
-	const loopPrs = (prs ?? []).filter(
-		(p) =>
-			!p.headRefName.startsWith('dependabot/') &&
-			p.labels.some((l) => l.name === 'merge-ready' || l.name.startsWith('ai-'))
+	const loopPrs = (prs ?? []).filter((p) =>
+		p.labels.some((l) => l.name === 'merge-ready' || l.name.startsWith('ai-'))
 	)
 	result.liveAgents = liveAgents(loopPrs, wip ?? [], freed, result.stalled)
 	if (config.maxAgents !== undefined) capAgents(result, config.maxAgents)
@@ -692,6 +742,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 			result.stalled,
 			result.decay,
 			result.dependabotCiRed,
+			result.dependabotRecreate,
 		].every((l) => l.length === 0)
 	result.summary = summarize(result, turns(result, loopPrs, wip ?? [], freed))
 	return result
@@ -811,7 +862,10 @@ export function summarize(r: LoopTickResult, t: Turns): string {
 	const blocked =
 		r.stalled.filter((s) => s.action === 'block').length +
 		r.fixRounds.filter((f) => f.action === 'block').length
-	const ciRed = r.sendBacks.filter((s) => s.reason === 'ci-red').length + r.dependabotCiRed.length
+	const ciRed =
+		r.sendBacks.filter((s) => s.reason === 'ci-red').length +
+		r.dependabotCiRed.length +
+		r.dependabotRecreate.length
 	const merge = r.handoffs.length
 	const saved = r.reviewsToSpawn.filter((s) => s.arm === 'both').length
 	const segments: [number | boolean, string][] = [
@@ -852,6 +906,7 @@ export async function loopTickCommand(options: { root?: string; json?: boolean }
 		console.error(chalk.red(`✖ halt: ${result.halt}`))
 	} else {
 		console.log(result.summary)
+		for (const k of result.skippedPickups) console.log(`  skipped #${k.number}: ${k.reason}`)
 		for (const line of problemLines(result)) console.log(line)
 	}
 	process.exitCode = result.exitCode

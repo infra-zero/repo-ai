@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import type { GhExec } from '../../../src/base/gh.js'
 import {
 	isDocsOnly,
+	recreateMarker,
 	problemLines,
 	runLoopTick,
 	staleInstall,
@@ -383,7 +384,7 @@ describe('runLoopTick', () => {
 					pr(16, 'ai-7-capped', ['ai-changes']),
 					pr(17, 'fix/by-agent', [], { body: '🤖 *Opened by an agent.*' }),
 					pr(18, 'fix/by-hand', [], { body: 'hand-written' }),
-					pr(19, 'dependabot/npm/x', ['ai-changes']),
+					pr(19, 'dependabot/npm/x', []),
 				],
 				merge: { 10: 'CLEAN', 11: 'BEHIND' },
 				failing: [12],
@@ -646,6 +647,9 @@ describe('runLoopTick', () => {
 			}),
 		})
 		expect(r.pickups.map((p) => p.number)).toEqual([117])
+		expect(r.skippedPickups).toEqual([
+			{ number: 115, reason: 'names loop-tick.ts, which an ai-wip issue also names' },
+		])
 	})
 
 	it('does not serialise on shared docs every issue touches (#185)', async () => {
@@ -784,6 +788,27 @@ describe('runLoopTick', () => {
 				failing: [{ name: 'test', link: 'https://github.com/acme/widget/actions/runs/555/job/1' }],
 			},
 		])
+	})
+
+	it('asks Dependabot to recreate a red PR once per head, never a fixer (#240)', async () => {
+		const root = checkout(newTmpDir())
+		const tick = (comments: { body: string }[]) =>
+			runLoopTick({
+				root,
+				env: {},
+				now: NOW,
+				gh: fakeGh({
+					prs: [{ ...pr(10, 'dependabot/npm/x', ['ai-review']), comments }],
+					failing: [10],
+					runIds: { 10: 555 },
+					runAttempts: { 555: 2 },
+				}),
+			})
+		const first = await tick([])
+		expect(first.dependabotRecreate).toEqual([{ pr: 10, head: 'head' }])
+		expect(first.sendBacks).toEqual([])
+		const again = await tick([{ body: `@dependabot recreate\n${recreateMarker('head')}` }])
+		expect(again.dependabotRecreate).toEqual([])
 	})
 
 	it('reruns again after a new head starts a fresh run at attempt 1 (#202)', async () => {
@@ -975,6 +1000,13 @@ describe('runLoopTick', () => {
 			}),
 		})
 		expect(r.summary).toBe('agents idle·1 on CI·2 to merge')
+	})
+})
+
+describe('isDocsOnly tiers (#241)', () => {
+	it('keeps lockfiles, manifests, workflows and scripts on the split review', () => {
+		for (const f of ['pnpm-lock.yaml', 'package.json', '.github/workflows/ci.yml', 'scripts/x.sh'])
+			expect(isDocsOnly(['README.md', f])).toBe(false)
 	})
 })
 

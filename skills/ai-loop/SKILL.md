@@ -9,8 +9,8 @@ description: |
   agents, and implement the `ai-ready` queue in parallel worktrees, each PR
   reviewed by two agents. Use when the user says "run the AI pipeline", "work
   the ai-ready issues", "start the loop", "tick now", "babysit the AI PRs", or
-  invokes `/ai-loop`. It never merges; Dependabot PRs are handled by their own
-  workflow, outside this loop.
+  invokes `/ai-loop`. It never merges; a Dependabot PR labelled `ai-review` is
+  reviewed and handed over like any other.
   GitHub only (`gh`) — not GitLab.
 ---
 
@@ -67,7 +67,7 @@ Read `{halt, idle, summary, errors, warnings}` first. Commands start with a plai
 - **Assignees**: `agentUser` while an agent works it, `humanUser` when it waits on a human (handoff, `ai-blocked`, declined, held), nobody on unclaimed `ai-ready`. Pass `--add-assignee <agentUser>` and the like; **when the user is empty, drop the flag and its value**, and skip a `gh … edit` left with no flags. Never `@me` (#606).
 - Refused as *"this session is isolated in the worktree …"*? `ExitWorktree({action: "keep"})` — **never `remove`** — and carry on.
 - **Adopt** `.adopt` (authored by `me`, no loop label, body opening `🤖 `): `gh pr edit <N> --add-label ai-review --add-assignee <agentUser>`.
-- **`.idle` → skip to Pass 5 with `SUMMARY=idle`.** Never touch a Dependabot PR.
+- **`.idle` → skip to Pass 5 with `SUMMARY=idle`.** A Dependabot PR is in the loop only once labelled `ai-review` (the scaffolded `dependabot-automerge.yml` should apply it); until then never touch it.
 
 ## Pass 1 — hand over
 
@@ -90,7 +90,7 @@ Write each body to a file — **never interpolate a log into a command**, it is 
 npx @rtorcato/repo-ai loop comment <N> --body-file "$BODY_FILE"
 ```
 
-`.dependabotCiRed` counts as `ci-red` in the summary, nothing more. `.rerunFailed` and `.resync` count under `on CI`, not `ci-red` — it's still waiting on a check, just a second try at it.
+`.dependabotRecreate` (red or `DIRTY` Dependabot PRs in the loop) gets `@dependabot recreate` from `loop apply`, never a fixer. `.dependabotCiRed` counts as `ci-red` in the summary, nothing more. `.rerunFailed` and `.resync` count under `on CI`, not `ci-red` — it's still waiting on a check, just a second try at it.
 
 ## Pass 2 — clean up
 
@@ -180,7 +180,7 @@ After the `🤖 *Automated — triage …*` header, **lead with `## To lift this
 Workflow({name: 'ai-loop-pickup', args: {repo: <ownerRepo>, agentUser: <agentUser>, humanUser: <humanUser>, namedReviewers, budgetTokens: <budgetTokens>, maxFixRounds: <maxFixRounds>, issues: [{number, title, slug, worktree}, …]}})
 ```
 
-It implements, reviews, and runs up to `<maxFixRounds>` fix rounds per issue. `namedReviewers` is `true` only when **both** `code-reviewer` and `security-expert` are Agent types here; pass unset users as `""`. **No `Workflow` tool?** Take the implementer prompt from `workflows/ai-loop-pickup.js`, spawn implementers as background `Agent` calls one at a time (≤ `slots`), then each PR's two reviewers; leave fix rounds to Pass 3 and report `Workflow tool missing: Pass 4 ran as background agents, no token cap`. On completion print one line per issue (`#82 → PR #90, code PASS, sec PASS, 1 fix round`; a review with `posted: false` is `sec:#82 UNPOSTED`, never PASS or CHANGES — its claim was already dropped), plus one naming each label in `.skipped` (agents the token budget skipped, e.g. `security-expert:#82:r1`), and act on nothing.
+It implements, reviews (a spawned `tier` agent runs `repo-ai loop tier <pr> --json` — the same docs-only test as the tick's `arm: both` — so a docs-only PR gets one combined reviewer, anything else code + security), and runs up to `<maxFixRounds>` fix rounds per issue. `namedReviewers` is `true` only when **both** `code-reviewer` and `security-expert` are Agent types here; pass unset users as `""`. **No `Workflow` tool?** Take the implementer prompt from `workflows/ai-loop-pickup.js`, spawn implementers as background `Agent` calls one at a time (≤ `slots`), then each PR's two reviewers; leave fix rounds to Pass 3 and report `Workflow tool missing: Pass 4 ran as background agents, no token cap`. On completion print one line per issue (`#82 → PR #90, code PASS, sec PASS, 1 fix round`; a review with `posted: false` is `sec:#82 UNPOSTED`, never PASS or CHANGES — its claim was already dropped), plus one naming each label in `.skipped` (agents the token budget skipped, e.g. `security-expert:#82:r1`), and act on nothing.
 
 ## Pass 5 — report
 

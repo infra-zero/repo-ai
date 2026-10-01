@@ -106,7 +106,7 @@ sandbox disabled. For every arm that is NONE, drop its claim so the next tick re
 the PR yourself.
 
 ${RELAYED}`,
-			{ label: `verify:${t.label}`, phase: 'Review', schema: VERIFIED }
+			{ label: `verify:${t.label}`, phase: 'Review', schema: VERIFIED, model: 'haiku' }
 		)
 		const verdicts = arms.map((arm) => checked?.verdicts?.find((c) => c.arm === arm)?.verdict ?? 'NONE')
 		const posted = verdicts.every((v) => v !== 'NONE')

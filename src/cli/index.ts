@@ -10,7 +10,7 @@ import { loopEnvCommand } from './commands/loop-env.js'
 import { loopGuardCommand } from './commands/loop-guard.js'
 import { loopCommentCommand, loopVerdictCommand } from './commands/loop-marker.js'
 import { loopReapCommand } from './commands/loop-reap.js'
-import { loopTickCommand } from './commands/loop-tick.js'
+import { loopTickCommand, loopTierCommand } from './commands/loop-tick.js'
 import { loopWatchCommand } from './commands/loop-watch.js'
 import { loopWorktreeAddCommand } from './commands/loop-worktree.js'
 import { setupCommand } from './commands/setup.js'
@@ -173,6 +173,13 @@ loop
 			'Exits 1 when the PR or its reviews cannot be read.\n'
 	)
 	.action(loopVerdictCommand)
+
+loop
+	.command('tier <pr>')
+	.description('🪜 Choose the review tier from the PR diff: both (docs-only) or split')
+	.option('-d, --dir <path>', 'Directory to resolve the GitHub repo from', process.cwd())
+	.option('--json', 'Emit machine-readable JSON output')
+	.action(loopTierCommand)
 
 loop
 	.command('tick')
