@@ -409,7 +409,14 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 	for (const r of tick.reviewsToSpawn) {
 		if (tasks <= 0) break
 		// `both` is one docs-only reviewer carrying both lenses: one task, both claims.
-		const arms = r.arm === 'both' ? ['code', 'sec'] : [r.arm]
+		let arms: ('code' | 'sec')[] = r.arm === 'both' ? ['code', 'sec'] : [r.arm]
+		// Re-read the labels: a pickup workflow may have reviewed since the tick (#243).
+		const cur = await gh(['pr', 'view', String(r.pr), '--json', 'labels', '-q', '.labels[].name'])
+		if (cur.ok) {
+			const have = new Set(cur.stdout.split('\n').map((l) => l.trim()))
+			arms = arms.filter((a) => !have.has(`ai-ok-${a}`) && !have.has(`ai-reviewing-${a}`))
+			if (!arms.length) continue
+		}
 		const ok = await run(3, 'claim-review', r.pr, [
 			'pr',
 			'edit',
@@ -419,7 +426,8 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 		])
 		if (ok) {
 			tasks--
-			result.claimed.reviews.push(r)
+			// Record the narrowed arm, so Pass 3 doesn't re-review one that already passed.
+			result.claimed.reviews.push({ ...r, arm: arms.length === 2 ? 'both' : (arms[0] ?? r.arm) })
 		}
 	}
 

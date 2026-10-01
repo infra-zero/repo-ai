@@ -43,8 +43,15 @@ function tick(root: string, work: Partial<LoopTickResult>, users = true): LoopTi
 	return { ...emptyTick(env), ...work }
 }
 
-/** Records every write; `fail` names the gh subcommands (`pr update-branch`) that exit non-zero. */
-function fakeGh(fail: string[] = [], prs: Record<string, { number: number; state: string }> = {}) {
+/**
+ * Records every write; `fail` names the gh subcommands (`pr update-branch`) that exit non-zero.
+ * `labels` is each PR's current labels, as the pre-claim re-read sees them (#243).
+ */
+function fakeGh(
+	fail: string[] = [],
+	prs: Record<string, { number: number; state: string }> = {},
+	labels: Record<number, string[]> = {}
+) {
 	const calls: string[][] = []
 	const gh: GhExec = async (args) => {
 		const ok = (stdout: string) => ({ ok: true, stdout, stderr: '', code: 0 })
@@ -53,6 +60,8 @@ function fakeGh(fail: string[] = [], prs: Record<string, { number: number; state
 			return ok(JSON.stringify(pr ? [pr] : []))
 		}
 		if (args[0] === 'issue' && args[1] === 'view') return ok('OPEN\n')
+		if (args[0] === 'pr' && args[1] === 'view')
+			return ok(`${(labels[Number(args[2])] ?? []).join('\n')}\n`)
 		calls.push(args)
 		if (fail.includes(`${args[0]} ${args[1]}`))
 			return { ok: false, stdout: '', stderr: 'boom', code: 1 }
@@ -376,6 +385,22 @@ describe('runLoopApply claims (#148)', () => {
 		])
 		expect(r.claimed.fixes.map((f) => f.pr)).toEqual([101])
 		expect(r.claimed.reviews.map((x) => x.pr)).toEqual([102])
+	})
+
+	it('skips a review arm that passed or was claimed since the tick (#243)', async () => {
+		const root = checkout(newTmpDir())
+		const fake = fakeGh([], {}, { 102: ['ai-review', 'ai-ok-code'], 103: ['ai-reviewing-sec'] })
+		const t = tick(root, {
+			reviewsToSpawn: [
+				{ pr: 102, issue: 2, arm: 'both' },
+				{ pr: 103, issue: 3, arm: 'sec' },
+			],
+		})
+		const r = await runLoopApply({ tick: t, gh: fake.gh })
+		expect(fake.calls).toEqual([
+			['pr', 'edit', '102', '--add-label', 'ai-reviewing-sec', '--add-assignee', 'agent-bot'],
+		])
+		expect(r.claimed.reviews.map((x) => [x.pr, x.arm])).toEqual([[102, 'sec']])
 	})
 
 	it('blocks a round-capped fix round outside the cap and owes the comment', async () => {
