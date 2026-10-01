@@ -241,7 +241,8 @@ const results = await pipeline(
 6. Push and open the PR. The title must be a Conventional Commit — it becomes
    the squash subject and, under semantic-release, decides whether a release
    goes out. The body opens with \`🤖 *Opened by an implementer via ai-loop.*\`
-   and contains \`Closes #${i.number}\`. Then
+   and contains \`Closes #${i.number}\`.${i.stackedOn ? ` It is stacked (#253): open it with
+   \`--base ${i.base}\`, and put \`Stacked on #${i.stackedOn}\` on a line of its own in the body.` : ''} Then
    \`gh pr edit --add-label ai-review\`.
 7. NEVER merge and NEVER approve.
 
