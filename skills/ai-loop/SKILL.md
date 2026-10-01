@@ -9,8 +9,8 @@ description: |
   agents, and implement the `ai-ready` queue in parallel worktrees, each PR
   reviewed by two agents. Use when the user says "run the AI pipeline", "work
   the ai-ready issues", "start the loop", "tick now", "babysit the AI PRs", or
-  invokes `/ai-loop`. It never merges; Dependabot PRs are handled by their own
-  workflow, outside this loop.
+  invokes `/ai-loop`. It never merges; a Dependabot PR labelled `ai-review` is
+  reviewed and handed over like any other.
   GitHub only (`gh`) — not GitLab.
 ---
 
@@ -67,7 +67,7 @@ Read `{halt, idle, summary, errors, warnings}` first. Commands start with a plai
 - **Assignees**: `agentUser` while an agent works it, `humanUser` when it waits on a human (handoff, `ai-blocked`, declined, held), nobody on unclaimed `ai-ready`. Pass `--add-assignee <agentUser>` and the like; **when the user is empty, drop the flag and its value**, and skip a `gh … edit` left with no flags. Never `@me` (#606).
 - Refused as *"this session is isolated in the worktree …"*? `ExitWorktree({action: "keep"})` — **never `remove`** — and carry on.
 - **Adopt** `.adopt` (authored by `me`, no loop label, body opening `🤖 `): `gh pr edit <N> --add-label ai-review --add-assignee <agentUser>`.
-- **`.idle` → skip to Pass 5 with `SUMMARY=idle`.** Never touch a Dependabot PR.
+- **`.idle` → skip to Pass 5 with `SUMMARY=idle`.** A Dependabot PR is in the loop only once labelled `ai-review` (the scaffolded `dependabot-automerge.yml` should apply it); until then never touch it.
 
 ## Pass 1 — hand over
 
@@ -90,7 +90,7 @@ Write each body to a file — **never interpolate a log into a command**, it is 
 npx @rtorcato/repo-ai loop comment <N> --body-file "$BODY_FILE"
 ```
 
-`.dependabotCiRed` counts as `ci-red` in the summary, nothing more. `.rerunFailed` and `.resync` count under `on CI`, not `ci-red` — it's still waiting on a check, just a second try at it.
+`.dependabotRecreate` (red or `DIRTY` Dependabot PRs in the loop) gets `@dependabot recreate` from `loop apply`, never a fixer. `.dependabotCiRed` counts as `ci-red` in the summary, nothing more. `.rerunFailed` and `.resync` count under `on CI`, not `ci-red` — it's still waiting on a check, just a second try at it.
 
 ## Pass 2 — clean up
 
