@@ -391,7 +391,7 @@ describe('runLoopApply claims (#148)', () => {
 		expect(fake.calls).toEqual([
 			['pr', 'edit', '102', '--add-label', 'ai-reviewing-sec', '--add-assignee', 'agent-bot'],
 		])
-		expect(r.claimed.reviews.map((x) => x.pr)).toEqual([102])
+		expect(r.claimed.reviews.map((x) => [x.pr, x.arm])).toEqual([[102, 'sec']])
 	})
 
 	it('blocks a round-capped fix round outside the cap and owes the comment', async () => {
