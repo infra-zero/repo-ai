@@ -224,6 +224,21 @@ export function isDocsOnly(files: string[]): boolean {
 }
 
 /**
+ * `loop tier <pr>` — the review tier from the PR's changed paths, never an agent's judgment (#241).
+ * `both`: one combined reviewer. `split`: code + security, also on any failure.
+ */
+export async function loopTierCommand(
+	pr: string,
+	options: { dir?: string; json?: boolean }
+): Promise<void> {
+	const r = await realGhExec(['pr', 'diff', pr, '--name-only'], undefined, options.dir)
+	const tier = r.ok && isDocsOnly(r.stdout.split('\n').filter(Boolean)) ? 'both' : 'split'
+	if (options.json) console.log(JSON.stringify({ pr: Number(pr), tier }))
+	else console.log(tier)
+	if (!r.ok) console.error(`gh pr diff failed, defaulting to split: ${r.stderr.trim()}`)
+}
+
+/**
  * Basenames of the files an issue body names in backticks, lowercased: `src/a/loop-tick.ts`
  * and `loop-tick.ts` collide. Over-matching only delays a pickup a tick.
  */
