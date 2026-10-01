@@ -286,16 +286,31 @@ check nor the fixer pushes labels into a repo that opted out.
 
 ```
 issue: ai-ready ─pickup─> ai-wip ─> PR opened, labelled ai-review
-PR: ai-review ─> ai-reviewing-* ─┬─> ai-ok-code + ai-ok-sec ─┬─ issue PR  ─> merge-ready, assigned to you
-                                 │        (± ai-notes)       │              ─> YOU merge
-                                 │                           └─ dependabot ─> auto-merge
+PR: ai-review ─> ai-reviewing-* ─┬─> ai-ok-code + ai-ok-sec ─> merge-ready, assigned to you ─> YOU merge
+                                 │        (± ai-notes)          (issue PRs and Dependabot PRs alike)
                                  ├─> ai-changes ─> ai-fixing (max 2) ─> ai-review
                                  │   ▲                       └─ round 3 ─> ai-blocked
                                  │   └─ Pass 1 sends back: ci-red (after one free rerun), or BLOCKED
                                  └─> ai-conflicts ─> ai-fixing (merge, free) ─> ai-review
                                      ▲
                                      └─ Pass 1 sends back: DIRTY
+dependabot PR, red or DIRTY ─> @dependabot recreate (never a fixer; verdicts dropped)
 ```
+
+A Dependabot PR joins the loop only once something labels it `ai-review` — the
+scaffolded `dependabot-automerge.yml` should — and until then the loop never
+touches it. Once in, it gets the same reviews and the same `merge-ready`
+handoff as an issue PR. Agents can't push to a Dependabot branch, so a red
+(after the one free rerun) or `DIRTY` one is asked to `@dependabot recreate`
+instead of going to a fixer, once per head SHA.
+
+**Review tiers.** `loop tier <pr>` picks the reviewers from the PR's changed
+paths, never an agent's judgment. A docs-only diff (Markdown and
+`apps/docs/docs/`, but never `skills/`, workflows or agent-instruction files
+like `AGENTS.md`) gets one combined reviewer that carries both lenses, claims
+both `ai-reviewing-*` labels and posts both verdicts. Anything else gets the
+`code` and `sec` reviewers separately. An unreadable diff fails closed to the
+split.
 
 Pass 4's Workflow drives this whole chain itself for the issue it just picked
 up — reviews, fix rounds and all — so a PR normally reaches Pass 1 already
@@ -389,8 +404,8 @@ Passes run cheapest first, so a quiet repo exits fast.
 
 | Pass | Does |
 |---|---|
-| **0 — orient** | Resolve the main checkout, fetch, list open PRs and `ai-wip` issues. Adopt unlabelled PRs — Dependabot's, and any the loop's own identity opened with the `🤖` header. Bail to Pass 5 with `idle` only if there is nothing at all: no labelled PR, no eligible issue, and no leftover worktree. |
-| **1 — merge** | Auto-merge only *Dependabot* PRs that passed both reviews, plus fully-passed issue PRs on a repo that sets `"autoMerge": true` in `.repo-ai.json` *and* publishes behind a `release` environment with required reviewers — the release gate alone is not enough. Hand every other ready PR to you as `merge-ready`, dropping `ai-review` and both `ai-ok-*`. Update a `BEHIND` branch with `gh pr update-branch`, keeping the reviews; wait on required checks still pending. Send back anything else GitHub reports as not `CLEAN`, or with a required check red. |
+| **0 — orient** | Resolve the main checkout, fetch, list open PRs and `ai-wip` issues. Adopt unlabelled PRs the loop's own identity opened with the `🤖` header. A Dependabot PR is in the loop only once labelled `ai-review`; until then it is left alone. Bail to Pass 5 with `idle` only if there is nothing at all: no labelled PR, no eligible issue, and no leftover worktree. |
+| **1 — merge** | Never merges a Dependabot PR: one that passed both reviews is handed to you as `merge-ready` like any other, and a red or `DIRTY` one gets `@dependabot recreate`. The only unattended merge is a fully-passed issue PR on a repo that sets `"autoMerge": true` in `.repo-ai.json` *and* publishes behind a `release` environment with required reviewers — the release gate alone is not enough. Hand every other ready PR to you as `merge-ready`, dropping `ai-review` and both `ai-ok-*`. Update a `BEHIND` branch with `gh pr update-branch`, keeping the reviews; wait on required checks still pending. Send back anything else GitHub reports as not `CLEAN`, or with a required check red. |
 | **2 — clean up** | Remove worktrees whose PR merged (confirming the squash is on `main` first), then reap stalls. |
 | **3 — review (recovery)** | Queue reviews and fix rounds only for PRs with no live pickup Workflow behind them — a dead agent, a restart, a PR Pass 0 adopted, or one Pass 1 sent back — then run them all in one Workflow (at most 8 agents) with typed verdicts. The agents still write the labels and verdict markers. |
 | **4 — pick up** | Claim eligible `ai-ready` issues, create the worktrees, and run one Workflow that owns each issue's whole chain — implement, both reviews, and every fix round — so its PRs normally reach Pass 1 already passed, without Pass 3. |
