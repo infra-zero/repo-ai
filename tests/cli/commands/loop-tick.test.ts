@@ -8,6 +8,7 @@ import {
 	dependsOn,
 	isDocsOnly,
 	recreateMarker,
+	stalledMarker,
 	problemLines,
 	runLoopTick,
 	staleInstall,
@@ -817,6 +818,32 @@ describe('runLoopTick', () => {
 		expect(first.sendBacks).toEqual([])
 		const again = await tick([{ body: `@dependabot recreate\n${recreateMarker('head')}` }])
 		expect(again.dependabotRecreate).toEqual([])
+	})
+
+	it('hands a Dependabot PR to the human once its recreate stalls (#255)', async () => {
+		const root = checkout(newTmpDir())
+		const asked = (ago: number) => ({
+			body: `@dependabot recreate\n${recreateMarker('head')}`,
+			createdAt: new Date(NOW.getTime() - ago * 60_000).toISOString(),
+		})
+		const tick = (comments: { body: string; createdAt?: string }[]) =>
+			runLoopTick({
+				root,
+				env: {},
+				now: NOW,
+				gh: fakeGh({
+					prs: [{ ...pr(10, 'dependabot/npm/x', ['ai-review']), comments }],
+					failing: [10],
+					runIds: { 10: 555 },
+					runAttempts: { 555: 2 },
+				}),
+			})
+		expect((await tick([asked(5)])).dependabotStalled).toEqual([])
+		const stalled = await tick([asked(31)])
+		expect(stalled.dependabotStalled).toEqual([{ pr: 10, head: 'head' }])
+		expect(stalled.summary).toContain('⚠1dependabot-stalled')
+		const done = await tick([asked(31), { body: stalledMarker('head') }])
+		expect(done.dependabotStalled).toEqual([])
 	})
 
 	it('reruns again after a new head starts a fresh run at attempt 1 (#202)', async () => {

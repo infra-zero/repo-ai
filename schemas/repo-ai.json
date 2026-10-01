@@ -84,6 +84,12 @@
       "default": 30,
       "description": "Minutes between /ai-loop cron ticks when idle, and the fallback cadence under a `loop watch` Monitor. Values below 1 are ignored."
     },
+    "dependabotStallMinutes": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 30,
+      "description": "Minutes a `@dependabot recreate` may go without a new head before the PR is handed to the human with a decision comment. Values below 1 are ignored."
+    },
     "maxAgents": {
       "type": "integer",
       "minimum": 1,

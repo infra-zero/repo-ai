@@ -34,6 +34,8 @@ export interface RepoAiConfig {
 	busyMinutes?: number
 	/** `/ai-loop` job cadence when idle (#158). */
 	idleMinutes?: number
+	/** Minutes a Dependabot recreate may go unanswered before the PR is handed to a human (#255). */
+	dependabotStallMinutes?: number
 	/** Live agents across every Workflow, counted from claim labels; unset means no cap (#167). */
 	maxAgents?: number
 	/** The CI workflow file the `main` run probes watch (#201); unset means `ci.yml`. */
@@ -68,6 +70,8 @@ export const LIMITS = {
 	staleMinutes: { default: 45, min: 1 },
 	busyMinutes: { default: 10, min: 1 },
 	idleMinutes: { default: 30, min: 1 },
+	/** Minutes a Dependabot recreate may go unanswered before the PR is handed to a human (#255). */
+	dependabotStallMinutes: { default: 30, min: 1 },
 } as const
 export type LimitKey = keyof typeof LIMITS
 

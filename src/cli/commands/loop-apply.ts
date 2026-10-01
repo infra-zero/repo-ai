@@ -11,6 +11,7 @@ import {
 	type LoopTickResult,
 	namedFiles,
 	recreateMarker,
+	stalledMarker,
 	runLoopTick,
 	STACKED,
 	type SendBack,
@@ -60,6 +61,7 @@ export interface Applied {
 		| 'resync'
 		| 'retarget'
 		| 'dependabot-recreate'
+		| 'dependabot-stalled'
 		| 'send-back'
 		| 'relabel'
 		| 'stall'
@@ -319,7 +321,34 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 			'ai-ok-code',
 			'--remove-label',
 			'ai-ok-sec',
+			'--remove-label',
+			'merge-ready',
 		])
+	}
+
+	// Dependabot never answered the recreate: the human resolves the conflict, with no pass claimed (#255).
+	for (const { pr: n, head } of tick.dependabotStalled) {
+		const ok = await run(1, 'dependabot-stalled', n, [
+			'pr',
+			'edit',
+			String(n),
+			...flag('--add-assignee', humanUser),
+			...flag('--remove-assignee', agentUser),
+			'--remove-label',
+			'ai-ok-code',
+			'--remove-label',
+			'ai-ok-sec',
+			'--remove-label',
+			'merge-ready',
+		])
+		if (ok)
+			await run(1, 'dependabot-stalled', n, [
+				'pr',
+				'comment',
+				String(n),
+				'--body',
+				`🤖 Dependabot did not answer \`@dependabot recreate\` with a new head, so this PR needs a human: merge the default branch in (keep Dependabot's lockfile, then \`--lockfile-only\`) or close it.\n${stalledMarker(head)}`,
+			])
 	}
 
 	// Pass 2 — remove worktrees before relabelling, so a failed removal keeps its issue in flight.

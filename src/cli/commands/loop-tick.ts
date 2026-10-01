@@ -9,7 +9,7 @@ import {
 	releaseStuckWarning,
 	runAttempt,
 } from '../../base/ci-runs.js'
-import { readConfig } from '../../base/config.js'
+import { limit, readConfig } from '../../base/config.js'
 import { releaseGated } from '../../base/release-gate.js'
 import { securityAlertWarning } from '../../base/security-alerts.js'
 import {
@@ -147,6 +147,8 @@ export interface LoopTickResult {
 	dependabotCiRed: number[]
 	/** Red or DIRTY Dependabot PRs in the loop: asked to `@dependabot recreate`, never sent to a fixer (#240). */
 	dependabotRecreate: { pr: number; head: string }[]
+	/** A recreate that got no new head within `dependabotStallMinutes`: handed to the human (#255). */
+	dependabotStalled: { pr: number; head: string }[]
 	/** Pass 2 — worktrees for `loop apply` to remove, and issues to relabel. */
 	toClean: CleanupEntry[]
 	/** Pass 2 — `loop reap`'s verdicts, to apply. */
@@ -185,6 +187,8 @@ export interface LoopTickResult {
 
 /** Hidden marker on the `@dependabot recreate` comment, so a head is asked once. */
 export const recreateMarker = (head: string) => `<!-- ai-loop:recreate:${head} -->`
+/** Hidden marker on the stalled-recreate hand-off comment, so a head is escalated once (#255). */
+export const stalledMarker = (head: string) => `<!-- ai-loop:stalled:${head} -->`
 
 export interface LoopTickOptions {
 	root?: string
@@ -208,7 +212,7 @@ interface Pr {
 	author: { login: string } | null
 	body: string | null
 	statusCheckRollup?: { conclusion?: string | null }[] | null
-	comments?: { body: string }[]
+	comments?: { body: string; createdAt?: string }[]
 }
 
 interface RestIssue {
@@ -312,6 +316,7 @@ export function emptyTick(env: LoopEnv): LoopTickResult {
 		stripMergeReady: [],
 		dependabotCiRed: [],
 		dependabotRecreate: [],
+		dependabotStalled: [],
 		toClean: [],
 		stalled: [],
 		decay: [],
@@ -503,8 +508,15 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		// One recreate per head SHA: Dependabot's force-push is a new head, so a still-red PR is not re-asked every tick.
 		const recreate = () => {
 			const head = pr.headRefOid ?? ''
-			if (!(pr.comments ?? []).some((c) => c.body.includes(recreateMarker(head))))
-				result.dependabotRecreate.push({ pr: pr.number, head })
+			const asked = (pr.comments ?? []).find((c) => c.body.includes(recreateMarker(head)))
+			if (!asked) return void result.dependabotRecreate.push({ pr: pr.number, head })
+			// Asked for this head and still no new one: past the limit, hand it over once (#255).
+			const age = now - Date.parse(asked.createdAt ?? '')
+			if (
+				age >= limit(config, 'dependabotStallMinutes') * 60_000 &&
+				!(pr.comments ?? []).some((c) => c.body.includes(stalledMarker(head)))
+			)
+				result.dependabotStalled.push({ pr: pr.number, head })
 		}
 		// Dependabot joins the loop once something labels it `ai-review` (#240); until then it is skipped.
 		if (isDep && !(has('merge-ready') || [...labels].some((l) => l.startsWith('ai-')))) {
@@ -814,6 +826,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 			result.decay,
 			result.dependabotCiRed,
 			result.dependabotRecreate,
+			result.dependabotStalled,
 		].every((l) => l.length === 0)
 	result.summary = summarize(result, turns(result, loopPrs, wip ?? [], freed))
 	return result
@@ -865,6 +878,7 @@ function turns(
 	const human = new Set([
 		...r.handoffs.map((h) => h.pr),
 		...r.fixRounds.filter((f) => f.action === 'block').map((f) => f.pr),
+		...r.dependabotStalled.map((d) => d.pr),
 	])
 	const sentBack = new Set(r.sendBacks.map((s) => s.pr))
 	// A rerun or a resync is waiting on CI, same as a passed PR waiting on checks (#202, #219).
@@ -941,11 +955,13 @@ export function summarize(r: LoopTickResult, t: Turns): string {
 		r.sendBacks.filter((s) => s.reason === 'ci-red').length +
 		r.dependabotCiRed.length +
 		r.dependabotRecreate.length
+	const stalled = r.dependabotStalled.length
 	const merge = r.handoffs.length
 	const saved = r.reviewsToSpawn.filter((s) => s.arm === 'both').length
 	const segments: [number | boolean, string][] = [
 		[r.errors.length > 0, '⚠error'],
 		[blocked, `⚠${blocked}blocked`],
+		[stalled, `⚠${stalled}dependabot-stalled`],
 		[ciRed, `⚠${ciRed}ci-red`],
 		[r.releaseStuck, '⚠release-stuck'],
 		[r.releaseFailed, '⚠release-failed'],
