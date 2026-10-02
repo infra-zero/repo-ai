@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ciRunWarning, releaseFailedWarning, releaseStuckWarning } from '../../src/base/ci-runs.js'
 import type { GhExec, GhResult } from '../../src/base/gh.js'
@@ -279,5 +282,54 @@ describe('releaseFailedWarning (#204)', () => {
 			return { ok: false, stdout: '', stderr: 'rate limited', code: 1 }
 		}
 		expect(await releaseFailedWarning(gh, 'acme/widget', 'main')).toBeNull()
+	})
+})
+
+describe('release probes with a release.yml (#260)', () => {
+	const root = mkdtempSync(path.join(tmpdir(), 'repo-ai-'))
+	mkdirSync(path.join(root, '.github', 'workflows'), { recursive: true })
+	writeFileSync(path.join(root, '.github', 'workflows', 'release.yml'), 'name: release\n')
+
+	const gh =
+		(runs: ReturnType<typeof run>[], paths: string[] = []): GhExec =>
+		async (args): Promise<GhResult> => {
+			const p = args[1] ?? ''
+			paths.push(p)
+			const ok = (v: unknown) => ({ ok: true, stdout: JSON.stringify(v), stderr: '', code: 0 })
+			if (p.includes('/workflows/release.yml/runs?')) return ok({ workflow_runs: runs })
+			if (p.includes('/jobs?')) return ok({ jobs: [{ name: 'release', conclusion: 'failure' }] })
+			return { ok: false, stdout: '', stderr: 'unexpected', code: 1 }
+		}
+
+	it('warns on a release.yml run waiting 2h, any event', async () => {
+		const paths: string[] = []
+		const g = gh(
+			[run({ id: 9, status: 'waiting', conclusion: null, created_at: hoursAgo(2) })],
+			paths
+		)
+		const w = await releaseStuckWarning(g, 'acme/widget', 'main', NOW, 'ci.yml', root)
+		expect(w).toContain('waiting on approval for 2h')
+		expect(paths[0]).toBe(
+			'repos/acme/widget/actions/workflows/release.yml/runs?branch=main&per_page=5'
+		)
+	})
+
+	it('never says "cancel it" for a release.yml run behind a newer one', async () => {
+		const g = gh([
+			run({ id: 10, head_sha: 'bbbbbbb2222' }),
+			run({ id: 9, status: 'waiting', conclusion: null, created_at: minutesAgo(10) }),
+		])
+		expect(await releaseStuckWarning(g, 'acme/widget', 'main', NOW, 'ci.yml', root)).toBeNull()
+	})
+
+	it('warns on a failed release job in release.yml', async () => {
+		const w = await releaseFailedWarning(
+			gh([run({ id: 7 })]),
+			'acme/widget',
+			'main',
+			'ci.yml',
+			root
+		)
+		expect(w).toContain('release failed')
 	})
 })
