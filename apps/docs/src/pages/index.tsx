@@ -108,7 +108,8 @@ const EXAMPLES: { label: string; file: string; code: string }[] = [
 		file: 'In Claude Code',
 		code: `/ai-issue "Add --json to the reap command"   # file an ai-ready issue
 /ai-loop                                    # work the queue, then keep babysitting the PRs
-/ai-loop-status                             # read-only: what is the loop doing?`,
+/ai-loop-status                             # read-only: what is the loop doing?
+/ai-loop-stop                               # stop this repo's loop`,
 	},
 	{
 		label: 'audit',
@@ -136,7 +137,7 @@ const PARTS: { name: string; desc: string; chips: string[]; href: string }[] = [
 	{
 		name: 'Claude Code skills',
 		desc: 'The loop, the issue on-ramp, and a read-only status view — installed into ~/.claude/skills.',
-		chips: ['ai-loop', 'ai-issue', 'ai-loop-status'],
+		chips: ['ai-loop', 'ai-issue', 'ai-loop-status', 'ai-loop-stop'],
 		href: '/docs/commands',
 	},
 	{

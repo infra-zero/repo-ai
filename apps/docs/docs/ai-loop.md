@@ -561,14 +561,14 @@ That's the only thing to type. The loop paces itself: the first tick starts a
 job in this session as a 30-minute (`idleMinutes`) fallback. Without Claude Code's Monitor tool
 the job does all the pacing instead, firing every 10 minutes (`busyMinutes`) while agents or
 reviews are in flight and every 30 (`idleMinutes`) when idle, and the tick says so.
-The job ends with the session and expires after 7 days. Say "stop the loop" to
-end it sooner. Don't wrap it in `/loop`.
+The job ends with the session and expires after 7 days. To end it sooner, see
+[Stopping](#stopping). Don't wrap it in `/loop`.
 
 **It stops itself after a quiet period.** Even an idle or waiting loop costs
 about four turns an hour, each re-reading the whole session. Status file line 4
 records when the summary last changed; once it has sat unchanged for
 `quietStopMinutes` (default 120), whether `idle` or waiting on you to merge, the
-tick deletes its job, stops any `loop watch` Monitor, writes
+tick deletes its job, stops its `loop watch` Monitor, writes
 `stopped·quiet120m`, and ends with `Next tick: none — loop stopped after 120m
 unchanged; /ai-loop restarts it`. Type `/ai-loop` to restart. Set
 `quietStopMinutes` to `0` to tick until the session ends.
@@ -628,6 +628,29 @@ can't go below 60. A halt prints once, and a failed poll is skipped. An
 `agentUser` mismatch does not halt the watcher; see
 [Running reviewers as a second identity](#running-reviewers-as-a-second-identity).
 
+### Stopping
+
+```
+/ai-loop-stop
+```
+
+Or say "stop the loop". It stops **this repo's** loop in this session, nothing
+else:
+
+1. Deletes the recurring job tagged `/ai-loop --root <root>` (and a bare
+   `/ai-loop` job from an older version). Another repo's job keeps running.
+2. Stops the `loop watch --root <root>` watcher. Another repo's watcher keeps
+   running.
+3. Writes `stopped·user` to `.claude/ai-loop-status`, so the statusline stops
+   showing a live loop.
+4. Lists what is still in flight: live agents, and issues and PRs carrying
+   `ai-wip`, `ai-reviewing-*` or `ai-fixing`. It never removes those labels. A
+   background Workflow may still finish and label its PR, and the next tick reaps
+   a dead agent's claim after `staleMinutes`.
+
+Running it again changes nothing and reports `Loop already stopped`. The quiet
+stop runs the same first two steps. `/ai-loop` restarts the loop.
+
 ### Watching the loop from GitHub
 
 Labels are the loop's whole state, so GitHub's own search works as a live board.
@@ -645,8 +668,8 @@ For a board, create a GitHub Project, turn on its built-in *Auto-add* workflow
 for this repo, and group the view by label. Columns then follow the loop with no
 extra tooling.
 
-Ticks fire only while the REPL is idle. Stop by asking the session to stop the
-loop, or just remove the `ai-ready` labels — the loop then idles harmlessly.
+Ticks fire only while the REPL is idle. To stop, see [Stopping](#stopping), or
+just remove the `ai-ready` labels — the loop then idles harmlessly.
 
 On a new repo, start with one trivial `ai-ready` issue and watch the first few
 ticks before leaving the loop alone.

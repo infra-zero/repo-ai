@@ -129,7 +129,7 @@ npx @rtorcato/repo-ai setup
 ```
 
 One guided run: writes `.repo-ai.json` (step 2), installs the `ai-loop`,
-`ai-issue` and `ai-loop-status` skills, creates the loop's labels
+`ai-issue`, `ai-loop-status` and `ai-loop-stop` skills, creates the loop's labels
 (`ai-ready`, `ai-wip`, `ai-review`, …) with `gh label create`, runs
 `fix ai-loop-identity` if you give it an agent user, and installs the
 statusline segment — asking before each step, then running `doctor` to

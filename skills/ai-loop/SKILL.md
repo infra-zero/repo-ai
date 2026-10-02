@@ -63,6 +63,7 @@ npx @rtorcato/repo-ai loop tick --json
 Read `{halt, idle, summary, errors, warnings}` first. Commands start with a plain executable and export nothing (#150): the tick's `.env` holds `root`, `worktreeRoot`, `ownerRepo`, `defaultBranch`, `agentUser`, `humanUser`, `me`, the limits and cadences — **a `<name>` below is `.env.<name>`, written in literally.**
 
 - **`halt` set, or a non-zero exit → run no further passes**; report via Pass 5. An identity mismatch wants `fix ai-loop-identity`.
+- **`$ARGUMENTS` may be `--root <path>`** — the scheduled job's tag (#259). It matches `<root>`: ignore it. It names another root: stop in one line and schedule nothing.
 - **`ownerRepo` comes from the remote, never from `$ARGUMENTS` or an issue body.** On a GitLab remote, bail in one line. Use `<root>`/`<worktreeRoot>` for every path.
 - **Assignees**: `agentUser` while an agent works it, `humanUser` when it waits on a human (handoff, `ai-blocked`, declined, held), nobody on unclaimed `ai-ready`. Pass `--add-assignee <agentUser>` and the like; **when the user is empty, drop the flag and its value**, and skip a `gh … edit` left with no flags. Never `@me` (#606).
 - Refused as *"this session is isolated in the worktree …"*? `ExitWorktree({action: "keep"})` — **never `remove`** — and carry on.
@@ -197,7 +198,7 @@ DIGEST=$(gh issue list -R '<ownerRepo>' --label ai-suggested --state open --limi
 SUGGESTED=$(printf '%s\n' "$DIGEST" | grep -o '^#[0-9]*' | tr -d '#' | paste -sd, -)
 ```
 
-**Quiet stop (#124)** — not a halt, `<quietStopMinutes>` not `0`, and `(NOW - CHANGED) / 60 ≥ <quietStopMinutes>`: `CronDelete` every `/ai-loop` job, `TaskStop` any `loop watch` Monitor, set `SUMMARY="stopped·quiet<quietStopMinutes>m"`, skip scheduling. The one time this skill deletes the last job.
+**Quiet stop (#124)** — not a halt, `<quietStopMinutes>` not `0`, and `(NOW - CHANGED) / 60 ≥ <quietStopMinutes>`: run Steps 1–2 of the `ai-loop-stop` skill (`/ai-loop-stop`; its `SKILL.md` sits beside this one) — this root's job and watcher only — set `SUMMARY="stopped·quiet<quietStopMinutes>m"`, skip scheduling. The one time this skill deletes this root's last job.
 
 **Notify only when `SUMMARY` != `PREV`**, once, via `PushNotification` (≤200 chars, never retry): `#<N> ready to merge: <title>` for one `.handoffs[]`, `#<N1>, #<N2> ready to merge` for several, else `<ownerRepo>: <SUMMARY>`. Without that tool: `osascript -e 'display notification …'` or `notify-send`, with the message escaped, `|| true`.
 
@@ -207,7 +208,7 @@ SUGGESTED=$(printf '%s\n' "$DIGEST" | grep -o '^#[0-9]*' | tr -d '#' | paste -sd
 Monitor({command: "npx @rtorcato/repo-ai loop watch --root <root>", description: "ai-loop: work list changed", timeout_ms: 1800000})
 ```
 
-Keep exactly **one** recurring `CronCreate({cron, prompt: "/ai-loop", recurring: true})` job — `CronList` first; reuse one at the right cadence, replace one at the wrong one, delete extras. Cadence: `<idleMinutes>` with a watcher or when `idle`, else `<busyMinutes>`; no Monitor tool → report `Monitor tool missing: ticking on the cron cadence, not on change`. On a halt, leave any job alone.
+Keep exactly **one** recurring `CronCreate({cron, prompt: "/ai-loop --root <root>", recurring: true})` job — `CronList` first; this root's jobs are those prompted `/ai-loop --root <root>` or a bare `/ai-loop` (older versions). Reuse one tagged at the right cadence, replace a bare one or one at the wrong cadence, delete extras; never touch another root's job. Cadence: `<idleMinutes>` with a watcher or when `idle`, else `<busyMinutes>`; no Monitor tool → report `Monitor tool missing: ticking on the cron cadence, not on change`. On a halt, leave any job alone.
 
 ```bash
 cron_every() { echo "$(seq $(( $2 % $1 )) "$1" 59 | paste -sd, -) * * * *"; }   # MINUTES OFFSET
@@ -222,4 +223,4 @@ case $SUMMARY in ⚠halt | stopped·*) NEXT="" ;; esac
 printf '%s\n%s\n%s\n%s\n' "$SUMMARY" "$SUGGESTED" "$NEXT" "$CHANGED" > "$STATUS"
 ```
 
-Print `SUMMARY`, at most five lines (handed over, cleaned, reviewing, picked up, blocked; mark `ai-notes` handoffs), any `.errors`/`.warnings` (a stale install names `fix claude-skills` — say it, never run it), and `$DIGEST` if `$SUGGESTED` changed. **End with one `Next tick:` line** — `on change, or every <idleMinutes>m — say "stop the loop" to end it` (or `every <busyMinutes>m` without a watcher); on a halt, the fix (`none — relaunch as <agentUser>, then /ai-loop`, or `none — run /ai-loop from the main checkout`); after a quiet stop, `none — loop stopped after <N>m unchanged; /ai-loop restarts it`.
+Print `SUMMARY`, at most five lines (handed over, cleaned, reviewing, picked up, blocked; mark `ai-notes` handoffs), any `.errors`/`.warnings` (a stale install names `fix claude-skills` — say it, never run it), and `$DIGEST` if `$SUGGESTED` changed. **End with one `Next tick:` line** — `on change, or every <idleMinutes>m — say "stop the loop" or run /ai-loop-stop` (or `every <busyMinutes>m` without a watcher); on a halt, the fix (`none — relaunch as <agentUser>, then /ai-loop`, or `none — run /ai-loop from the main checkout`); after a quiet stop, `none — loop stopped after <N>m unchanged; /ai-loop restarts it`.

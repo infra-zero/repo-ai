@@ -18,7 +18,7 @@ repo-ai targets **Claude Code** only for now; other agent harnesses aren't suppo
 | Part | Depends on |
 |---|---|
 | `repo-ai` CLI (`loop …`, `doctor`, `fix`, `setup`) | Node ≥ 22 and `gh`. Harness-neutral, so any agent or script can call it |
-| Skills (`ai-loop`, `ai-issue`, `ai-loop-status`) | The Claude Code skill format |
+| Skills (`ai-loop`, `ai-issue`, `ai-loop-status`, `ai-loop-stop`) | The Claude Code skill format |
 | Parallel implement/review (`ai-loop` Pass 3 and Pass 4, via the `ai-loop-recover` and `ai-loop-pickup` workflows) | The **Workflow** tool. Named reviewer types (`code-reviewer`, `security-expert`) need them in the Agent tool's registry; otherwise the reviewers run as `general-purpose`. Without Workflow, `ai-loop` falls back to background Agent calls |
 | Self-scheduling (`/ai-loop` keeps itself going) | A session-scoped recurring **CronCreate** job |
 | Wake on change (`loop watch`) | The **Monitor** tool |
@@ -36,7 +36,7 @@ npx @rtorcato/repo-ai setup
 
 `setup` shows this notice first and asks `Continue? (y/N)`, once per machine (recorded in `~/.config/repo-ai/acknowledged`) and again if the text changes; `--yes` or `--json` counts as acceptance.
 
-One guided run: the skills, the loop labels, the agent identity, and the statusline segment, asking before each, then `doctor`. The skill step installs `ai-loop`, `ai-issue` and `ai-loop-status` into `~/.claude/skills` (or `--skills-dir <path>`).
+One guided run: the skills, the loop labels, the agent identity, and the statusline segment, asking before each, then `doctor`. The skill step installs `ai-loop`, `ai-issue`, `ai-loop-status` and `ai-loop-stop` into `~/.claude/skills` (or `--skills-dir <path>`).
 
 ### Installing the skills
 

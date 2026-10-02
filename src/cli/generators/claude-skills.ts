@@ -16,9 +16,10 @@ import { type GitExec, isNewerVersion, resolveShippedVersion } from '../utils/ve
 
 /**
  * Skills this package owns the content of and keeps up to date. The loop first —
- * it is the pipeline; the others are its on-ramp and status view.
+ * it is the pipeline; the others are its on-ramp, status view and
+ * stop switch.
  */
-export const SHIPPED_SKILLS = ['ai-loop', 'ai-issue', 'ai-loop-status']
+export const SHIPPED_SKILLS = ['ai-loop', 'ai-issue', 'ai-loop-status', 'ai-loop-stop']
 
 /**
  * Skills a release still needs to clean up a stale copy of: a stale copy would
