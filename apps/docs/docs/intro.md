@@ -25,7 +25,8 @@ repo-side standard the loop relies on — branch protection, auto-merge, and the
 ## What it ships
 
 - **Claude Code skills** — `ai-loop` (the entry point and the engine),
-  `ai-issue` (the on-ramp), and `ai-loop-status` (a read-only view).
+  `ai-issue` (the on-ramp), `ai-loop-status` (a read-only view), and
+  `ai-loop-stop` (stop this repo's loop).
 - **`loop` commands** — the mechanics the skills call, as tested code:
   `loop tick`, `loop guard`, `loop worktree add`, `loop reap`, and more.
 - **`doctor` / `fix`** — audit and repair the loop's own setup: labels, the agent
@@ -40,7 +41,7 @@ repo-ai targets **Claude Code** only for now; other agent harnesses aren't suppo
 | Part | Depends on |
 |---|---|
 | `repo-ai` CLI (`loop …`, `doctor`, `fix`, `setup`) | Node ≥ 22 and `gh`. Harness-neutral, so any agent or script can call it |
-| Skills (`ai-loop`, `ai-issue`, `ai-loop-status`) | The Claude Code skill format |
+| Skills (`ai-loop`, `ai-issue`, `ai-loop-status`, `ai-loop-stop`) | The Claude Code skill format |
 | Parallel implement/review (`ai-loop` Pass 3 and Pass 4, via the `ai-loop-recover` and `ai-loop-pickup` workflows) | The **Workflow** tool. Named reviewer types (`code-reviewer`, `security-expert`) need them in the Agent tool's registry; otherwise the reviewers run as `general-purpose`. Without Workflow, `ai-loop` falls back to background Agent calls |
 | Self-scheduling (`/ai-loop` keeps itself going) | A session-scoped recurring **CronCreate** job |
 | Wake on change (`loop watch`) | The **Monitor** tool |

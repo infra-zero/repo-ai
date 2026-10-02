@@ -1,6 +1,6 @@
 {
   "name": "repo-ai",
-  "description": "The ai-loop pipeline for Claude Code: ai-loop (the label-driven issue-to-PR loop), ai-issue (file an ai-ready issue) and ai-loop-status (a read-only view). Unversioned: follows the default branch.",
+  "description": "The ai-loop pipeline for Claude Code: ai-loop (the label-driven issue-to-PR loop), ai-issue (file an ai-ready issue) ai-loop-status (a read-only view) and ai-loop-stop (stop this repo's loop). Unversioned: follows the default branch.",
   "author": {
     "name": "Richard Torcato",
     "url": "https://github.com/rtorcato"

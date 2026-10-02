@@ -52,3 +52,4 @@ The skills call these; you rarely need them directly.
 | `/ai-loop` | **Start here.** Implements the `ai-ready` queue in parallel worktrees, then keeps itself going in this session, carrying the PRs through review, fix rounds and cleanup. Type it again to tick now. |
 | `/ai-issue` | File an issue labelled `ai-ready` for the loop to pick up. |
 | `/ai-loop-status` | Read-only: what the loop is doing, and what is blocked. |
+| `/ai-loop-stop` | Stop this repo's loop in this session: its recurring job and `loop watch` watcher. Lists in-flight claims; never removes them. |
