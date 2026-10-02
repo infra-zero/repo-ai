@@ -11,6 +11,8 @@ description: What repo-ai is, what it ships, and where to start.
 takes an `ai-ready` GitHub issue, implements it in its own git worktree, opens a
 PR, has two agents review it, and hands it to a human to merge.
 
+issue → loop → PR → two reviews → you merge → [you release](./getting-started.md#8-merging-and-releasing).
+
 It was split out of [`@rtorcato/repo-tooling`](https://docs.torcato.dev/repo-tooling/)
 so the tooling can be used without the loop. repo-tooling still owns the
 repo-side standard the loop relies on — branch protection, auto-merge, and the

@@ -7,6 +7,8 @@
 
 The **ai-loop** pipeline: a label-driven loop that takes an `ai-ready` GitHub issue, implements it in its own git worktree, opens a PR, has two agents review it, and hands it to a human to merge.
 
+issue → loop → PR → two reviews → you merge → [you release](https://docs.torcato.dev/repo-ai/docs/getting-started#8-merging-and-releasing).
+
 This package holds the moving parts: the Claude Code skills, the `loop` commands they call, and a `doctor`/`fix` pair for the loop's setup. It was split out of [`@rtorcato/repo-tooling`](https://github.com/rtorcato/repo-tooling) so the tooling can be used without the loop.
 
 New here? [Getting started](https://docs.torcato.dev/repo-ai/docs/getting-started) is the one-page walkthrough from zero to a first handed-over PR. See [the docs site](https://docs.torcato.dev/repo-ai/docs/ai-loop) for how the pipeline works.
@@ -36,7 +38,7 @@ npx @rtorcato/repo-ai setup
 
 `setup` shows this notice first and asks `Continue? (y/N)`, once per machine (recorded in `~/.config/repo-ai/acknowledged`) and again if the text changes; `--yes` or `--json` counts as acceptance.
 
-One guided run: the skills, the loop labels, the agent identity, and the statusline segment, asking before each, then `doctor`. The skill step installs `ai-loop`, `ai-issue`, `ai-loop-status` and `ai-loop-stop` into `~/.claude/skills` (or `--skills-dir <path>`).
+One guided run: the skills, the loop labels, the agent identity, and the statusline segment, asking before each, then `doctor`. Then `/ai-issue`, `/ai-loop`, and when a PR is `merge-ready`, you merge and [you release](https://docs.torcato.dev/repo-ai/docs/getting-started#8-merging-and-releasing). The skill step installs `ai-loop`, `ai-issue`, `ai-loop-status` and `ai-loop-stop` into `~/.claude/skills` (or `--skills-dir <path>`).
 
 ### Installing the skills
 

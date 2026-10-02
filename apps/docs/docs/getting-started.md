@@ -1,6 +1,6 @@
 ---
 title: Getting started
-description: Zero to a first handed-over PR — the bot account, config, Claude Code allow rules, repo prerequisites, and labels, in the order you actually need them.
+description: Zero to a first merged and released PR — the bot account, config, Claude Code allow rules and sandbox, repo prerequisites, labels, stopping, merging and releasing.
 ---
 
 # Getting started
@@ -90,6 +90,23 @@ the loop needs:
 }
 ```
 
+**With Claude Code's sandbox on**, an allow rule only skips the prompt; the
+call still runs sandboxed, where `gh` and `npx` fail. Add the loop's own calls
+to `sandbox.excludedCommands` in whichever settings file sets
+`sandbox.enabled`:
+
+```json
+{
+  "sandbox": {
+    "excludedCommands": ["gh *", "npx @rtorcato/repo-ai *"]
+  }
+}
+```
+
+`npx @rtorcato/repo-ai fix sandbox` writes this for you, and `doctor` flags it
+when it is missing. See [Claude Code permissions](./ai-loop.md#claude-code-permissions)
+for why.
+
 Already have prompts piling up from other tools? The `fewer-permission-prompts`
 skill scans your transcripts and writes a prioritized allowlist instead of you
 guessing at rules.
@@ -164,12 +181,39 @@ issue PR** — read the diff and merge it yourself.
 
 ## 7. Stopping it
 
-- Say **"stop the loop"** — it deletes its recurring job.
+```bash
+/ai-loop-stop
+```
+
+That stops this repo's loop in this session — its recurring job and watcher —
+and lists what is still in flight. See [Stopping](./ai-loop.md#stopping) for
+exactly what it does. The alternatives:
+
+- Say **"stop the loop"** — the same thing.
 - Or just stop labelling issues `ai-ready`; an idle loop spawns no agents and
   [stops itself](./ai-loop.md#driving-it) after a quiet period (default 120
   minutes) either way.
 - Closing the Claude Code session stops it immediately — ticks only fire while
   a session is running.
+
+## 8. Merging and releasing
+
+This part is yours; the loop never does it.
+
+- **Merge.** Merge `merge-ready` PRs yourself. If a PR also carries
+  `ai-notes`, read the reviewer's note first.
+- **Release.** In a repo with repo-tooling ≥ 5.4's `release.yml`, merging to
+  `main` doesn't release. Release on demand with
+  `gh workflow run release.yml` (or `/release`, or close a milestone), then
+  approve the `release` environment in the run. A newer dispatch supersedes
+  one still waiting for approval.
+- **Warnings.** `⚠release-stuck` in the loop's summary means a release run has
+  sat waiting on approval for over a day; `⚠release-failed` means the newest
+  release run failed. The loop only reports them — it never approves, cancels
+  or re-runs a release. See [the tick](./ai-loop.md#the-tick) for why a stale
+  approval is better cancelled than approved.
+- **Moving to `release.yml`?** Re-point npm's trusted publisher (OIDC) for the
+  package at `release.yml`, or publishing fails.
 
 ## What's next
 
