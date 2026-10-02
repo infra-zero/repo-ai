@@ -1,0 +1,94 @@
+name: 🚀 Release
+
+# On demand only, never per merge (#740): a dispatch (hotfix, ad hoc) or a
+# closed milestone ("ship this batch").
+on:
+  workflow_dispatch:
+  milestone:
+    types: [closed]
+
+# A newer request supersedes an older one still waiting for approval (#753).
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+jobs:
+  release:
+    environment: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The tip, not the event's SHA: the job starts after approval, and
+          # semantic-release refuses a checkout that main has moved past.
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          # RELEASE_TOKEN (admin PAT) lets semantic-release push the version
+          # commit + tag to a protected main; GITHUB_TOKEN can't bypass branch
+          # protection. Falls back to GITHUB_TOKEN when no PAT is set.
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: 📦 Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 🏗️ Build project
+        run: pnpm build
+
+      - name: 🧪 Run tests
+        run: pnpm test --run
+
+      - name: 🔧 Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      # OIDC trusted publishing needs npm >= 11.5.1; Node 22 bundles npm 10, whose
+      # `npm publish` fails with ENEEDAUTH. Pinned to a range, not `latest`, so a
+      # future npm major can't change publishing unannounced.
+      - name: 📦 Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: 🚀 Run semantic-release
+        id: release
+        # Publishes to npm via OIDC trusted publishing — no NPM_TOKEN. Requires
+        # the `id-token: write` permission above + a trusted publisher configured
+        # for the package on npmjs.com (Settings → Trusted Publisher, workflow
+        # release.yml, environment release).
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          npx semantic-release 2>&1 | tee /tmp/semantic-release.log
+
+      # semantic-release exits 0 even when it publishes nothing: if main moved
+      # on after the checkout, it logs this line and quietly no-ops. Fail the
+      # run instead of going green having published nothing. "No relevant
+      # changes" is a clean no-op, not this case.
+      - name: Fail if the release run published nothing
+        if: always() && steps.release.outcome == 'success'
+        run: |
+          set -euo pipefail
+          if grep -q 'is behind the remote one' /tmp/semantic-release.log; then
+            {
+              echo "### :rotating_light: Release published nothing"
+              echo
+              echo "\`main\` moved on during this run, so semantic-release no-op'd instead of publishing."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::semantic-release published nothing — main moved on during this run."
+            exit 1
+          fi
