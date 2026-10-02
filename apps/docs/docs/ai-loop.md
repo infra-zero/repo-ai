@@ -395,6 +395,25 @@ classifier, which can block the tick. Add these to `permissions.allow` in
 }
 ```
 
+**With Claude Code's sandbox on**, an allow rule only skips the prompt, and the
+call still runs sandboxed. There `gh` fails TLS verification on macOS (Seatbelt
+blocks the keychain) and `npx` can't write `~/.npm/_cacache`. The tick then
+needs an unsandboxed retry, which the auto-mode classifier can refuse. Exclude
+the loop's own calls in whichever file sets `sandbox.enabled`, or run
+`npx @rtorcato/repo-ai fix sandbox`:
+
+```json
+{
+  "sandbox": {
+    "excludedCommands": ["gh *", "npx @rtorcato/repo-ai *"]
+  }
+}
+```
+
+Excluding `gh *` runs `gh` with your keychain and network, which the loop
+needs anyway to label PRs. A chained call such as `cd x && gh …` still runs
+sandboxed.
+
 On a repo with `agentUser` set, `doctor` reads all three files and warns once
 for each rule that is missing.
 
