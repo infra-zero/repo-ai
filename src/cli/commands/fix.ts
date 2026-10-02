@@ -2,6 +2,7 @@ import os from 'node:os'
 import path from 'node:path'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
+import { fixSandboxExcludes } from '../../base/allow-rules.js'
 import { setupAgentIdentity } from '../../base/ai-loop-identity.js'
 import { writeConfigSchema } from '../../base/config-schema.js'
 import { FixerAbort } from '../../base/fixer-abort.js'
@@ -65,6 +66,11 @@ export const FIXERS = {
 		description:
 			'Install the loop status segment to ~/.claude/ai-loop-statusline.sh; set it as the statusline only when none is configured',
 		run: () => installStatusline(os.homedir()),
+	},
+	sandbox: {
+		description:
+			"With Claude Code's sandbox on, add the loop's gh and repo-ai calls to sandbox.excludedCommands in the file that enables it",
+		run: (dir) => fixSandboxExcludes(dir, os.homedir()),
 	},
 } satisfies Record<string, Fixer>
 
