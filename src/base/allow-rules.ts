@@ -17,21 +17,27 @@ export const LOOP_ALLOW_RULES = [
 /** `Bash(gh:*)` and `Bash(gh *)` are the same prefix rule. */
 const normalise = (rule: string): string => rule.trim().replace(/:\*\)$/, ' *)')
 
+const strings = (v: unknown): string[] =>
+	Array.isArray(v) ? v.filter((r): r is string => typeof r === 'string') : []
+
+/** User, project, local — lowest precedence first. */
+const settingsFiles = (dir: string, home: string) => [
+	path.join(home, '.claude', 'settings.json'),
+	path.join(dir, '.claude', 'settings.json'),
+	path.join(dir, '.claude', 'settings.local.json'),
+]
+
 async function allowRules(file: string): Promise<string[]> {
 	const settings = await fs.readJson(file).catch(() => null)
-	const allow = settings?.permissions?.allow
-	return Array.isArray(allow) ? allow.filter((r): r is string => typeof r === 'string') : []
+	return strings(settings?.permissions?.allow)
 }
 
 /** One result per missing rule, or a single `ok` when all are present. */
 export async function checkAllowRules(dir: string, home: string): Promise<CheckResult[]> {
 	const check = 'Claude Code permissions'
-	const files = [
-		path.join(home, '.claude', 'settings.json'),
-		path.join(dir, '.claude', 'settings.json'),
-		path.join(dir, '.claude', 'settings.local.json'),
-	]
-	const have = new Set((await Promise.all(files.map(allowRules))).flat().map(normalise))
+	const have = new Set(
+		(await Promise.all(settingsFiles(dir, home).map(allowRules))).flat().map(normalise)
+	)
 	// A bare `Bash` (or `Bash(*)`) allows every command.
 	if (have.has('Bash') || have.has('Bash(*)')) {
 		return [{ check, status: 'ok', detail: 'all Bash commands are allowed' }]
@@ -46,4 +52,58 @@ export async function checkAllowRules(dir: string, home: string): Promise<CheckR
 		detail: `no "${rule}" allow rule — the loop's calls will prompt or hit the auto-mode classifier`,
 		hint: `Add "${rule}" to permissions.allow in .claude/settings.json or ~/.claude/settings.json`,
 	}))
+}
+
+/**
+ * With Claude Code's sandbox on, an allow rule only skips the prompt: the call
+ * still runs sandboxed, where `gh` fails TLS (no keychain on macOS) and `npx`
+ * can't write its cache (#257). These run the loop's own calls outside it.
+ */
+export const LOOP_SANDBOX_EXCLUDES = ['gh *', 'npx @rtorcato/repo-ai *']
+
+/** `excludedCommands` takes `Bash(...)` rule syntax, so `gh:*` is `gh *`. */
+const normaliseExclude = (cmd: string): string => cmd.trim().replace(/:\*$/, ' *')
+
+async function readSandbox(dir: string, home: string) {
+	const files = settingsFiles(dir, home)
+	const all = await Promise.all(files.map((f) => fs.readJson(f).catch(() => null)))
+	// The highest-precedence file that says anything about `enabled` decides it.
+	let enabledIn: string | undefined
+	for (const [i, s] of all.entries()) {
+		if (typeof s?.sandbox?.enabled === 'boolean')
+			enabledIn = s.sandbox.enabled ? files[i] : undefined
+	}
+	const have = new Set(
+		all.flatMap((s) => strings(s?.sandbox?.excludedCommands)).map(normaliseExclude)
+	)
+	return { enabledIn, missing: LOOP_SANDBOX_EXCLUDES.filter((c) => !have.has(c)) }
+}
+
+/** One `drift` per missing exclude while the sandbox is on; `ok` otherwise. */
+export async function checkSandboxExcludes(dir: string, home: string): Promise<CheckResult[]> {
+	const check = 'Claude Code sandbox'
+	const { enabledIn, missing } = await readSandbox(dir, home)
+	if (!enabledIn) return [{ check, status: 'ok', detail: 'sandbox is off' }]
+	if (missing.length === 0) {
+		return [{ check, status: 'ok', detail: "the loop's calls are excluded from the sandbox" }]
+	}
+	return missing.map((cmd) => ({
+		check,
+		status: 'drift',
+		detail: `sandbox is on and "${cmd}" is not in sandbox.excludedCommands — the loop's calls run sandboxed and fail`,
+		hint: 'Run `npx @rtorcato/repo-ai fix sandbox`',
+	}))
+}
+
+/**
+ * Add the missing excludes to the file that turns the sandbox on. Never touches
+ * `enabled` or any other key, and writes nothing while the sandbox is off.
+ */
+export async function fixSandboxExcludes(dir: string, home: string): Promise<string[]> {
+	const { enabledIn, missing } = await readSandbox(dir, home)
+	if (!enabledIn || missing.length === 0) return []
+	const settings = await fs.readJson(enabledIn)
+	settings.sandbox.excludedCommands = [...strings(settings.sandbox.excludedCommands), ...missing]
+	await fs.writeJson(enabledIn, settings, { spaces: 2 })
+	return [enabledIn]
 }

@@ -3,7 +3,7 @@ import path from 'node:path'
 import chalk from 'chalk'
 import fs from 'fs-extra'
 import { checkAgentUser } from '../../base/agent-user.js'
-import { checkAllowRules } from '../../base/allow-rules.js'
+import { checkAllowRules, checkSandboxExcludes } from '../../base/allow-rules.js'
 import {
 	checkClaudeSkills,
 	checkPluginSkills,
@@ -62,7 +62,10 @@ export async function runDoctor(dir: string, skillsDir?: string): Promise<CheckR
 	if (config.agentUser && required.length > 0) {
 		results.push(await checkRequiredSkills(required, skillsDir))
 	}
-	if (config.agentUser) results.push(...(await checkAllowRules(dir, os.homedir())))
+	if (config.agentUser) {
+		results.push(...(await checkAllowRules(dir, os.homedir())))
+		results.push(...(await checkSandboxExcludes(dir, os.homedir())))
+	}
 	return results
 }
 
