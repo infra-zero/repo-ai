@@ -201,7 +201,7 @@ export async function checkReleaseStuck(
 		return { check, status: 'ok', detail: 'skipped — could not resolve the GitHub repo' }
 	}
 	const { ciWorkflow } = await readConfig(dir)
-	const warning = await releaseStuckWarning(gh, nwo, branch, now, ciWorkflow)
+	const warning = await releaseStuckWarning(gh, nwo, branch, now, ciWorkflow, dir)
 	return warning
 		? { check, status: 'drift', detail: warning }
 		: { check, status: 'ok', detail: 'no release run stuck waiting on approval' }
@@ -220,7 +220,7 @@ export async function checkReleaseFailed(dir: string, exec?: GhExec): Promise<Ch
 		return { check, status: 'ok', detail: 'skipped — could not resolve the GitHub repo' }
 	}
 	const { ciWorkflow } = await readConfig(dir)
-	const warning = await releaseFailedWarning(gh, nwo, branch, ciWorkflow)
+	const warning = await releaseFailedWarning(gh, nwo, branch, ciWorkflow, dir)
 	return warning
 		? { check, status: 'drift', detail: warning }
 		: { check, status: 'ok', detail: 'no failed release run' }

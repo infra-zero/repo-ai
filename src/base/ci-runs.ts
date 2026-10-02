@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import path from 'node:path'
 import type { GhExec } from './gh.js'
 
 /**
@@ -34,12 +36,13 @@ async function ciRuns(
 	gh: GhExec,
 	nwo: string,
 	branch: string,
-	workflow: string
+	workflow: string,
+	anyEvent = false
 ): Promise<RunApi[] | null> {
 	if (!branch) return null
 	const r = await gh([
 		'api',
-		`repos/${nwo}/actions/workflows/${encodeURIComponent(workflow)}/runs?event=push&branch=${encodeURIComponent(branch)}&per_page=5`,
+		`repos/${nwo}/actions/workflows/${encodeURIComponent(workflow)}/runs?${anyEvent ? '' : 'event=push&'}branch=${encodeURIComponent(branch)}&per_page=5`,
 	])
 	if (!r.ok) return null
 	try {
@@ -127,6 +130,18 @@ export async function runAttempt(gh: GhExec, nwo: string, runId: number): Promis
 }
 
 const RELEASE_STUCK_HOURS = 1
+/** repo-tooling 5.4.0+ keeps the release job in its own workflow (#260). */
+const RELEASE_WORKFLOW = 'release.yml'
+
+/**
+ * Which workflow the release probes read: `release.yml` (any event, since it is
+ * dispatched or milestone-triggered) when the checkout at `root` has one, else
+ * the CI workflow's push runs.
+ */
+function releaseSource(workflow: string, root?: string) {
+	const own = !!root && existsSync(path.join(root, '.github', 'workflows', RELEASE_WORKFLOW))
+	return own ? { workflow: RELEASE_WORKFLOW, anyEvent: true } : { workflow, anyEvent: false }
+}
 
 /**
  * `loop tick`/`doctor`'s release-approval probe (#146). A `release` job
@@ -144,15 +159,18 @@ export async function releaseStuckWarning(
 	nwo: string,
 	branch: string,
 	now: number,
-	workflow = DEFAULT_CI_WORKFLOW
+	workflow = DEFAULT_CI_WORKFLOW,
+	root?: string
 ): Promise<string | null> {
-	const runs = await ciRuns(gh, nwo, branch, workflow)
+	const src = releaseSource(workflow, root)
+	const runs = await ciRuns(gh, nwo, branch, src.workflow, src.anyEvent)
 	const waiting = runs?.find((run) => run.status === 'waiting')
 	if (!runs || !waiting) return null
 	// ponytail: the newest push run stands in for the branch head — a push that
 	// triggers no CI run can't be pinned behind the waiting one anyway.
 	const head = runs[0]?.head_sha
-	if (head && waiting.head_sha && head !== waiting.head_sha) {
+	// release.yml's cancel-in-progress supersedes a waiting run, so it can't pin ci.yml.
+	if (!src.anyEvent && head && waiting.head_sha && head !== waiting.head_sha) {
 		return `release run ${waiting.id} waiting on approval is stale (${waiting.head_sha.slice(0, 7)}, ${branch} is at ${head.slice(0, 7)}) and is cancelling newer runs — cancel it, don't approve it: ${waiting.html_url}`
 	}
 	const hours = (now - Date.parse(waiting.created_at)) / 3_600_000
@@ -174,9 +192,11 @@ export async function releaseFailedWarning(
 	gh: GhExec,
 	nwo: string,
 	branch: string,
-	workflow = DEFAULT_CI_WORKFLOW
+	workflow = DEFAULT_CI_WORKFLOW,
+	root?: string
 ): Promise<string | null> {
-	const runs = await ciRuns(gh, nwo, branch, workflow)
+	const src = releaseSource(workflow, root)
+	const runs = await ciRuns(gh, nwo, branch, src.workflow, src.anyEvent)
 	if (!runs) return null
 	for (const run of runs.filter((r) => r.status === 'completed')) {
 		const job = await releaseJob(gh, nwo, run.id)

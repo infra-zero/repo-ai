@@ -378,7 +378,8 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		ownerRepo,
 		env.defaultBranch,
 		now,
-		ciWorkflow
+		ciWorkflow,
+		root
 	)
 	if (releaseWarning) {
 		result.warnings.push(releaseWarning)
@@ -388,7 +389,13 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	const securityWarning = await securityAlertWarning(gh, ownerRepo, false)
 	if (securityWarning) result.warnings.push(securityWarning)
 	// #204: same reasoning — a failed release job is silent otherwise, and nothing publishes.
-	const releaseFailedMsg = await releaseFailedWarning(gh, ownerRepo, env.defaultBranch, ciWorkflow)
+	const releaseFailedMsg = await releaseFailedWarning(
+		gh,
+		ownerRepo,
+		env.defaultBranch,
+		ciWorkflow,
+		root
+	)
 	if (releaseFailedMsg) {
 		result.warnings.push(releaseFailedMsg)
 		result.releaseFailed = true
