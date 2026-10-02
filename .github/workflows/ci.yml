@@ -5,23 +5,15 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # "Run workflow" on main releases from its tip, whatever the last merge's type
-  # — for when merges landed close together and the queue skipped a release.
+  # Manual CI runs. Releasing is release.yml's job, not this workflow's.
   workflow_dispatch:
 
 concurrency:
-  # workflow_dispatch gets its own group suffix, separate from push runs on
-  # main: without it, cancel-in-progress below would let a manual re-dispatch
-  # cancel a push-triggered run that's already mid-publish to npm, not just
-  # one still stuck waiting on approval.
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && 'dispatch' || 'push' }}
-  # Never cancel a push-triggered run on main: it may be halfway through
-  # publishing. A manual dispatch, though, is usually a re-run to get past a
-  # stale approval wait — let a newer dispatch supersede one still queued.
-  # Pull-request runs aren't cancelled either: a cancelled run's test legs end
-  # `cancelled`, its `verify` (always()) then fails, and that blocks the PR even
-  # when a second run on the same SHA passed. A superseded run just finishes.
-  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never cancelled: a cancelled run's test legs end `cancelled`, its `verify`
+  # (always()) then fails, and that blocks the PR even when a second run on the
+  # same SHA passed. A superseded run just finishes.
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -122,78 +114,3 @@ jobs:
         run: |
           echo "changes=$CHANGES code=$CODE test=$TEST"
           test "$CHANGES" = success && { test "$CODE" = false || test "$TEST" = success; }
-
-  # Publishes @rtorcato/repo-ai with semantic-release. The `release`
-  # environment requires a maintainer's approval, so a merge to main never
-  # reaches npm unattended.
-  release:
-    needs: verify
-    # Only a merge that can release asks for approval: the squash subject starts
-    # with a type the semantic-release preset releases on (feat, fix, perf,
-    # refactor, revert, update) — `feat!:` and `fix!:` included. docs/ci/chore
-    # merges skip the job instead of queueing an approval that would publish
-    # nothing. Match the start only: a squash message carries the whole PR body,
-    # so searching it for `!:` or `BREAKING CHANGE` matched PRs that merely
-    # mentioned them. A skipped releasable commit is not lost: the next release
-    # picks up everything since the last tag.
-    if: >-
-      github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' && (
-        startsWith(github.event.head_commit.message, 'feat') ||
-        startsWith(github.event.head_commit.message, 'fix') ||
-        startsWith(github.event.head_commit.message, 'perf') ||
-        startsWith(github.event.head_commit.message, 'refactor') ||
-        startsWith(github.event.head_commit.message, 'revert') ||
-        startsWith(github.event.head_commit.message, 'update')
-      ))
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
-      id-token: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # semantic-release reads the full history and tags
-          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22"
-          cache: pnpm
-          registry-url: "https://registry.npmjs.org"
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run build
-      # OIDC trusted publishing needs npm >= 11.5.1; Node 22 ships 10.x.
-      - run: npm install -g npm@latest
-      # No NPM_TOKEN: publishes via OIDC, which needs a trusted publisher for
-      # this package on npmjs.com (workflow ci.yml, environment release).
-      - name: Release
-        id: release
-        run: |
-          set -o pipefail
-          npx semantic-release 2>&1 | tee /tmp/semantic-release.log
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
-      # semantic-release exits 0 even when it publishes nothing: if main moved
-      # while this run sat waiting on the `release` environment's approval,
-      # it logs this line and quietly no-ops instead of releasing what the
-      # approval was for. Catch that here instead of a run going green having
-      # published nothing.
-      - name: Fail if the release run published nothing
-        if: always() && steps.release.outcome == 'success'
-        run: |
-          set -euo pipefail
-          if grep -q 'is behind the remote one' /tmp/semantic-release.log; then
-            {
-              echo "### :rotating_light: Release published nothing"
-              echo
-              echo "\`main\` moved while this run waited on \`release\` approval, so semantic-release no-op'd instead of publishing."
-              echo
-              echo "**Fix:** re-run \`CI\` via \`workflow_dispatch\` from main's tip."
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::semantic-release published nothing — main moved during the approval wait. Re-run CI via workflow_dispatch from main's tip."
-            exit 1
-          fi

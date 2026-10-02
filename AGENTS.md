@@ -30,4 +30,4 @@ Config is read from the consuming repo's `.repo-ai.json`: `agentUser` and `requi
 - Merges are squash-only. Branches are deleted on merge.
 - Queue the merge with `gh pr merge --auto --squash --delete-branch`.
 - `.husky/post-merge` runs `pnpm build` after a pull that changes `src/`, so the repo's own `dist/` stays current.
-- Releases go through the `release` environment, which needs a maintainer's approval before anything is published to npm.
+- Merging to `main` does not release. A release is a manual dispatch of `.github/workflows/release.yml` or a closed milestone, and it runs behind the `release` environment, which needs a maintainer's approval before anything is published to npm.

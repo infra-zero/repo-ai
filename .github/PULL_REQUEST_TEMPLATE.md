@@ -5,9 +5,10 @@
 
 <!--
 The PR title becomes the squash commit subject on `main`, and semantic-release
-reads it to decide whether a release is cut: feat, fix, perf, refactor, revert
-and update release; docs, ci, chore, test and build do not. Pick the type
-deliberately.
+reads it to decide what the next release contains: feat, fix, perf, refactor,
+revert and update release; docs, ci, chore, test and build do not. Pick the
+type deliberately. Merging does not release: a release is a manual
+`release.yml` dispatch or a closed milestone.
 -->
 
 ## Type of change
