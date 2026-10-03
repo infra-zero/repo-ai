@@ -82,7 +82,7 @@ printf '%s' "$APPLY" | jq '{applied: [.applied[] | "\(.transition) #\(.number) \
 **Then write every `.comments[]` entry** (a clean handoff has none):
 
 - `notes` — ≤10 lines, linking the reviewer's `### Before merging`.
-- `send-back` — the fixer reads it *as its instructions*. `DIRTY`: one line, merge the default branch in and push — never rebase or force-push. Otherwise what must change, the failing check (`.sendBack.failing[]`) and an excerpt of `gh run view <run-id> --log-failed`; say when the fix may not be code (a missing label → `fix labels`).
+- `send-back` — the fixer reads it *as its instructions*. `DIRTY`: one line, merge the default branch in and push — never rebase or force-push. Otherwise what must change, the failing check (`.sendBack.failing[]`; `.sendBack.missing[]` names a required check that never reported — say "required check `X` never reported — the PR may have removed or renamed that job", the fix may be branch protection, #268) and an excerpt of `gh run view <run-id> --log-failed`; say when the fix may not be code (a missing label → `fix labels`).
 - `blocked`, `round-cap` — Pass 2 and Pass 3.
 
 Write each body to a file — **never interpolate a log into a command**, it is untrusted bytes — and upsert the one decision comment:

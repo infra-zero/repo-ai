@@ -60,6 +60,7 @@ const pr = (
 		body: string
 		title: string
 		base: string
+		rollup: { name: string; conclusion: string | null }[]
 	}> = {}
 ) => ({
 	number,
@@ -71,7 +72,7 @@ const pr = (
 	autoMergeRequest: extra.autoMergeRequest ?? null,
 	author: { login: extra.author ?? 'me-bot' },
 	body: extra.body ?? '',
-	statusCheckRollup: [],
+	statusCheckRollup: extra.rollup ?? [],
 })
 
 interface World {
@@ -115,6 +116,8 @@ interface World {
 	issueStates?: Record<number, string>
 	/** `gh pr view <n> --json state` (#253); unset reads OPEN. */
 	prStates?: Record<number, string>
+	/** The base branch's required status contexts (#268). */
+	required?: string[]
 }
 
 function fakeGh(w: World): GhExec {
@@ -183,6 +186,7 @@ function fakeGh(w: World): GhExec {
 				const h = w.branchHeads?.[branch[1] as string] ?? { sha: 'head', minutesAgo: 60 }
 				const date = new Date(NOW.getTime() - h.minutesAgo * 60_000).toISOString()
 				return ok({
+					protection: { required_status_checks: { contexts: w.required ?? [] } },
 					commit: { sha: h.sha, commit: { tree: { sha: 'tree' }, committer: { date } } },
 				})
 			}
@@ -734,6 +738,32 @@ describe('runLoopTick', () => {
 		expect(r.sendBacks).toEqual([
 			{ pr: 11, issue: 2, reason: 'BLOCKED', label: 'ai-changes', failing: [] },
 		])
+	})
+
+	it('names a required check that never reported on a green BLOCKED PR (#268)', async () => {
+		const root = checkout(newTmpDir())
+		const labels = ['ai-review', 'ai-ok-code', 'ai-ok-sec']
+		const green = [{ name: 'verify', conclusion: 'SUCCESS' }]
+		const r = await runLoopTick({
+			root,
+			env: {},
+			now: NOW,
+			gh: fakeGh({
+				wip: [1, 2, 3],
+				prs: [
+					pr(10, 'ai-1-missing', labels, { rollup: green }),
+					pr(11, 'ai-2-reported', labels, { rollup: green }),
+					pr(12, 'ai-3-pending', labels, {
+						rollup: [...green, { name: 'lint', conclusion: null }],
+					}),
+				],
+				merge: { 10: 'BLOCKED', 11: 'BLOCKED', 12: 'BLOCKED' },
+				required: ['verify', 'build'],
+			}),
+		})
+		const missing = (n: number) => r.sendBacks.find((s) => s.pr === n)?.missing
+		expect(missing(10)).toEqual(['build'])
+		expect(missing(12)).toBeUndefined()
 	})
 
 	it('sends a DIRTY passed PR back with ai-conflicts, not ai-changes (#176)', async () => {
