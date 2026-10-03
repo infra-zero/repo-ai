@@ -671,13 +671,16 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 				// A required check that never runs leaves a green PR BLOCKED with no reason given (#268).
 				// The bot can read this branch endpoint; `/protection` 404s for it.
 				const missing: string[] = []
-				if (s === 'BLOCKED') {
+				const rollup = pr.statusCheckRollup ?? []
+				// A pending or failing check is its own reason; only an all-green head names a missing one.
+				const allGreen = rollup.every((c) =>
+					['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(c.conclusion ?? '')
+				)
+				if (s === 'BLOCKED' && allGreen) {
 					const base = await json<{
 						protection?: { required_status_checks?: { contexts?: string[] } }
 					}>(['api', `repos/${ownerRepo}/branches/${pr.baseRefName}`])
-					const seen = new Set(
-						(pr.statusCheckRollup ?? []).map((c) => c.name ?? c.context).filter(Boolean)
-					)
+					const seen = new Set(rollup.map((c) => c.name ?? c.context).filter(Boolean))
 					for (const c of base?.protection?.required_status_checks?.contexts ?? [])
 						if (!seen.has(c)) missing.push(c)
 				}
