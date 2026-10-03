@@ -26,7 +26,11 @@ const config: Config = {
 	staticDirectories: ['static', '../../schemas'],
 
 	markdown: {
-		format: 'detect',
+		// mdx, not detect: ai-loop.md renders <LabelChips /> and can't be renamed
+		// .mdx — loop-tick's SHARED_DOCS and setup.test.ts match it by name (#272).
+		format: 'mdx',
+		// ```mermaid fences render as diagrams — the ai-loop state machine (#272).
+		mermaid: true,
 		hooks: {
 			onBrokenMarkdownLinks: 'warn',
 		},
@@ -53,6 +57,8 @@ const config: Config = {
 			} satisfies Preset.Options,
 		],
 	],
+
+	themes: ['@docusaurus/theme-mermaid'],
 
 	plugins: [
 		[
@@ -134,6 +140,7 @@ const config: Config = {
 		// were vsDark here, which is why the shared stylesheet had to pin fenced
 		// blocks dark in light mode too (#324). Keep this pairing and the CSS in
 		// step — vsDark tokens on a light surface are unreadable.
+		mermaid: { theme: { light: 'neutral', dark: 'dark' } },
 		prism: {
 			theme: prismThemes.vsLight,
 			darkTheme: prismThemes.vsDark,

@@ -2,6 +2,7 @@ import path from 'node:path'
 import chalk from 'chalk'
 import fs from 'fs-extra'
 import { type GhExec, ghPaginated, realGhExec } from './gh.js'
+import { LOOP_LABELS, type LabelSpec } from './label-specs.js'
 import type { CheckResult } from './types.js'
 
 /**
@@ -16,61 +17,14 @@ import type { CheckResult } from './types.js'
  * should pick this up" and "an agent gave up" rendered the same. Repair here
  * goes through `gh label edit`, which is the whole point of the fixer.
  *
- * This table is the single source of truth for the label set. The bootstrap
+ * `LOOP_LABELS` (label-specs.ts) is the single source of truth for the label set. The bootstrap
  * block in skills/ai-loop/SKILL.md is asserted against it in
  * tests/base/labels.test.ts, so the two cannot drift apart.
  */
 
 const CHECK = 'AI loop labels'
 
-export interface LabelSpec {
-	name: string
-	/** Six hex digits, no leading `#`, lowercase — what `gh` writes. */
-	color: string
-	description: string
-}
-
-export const LOOP_LABELS: readonly LabelSpec[] = [
-	{
-		name: 'holding',
-		color: '5319e7',
-		description: 'Gate/holding issue — human judgement, never auto-picked',
-	},
-	{ name: 'ai-ready', color: '0e8a16', description: 'Eligible for an AI agent to implement' },
-	{ name: 'ai-wip', color: 'fbca04', description: 'Claimed by an agent; worktree exists' },
-	{ name: 'ai-blocked', color: 'b60205', description: 'Agent gave up; needs a human' },
-	{ name: 'ai-review', color: '1d76db', description: 'PR awaiting agent review' },
-	{ name: 'ai-reviewing-code', color: 'c5def5', description: 'code-reviewer claimed and running' },
-	{ name: 'ai-reviewing-sec', color: 'c5def5', description: 'security-expert claimed and running' },
-	{ name: 'ai-ok-code', color: '0e8a16', description: 'code-reviewer passed' },
-	{ name: 'ai-ok-sec', color: '0e8a16', description: 'security-expert passed' },
-	{ name: 'ai-changes', color: 'd93f0b', description: 'Reviewer requested changes' },
-	{
-		name: 'ai-conflicts',
-		color: 'e99695',
-		description: 'Branch conflicts with the default branch — needs main merged in',
-	},
-	{
-		name: 'ai-fixing',
-		color: '006b75',
-		description: 'Fix-round implementer claimed and running',
-	},
-	{
-		name: 'ai-notes',
-		color: 'fbca04',
-		description: 'Passed, but a reviewer left something to read before merging',
-	},
-	{
-		name: 'merge-ready',
-		color: '8250df',
-		description: 'Both agent reviews passed and the PR is mergeable — waiting on a human',
-	},
-	{
-		name: 'ai-suggested',
-		color: 'c2e0c6',
-		description: 'Follow-up surfaced by an agent review — triage queue, never auto-picked',
-	},
-]
+export { LOOP_LABELS, type LabelSpec } from './label-specs.js'
 
 /**
  * How many of the set have to exist before this repo counts as running the

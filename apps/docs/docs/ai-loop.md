@@ -3,6 +3,9 @@ title: The AI Loop
 description: The end-to-end label-driven pipeline that turns an ai-ready GitHub issue into a reviewed PR — the one constraint that shapes it, the label state machine, the repo prerequisites, and the limits that keep it cheap.
 ---
 
+import Link from '@docusaurus/Link'
+import LabelChips, { Labels } from '@site/src/components/LabelChips'
+
 `ai-loop` is a **label-driven pipeline** that takes a GitHub issue marked
 `ai-ready`, implements it in a per-issue git worktree, opens a PR, has two agents
 review it, and hands it to you to merge. It runs unattended on a timer.
@@ -225,6 +228,10 @@ groundwork rather than a supported mode
 All state lives in GitHub labels. A tick is a stateless, idempotent pass over
 that state, so a missed tick, a crash, or a restart costs nothing.
 
+<LabelChips />
+
+Hover a chip for its description. The colours come from the same table `doctor` audits, so this list is always current; what each label means in the pipeline:
+
 | Label | On | Meaning |
 |---|---|---|
 | `ai-ready` | issue | Eligible for an agent. The hard gate. |
@@ -249,16 +256,16 @@ A PR moves through a few label combinations. Read them as "whose turn is it":
 
 | Labels | What's happening | Whose turn |
 |---|---|---|
-| `ai-review` | Opened, waiting for reviewers to start | the loop |
-| `ai-review` `ai-reviewing-code` `ai-reviewing-sec` | Both reviewers are running (a docs-only PR gets one combined reviewer that claims both) | the reviewers |
-| `ai-review` `ai-ok-code` `ai-reviewing-sec` | Code review passed; security review still running (either order) | the reviewers |
-| `ai-review` `ai-ok-code` `ai-ok-sec` | Both passed; waiting for CI to go green, or for the branch to be updated from `main` | the loop |
-| `ai-changes` | A reviewer asked for a change, or CI failed | the loop (a fixer is next) |
-| `ai-changes` `ai-fixing` | A fixer is pushing a fix; both reviews run again afterwards | the fixer |
-| `ai-conflicts` | The branch conflicts with `main` | the loop (a fixer merges `main` in next, for free) |
-| `ai-conflicts` `ai-fixing` | A fixer is merging `main` in; the reviews run again only if that changed the PR's own diff (#217) | the fixer |
-| `merge-ready` | Reviewed, green, mergeable | **you** |
-| `merge-ready` `ai-notes` | Same, but read the reviewer's `### Before merging` first | **you** |
+| <Labels names="ai-review" /> | Opened, waiting for reviewers to start | the loop |
+| <Labels names="ai-review ai-reviewing-code ai-reviewing-sec" /> | Both reviewers are running (a docs-only PR gets one combined reviewer that claims both) | the reviewers |
+| <Labels names="ai-review ai-ok-code ai-reviewing-sec" /> | Code review passed; security review still running (either order) | the reviewers |
+| <Labels names="ai-review ai-ok-code ai-ok-sec" /> | Both passed; waiting for CI to go green, or for the branch to be updated from `main` | the loop |
+| <Labels names="ai-changes" /> | A reviewer asked for a change, or CI failed | the loop (a fixer is next) |
+| <Labels names="ai-changes ai-fixing" /> | A fixer is pushing a fix; both reviews run again afterwards | the fixer |
+| <Labels names="ai-conflicts" /> | The branch conflicts with `main` | the loop (a fixer merges `main` in next, for free) |
+| <Labels names="ai-conflicts ai-fixing" /> | A fixer is merging `main` in; the reviews run again only if that changed the PR's own diff (#217) | the fixer |
+| <Labels names="merge-ready" /> | Reviewed, green, mergeable | **you** |
+| <Labels names="merge-ready ai-notes" /> | Same, but read the reviewer's `### Before merging` first | **you** |
 
 A claim label (`ai-reviewing-*`, `ai-fixing`) that sits for 45 minutes means its agent died; the next tick clears it and starts over.
 
@@ -267,8 +274,8 @@ sets, and the difference is legible without opening anything:
 
 | Labels | Means |
 |---|---|
-| `merge-ready` | Merge freely. |
-| `merge-ready`, `ai-notes` | Passed, but open the comments first. |
+| <Labels names="merge-ready" /> | Merge freely. |
+| <Labels names="merge-ready ai-notes" /> | Passed, but open the comments first. |
 
 `merge-ready` asserts strictly more than `ai-ok-code` + `ai-ok-sec` — both
 reviews passed *and* GitHub reports the PR mergeable — so the handoff drops the
@@ -284,18 +291,39 @@ hand-created one. A repo with fewer than two of these labels is reported as *not
 applicable* rather than drift: not running the loop is a choice, and neither the
 check nor the fixer pushes labels into a repo that opted out.
 
+```mermaid
+flowchart TD
+  ready([ai-ready issue]):::ready -->|pickup| wip[ai-wip<br/>worktree + implementer]:::wip
+  wip -->|PR opened| review[ai-review]:::review
+  review --> reviewing[ai-reviewing-code<br/>ai-reviewing-sec]:::reviewing
+  reviewing -->|both pass| ok[ai-ok-code + ai-ok-sec]:::ok
+  ok -->|CI green, mergeable| mr[merge-ready ± ai-notes<br/>assigned to you]:::mr
+  mr --> you([YOU merge]):::you
+  reviewing -->|defect| changes[ai-changes]:::changes
+  ok -->|ci-red after one free rerun,<br/>or BLOCKED| changes
+  ok -->|DIRTY| conflicts[ai-conflicts]:::conflicts
+  changes --> fixing[ai-fixing<br/>max 2 rounds]:::fixing
+  conflicts -->|merge main in, free| fixing
+  fixing -->|push| review
+  fixing -->|round 3| blocked([ai-blocked<br/>needs a human]):::blocked
+  wip -.->|stuck| blocked
+  reviewing -.->|follow-up filed| sugg([ai-suggested<br/>triage queue]):::sugg
+
+  classDef ready fill:#0e8a16,stroke:#0e8a16,color:#fff
+  classDef wip fill:#fbca04,stroke:#fbca04,color:#1f2328
+  classDef review fill:#1d76db,stroke:#1d76db,color:#fff
+  classDef reviewing fill:#c5def5,stroke:#c5def5,color:#1f2328
+  classDef ok fill:#0e8a16,stroke:#0e8a16,color:#fff
+  classDef mr fill:#8250df,stroke:#8250df,color:#fff
+  classDef you fill:#db2777,stroke:#db2777,color:#fff
+  classDef changes fill:#d93f0b,stroke:#d93f0b,color:#fff
+  classDef conflicts fill:#e99695,stroke:#e99695,color:#1f2328
+  classDef fixing fill:#006b75,stroke:#006b75,color:#fff
+  classDef blocked fill:#b60205,stroke:#b60205,color:#fff
+  classDef sugg fill:#c2e0c6,stroke:#c2e0c6,color:#1f2328
 ```
-issue: ai-ready ─pickup─> ai-wip ─> PR opened, labelled ai-review
-PR: ai-review ─> ai-reviewing-* ─┬─> ai-ok-code + ai-ok-sec ─> merge-ready, assigned to you ─> YOU merge
-                                 │        (± ai-notes)          (issue PRs and Dependabot PRs alike)
-                                 ├─> ai-changes ─> ai-fixing (max 2) ─> ai-review
-                                 │   ▲                       └─ round 3 ─> ai-blocked
-                                 │   └─ Pass 1 sends back: ci-red (after one free rerun), or BLOCKED
-                                 └─> ai-conflicts ─> ai-fixing (merge, free) ─> ai-review
-                                     ▲
-                                     └─ Pass 1 sends back: DIRTY
-dependabot PR, red or DIRTY ─> @dependabot recreate (never a fixer; verdicts dropped)
-```
+
+A red or `DIRTY` Dependabot PR never gets a fixer: the loop comments `@dependabot recreate` and drops its verdicts.
 
 A Dependabot PR joins the loop only once something labels it `ai-review` — the
 scaffolded `dependabot-automerge.yml` should — and until then the loop never
@@ -590,7 +618,7 @@ reports the same.
 or labelling an issue `ai-ready`. It reuses the running schedule rather than
 adding a second one.
 
-<a id="wake-on-change"></a>
+<Link id="wake-on-change" />
 **Wake on change — the default driver (#156).** A tick is a full LLM turn, so
 ticking on a timer costs tokens even when nothing changed. `loop watch` polls without the LLM: every `pollSeconds` it computes
 the tick's work list and prints one line only when the actionable part changes:
