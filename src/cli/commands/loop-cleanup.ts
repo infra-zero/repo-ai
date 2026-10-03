@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import chalk from 'chalk'
 import { resolveDefaultBranch } from '../../base/default-branch.js'
@@ -62,11 +63,26 @@ export interface LoopCleanupOptions {
 async function findPr(
 	gh: GhExec,
 	heads: string[]
-): Promise<{ number: number; state: string } | null> {
+): Promise<{ number: number; state: string; closedAt?: string | null } | null> {
 	for (const head of heads) {
-		const r = await gh(['pr', 'list', '--head', head, '--state', 'all', '--json', 'number,state'])
+		const r = await gh([
+			'pr',
+			'list',
+			'--head',
+			head,
+			'--state',
+			'all',
+			'--json',
+			'number,state,closedAt',
+		])
 		if (!r.ok) continue
-		const [pr] = JSON.parse(r.stdout || '[]') as { number: number; state: string }[]
+		const prs = JSON.parse(r.stdout || '[]') as {
+			number: number
+			state: string
+			closedAt?: string | null
+		}[]
+		// A re-picked issue reuses the slug, so older closed PRs share the head.
+		const pr = prs.find((p) => p.state === 'OPEN') ?? prs[0]
 		if (pr) return pr
 	}
 	return null
@@ -107,6 +123,12 @@ export async function runLoopCleanup(options: LoopCleanupOptions = {}): Promise<
 
 		if (!pr || pr.state === 'OPEN') {
 			entry.reason = pr ? 'PR still open' : 'no PR'
+			continue
+		}
+		// The worktree was created after this PR closed: a re-pick of the same
+		// issue reusing the slug (#269). The PR belongs to an earlier attempt.
+		if (pr.closedAt && fs.statSync(dir).birthtimeMs > Date.parse(pr.closedAt)) {
+			entry.reason = `re-picked after #${pr.number} closed`
 			continue
 		}
 		if (pr.state === 'MERGED') {

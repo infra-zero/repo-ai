@@ -38,7 +38,7 @@ function squash(root: string, subject: string, branch = 'main') {
 	git(root, 'push', '-q', 'origin', branch)
 }
 
-function fakeGh(prs: Record<string, { number: number; state: string }>): GhExec {
+function fakeGh(prs: Record<string, { number: number; state: string; closedAt?: string }>): GhExec {
 	return async (args) => {
 		const head = args[args.indexOf('--head') + 1] as string
 		const pr = prs[head]
@@ -116,5 +116,20 @@ describe('runLoopCleanup', () => {
 		})
 		expect(result).toMatchObject({ removed: false, worktrees: [{ action: 'to-remove' }] })
 		expect(fs.existsSync(wt)).toBe(true)
+	})
+
+	it('keeps a worktree created after its PR closed, and prefers an open PR (#269)', async () => {
+		const root = checkout(newTmpDir())
+		const wt = `${root}-worktrees`
+		git(root, 'worktree', 'add', '-q', join(wt, 'ai-6-repick'), '-b', 'ai-6-repick')
+		git(root, 'worktree', 'add', '-q', join(wt, 'ai-7-open'), '-b', 'ai-7-open')
+		const gh: GhExec = async (args) => {
+			const head = args[args.indexOf('--head') + 1]
+			const old = { number: 20, state: 'CLOSED', closedAt: '2020-01-01T00:00:00Z' }
+			const prs = head === 'ai-7-open' ? [old, { number: 21, state: 'OPEN' }] : [old]
+			return { ok: true, stdout: JSON.stringify(prs), stderr: '' }
+		}
+		const result = await runLoopCleanup({ root, dryRun: true, gh })
+		expect(result.worktrees.map((w) => w.action)).toEqual(['kept', 'kept'])
 	})
 })
