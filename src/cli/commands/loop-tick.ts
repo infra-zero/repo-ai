@@ -81,6 +81,8 @@ export interface SendBack {
 	label: 'ai-changes' | 'ai-conflicts'
 	/** Failing required checks, for the comment. */
 	failing: { name: string; link: string }[]
+	/** Required contexts that never reported on the head, e.g. a job the diff removed or renamed (#268). Absent when none. */
+	missing?: string[]
 }
 
 export interface RerunFailed {
@@ -211,7 +213,7 @@ interface Pr {
 	autoMergeRequest: unknown
 	author: { login: string } | null
 	body: string | null
-	statusCheckRollup?: { conclusion?: string | null }[] | null
+	statusCheckRollup?: { conclusion?: string | null; name?: string; context?: string }[] | null
 	comments?: { body: string; createdAt?: string }[]
 }
 
@@ -666,6 +668,19 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 			} else if (isDep && SEND_BACK_STATES.has(s)) {
 				recreate()
 			} else if (SEND_BACK_STATES.has(s)) {
+				// A required check that never runs leaves a green PR BLOCKED with no reason given (#268).
+				// The bot can read this branch endpoint; `/protection` 404s for it.
+				const missing: string[] = []
+				if (s === 'BLOCKED') {
+					const base = await json<{
+						protection?: { required_status_checks?: { contexts?: string[] } }
+					}>(['api', `repos/${ownerRepo}/branches/${pr.baseRefName}`])
+					const seen = new Set(
+						(pr.statusCheckRollup ?? []).map((c) => c.name ?? c.context).filter(Boolean)
+					)
+					for (const c of base?.protection?.required_status_checks?.contexts ?? [])
+						if (!seen.has(c)) missing.push(c)
+				}
 				result.sendBacks.push({
 					pr: pr.number,
 					issue,
@@ -673,6 +688,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 					// DIRTY wants the default branch merged in, not a fix — it costs no review round (#176).
 					label: s === 'DIRTY' ? 'ai-conflicts' : 'ai-changes',
 					failing: [],
+					...(missing.length > 0 && { missing }),
 				})
 			} else if (s !== 'UNKNOWN' && has('merge-ready')) {
 				result.stripMergeReady.push(pr.number)
