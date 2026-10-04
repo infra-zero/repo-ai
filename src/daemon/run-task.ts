@@ -2,12 +2,14 @@ import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 
 /**
- * One agent task in a Docker worker (#281): headless Claude Code in the
- * task's worktree. `stream-json` gives a line per event, so the dashboard can
- * show what the agent is doing while it runs and what it cost when it ends.
+ * One agent task in a Docker worker (#281): a headless agent CLI in the
+ * task's worktree. Each runner (#294) streams one JSON line per event, so the
+ * dashboard can show what the agent is doing while it runs and what it cost
+ * when it ends.
  *
- * `bypassPermissions` is safe only because the worker container is the
- * sandbox: no host mounts, non-root, a repo-scoped one-hour App token.
+ * Every runner skips its approval prompts. That is safe only because the
+ * worker container is the sandbox: no host mounts, non-root, a repo-scoped
+ * one-hour App token.
  */
 
 export interface TaskRun {
@@ -22,7 +24,9 @@ export interface TaskRun {
 	tools?: string[]
 	/** One short line per agent step, for the dashboard. */
 	onProgress?: (line: string) => void
-	/** Test seam: the executable and its leading args. */
+	/** Which agent CLI runs the task. Default: Claude Code. */
+	runner?: Runner
+	/** Test seam: the executable and its leading args, in place of the runner's. */
 	command?: [string, ...string[]]
 }
 
@@ -36,7 +40,19 @@ export interface TaskResult {
 	error?: string
 }
 
-/** What the dashboard shows for one stream-json event, or null to skip it. */
+/** One dashboard line for a tool call: its name and the first line of its main argument. */
+function step(name: unknown, input?: Record<string, unknown>): string {
+	const arg =
+		input?.command ??
+		input?.file_path ??
+		input?.absolute_path ??
+		input?.path ??
+		input?.pattern ??
+		''
+	return `${name}${arg ? ` ${String(arg).split('\n', 1)[0]?.slice(0, 120)}` : ''}`
+}
+
+/** What the dashboard shows for one Claude stream-json event, or null to skip it. */
 export function describeEvent(ev: unknown): string | null {
 	const e = ev as {
 		type?: string
@@ -46,15 +62,136 @@ export function describeEvent(ev: unknown): string | null {
 	}
 	if (e.type !== 'assistant') return null
 	for (const c of e.message?.content ?? []) {
-		if (c.type === 'tool_use') {
-			const arg = c.input?.command ?? c.input?.file_path ?? c.input?.pattern ?? ''
-			return `${c.name}${arg ? ` ${String(arg).split('\n', 1)[0]?.slice(0, 120)}` : ''}`
-		}
+		if (c.type === 'tool_use') return step(c.name, c.input)
 	}
 	return null
 }
 
-const MODEL_KEYS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY']
+/** The run's outcome so far, which a runner fills in as its events arrive. */
+export interface RunOptions {
+	model?: string
+	tools?: string[]
+}
+
+type Outcome = Partial<Pick<TaskResult, 'ok' | 'result' | 'costUsd' | 'outputTokens' | 'error'>>
+
+/**
+ * An agent CLI (#294): how to invoke it headless, which env vars carry its
+ * credential, and how its JSON-lines output maps to progress and usage.
+ * Prompts stay runner-neutral: markdown ending in a `PR:` / `VERDICT:` /
+ * `PUSHED:` trailer, which `result` must carry.
+ */
+export interface Runner {
+	bin: string
+	/** `model` and `tools` come from the worker's profile (#295). */
+	args: (prompt: string, o: RunOptions) => string[]
+	/** It can confine the agent to `tools`; a runner that cannot refuses a task that sets them. */
+	allowlist: boolean
+	/** Any one of these set means the worker can run tasks. */
+	auth: string[]
+	/** Fold one event into `out`; return a progress line, or null. */
+	event: (ev: Record<string, unknown>, out: Outcome) => string | null
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: event payloads are untyped JSON
+type Json = any
+
+export const runners = {
+	/** `claude -p`: one `result` event at the end carries everything. */
+	claude: {
+		bin: 'claude',
+		args: (prompt, o) => [
+			'-p',
+			prompt,
+			'--output-format',
+			'stream-json',
+			'--verbose',
+			...(o.model ? ['--model', o.model] : []),
+			// An allowlist needs `dontAsk`: under `bypassPermissions` every tool is already allowed.
+			...(o.tools?.length
+				? ['--permission-mode', 'dontAsk', '--allowedTools', o.tools.join(',')]
+				: ['--permission-mode', 'bypassPermissions']),
+		],
+		allowlist: true,
+		auth: ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'],
+		event: (ev: Json, out) => {
+			if (ev.type !== 'result') return describeEvent(ev)
+			out.ok = ev.is_error !== true
+			out.result = String(ev.result ?? '')
+			out.costUsd = Number(ev.total_cost_usd ?? 0)
+			out.outputTokens = Number(ev.usage?.output_tokens ?? 0)
+			return null
+		},
+	},
+	/** `codex exec --json`: items as they start and finish; usage on `turn.completed`, no cost. */
+	codex: {
+		bin: 'codex',
+		args: (prompt, o) => [
+			'exec',
+			'--json',
+			...(o.model ? ['--model', o.model] : []),
+			'--dangerously-bypass-approvals-and-sandbox',
+			'--skip-git-repo-check',
+			'--',
+			prompt,
+		],
+		allowlist: false,
+		auth: ['CODEX_API_KEY', 'OPENAI_API_KEY'],
+		event: (ev: Json, out) => {
+			const item = ev.item ?? {}
+			if (ev.type === 'item.started' && item.type === 'command_execution') return step('Bash', item)
+			if (ev.type === 'item.completed') {
+				if (item.type === 'agent_message') out.result = String(item.text ?? '')
+				if (item.type === 'file_change') return step('Edit', item.changes?.[0])
+				if (item.type === 'mcp_tool_call') return `${item.server}.${item.tool}`
+				if (item.type === 'web_search') return step('WebSearch', { command: item.query })
+			}
+			if (ev.type === 'turn.completed') {
+				out.ok ??= true
+				out.outputTokens = (out.outputTokens ?? 0) + Number(ev.usage?.output_tokens ?? 0)
+			}
+			if (ev.type === 'turn.failed' || ev.type === 'error') {
+				out.ok = false
+				out.error = String(ev.error?.message ?? ev.message ?? 'codex failed')
+			}
+			return null
+		},
+	},
+	/** `gemini --output-format stream-json`: streamed message deltas; token stats on `result`, no cost. */
+	gemini: {
+		bin: 'gemini',
+		args: (prompt, o) => [
+			'-p',
+			prompt,
+			'--output-format',
+			'stream-json',
+			'--yolo',
+			...(o.model ? ['--model', o.model] : []),
+		],
+		allowlist: false,
+		auth: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
+		event: (ev: Json, out) => {
+			if (ev.type === 'message' && ev.role === 'assistant')
+				out.result = (ev.delta ? (out.result ?? '') : '') + String(ev.content ?? '')
+			if (ev.type === 'tool_use') {
+				// The trailer is in the reply after the last tool call, as with Claude's `result`.
+				out.result = ''
+				return step(ev.tool_name, ev.parameters)
+			}
+			if (ev.type === 'result') {
+				out.ok = ev.status === 'success'
+				out.outputTokens = Number(ev.stats?.output_tokens ?? 0)
+				if (ev.status !== 'success') out.error = String(ev.error?.message ?? 'gemini failed')
+			}
+			return null
+		},
+	},
+} satisfies Record<string, Runner>
+
+export type RunnerName = keyof typeof runners
+
+/** Every runner's credential names: a task that brings one replaces all of the worker's (#295). */
+const MODEL_KEYS: string[] = Object.values(runners).flatMap((r) => r.auth)
 
 /**
  * The worker's environment minus what the agent must never read: the
@@ -88,20 +225,19 @@ export function agentIdentity(
 }
 
 export function runTask(t: TaskRun): Promise<TaskResult> {
-	const [bin, ...lead] = t.command ?? ['claude']
-	const args = [
-		...lead,
-		'-p',
-		t.prompt,
-		'--output-format',
-		'stream-json',
-		'--verbose',
-		...(t.model ? ['--model', t.model] : []),
-		// An allowlist needs `dontAsk`: under `bypassPermissions` every tool is already allowed.
-		...(t.tools?.length
-			? ['--permission-mode', 'dontAsk', '--allowedTools', t.tools.join(',')]
-			: ['--permission-mode', 'bypassPermissions']),
-	]
+	const runner: Runner = t.runner ?? runners.claude
+	const [bin, ...lead] = t.command ?? [runner.bin]
+	const args = [...lead, ...runner.args(t.prompt, { model: t.model, tools: t.tools })]
+	// Fail closed: a profile's tool allowlist that the runner cannot enforce must not run unconfined.
+	if (t.tools?.length && !runner.allowlist)
+		return Promise.resolve({
+			ok: false,
+			result: '',
+			costUsd: 0,
+			outputTokens: 0,
+			durationMs: 0,
+			error: `${runner.bin} cannot enforce a tool allowlist; clear the profile's tools or use claude`,
+		})
 	const started = Date.now()
 	return new Promise((resolve) => {
 		const id = agentIdentity()
@@ -111,7 +247,7 @@ export function runTask(t: TaskRun): Promise<TaskResult> {
 			...(id && { uid: id.uid, gid: id.gid }),
 			stdio: ['ignore', 'pipe', 'pipe'],
 		})
-		let final: Partial<TaskResult> | null = null
+		const out: Outcome = {}
 		let stderr = ''
 		let timedOut = false
 		const timer = setTimeout(() => {
@@ -130,34 +266,25 @@ export function runTask(t: TaskRun): Promise<TaskResult> {
 			} catch {
 				return
 			}
-			if (ev.type === 'result') {
-				final = {
-					ok: ev.is_error !== true,
-					result: String(ev.result ?? ''),
-					costUsd: Number(ev.total_cost_usd ?? 0),
-					outputTokens: Number((ev.usage as { output_tokens?: number })?.output_tokens ?? 0),
-				}
-				return
-			}
-			const step = describeEvent(ev)
-			if (step) t.onProgress?.(step)
+			const progress = runner.event(ev, out)
+			if (progress) t.onProgress?.(progress)
 		})
 		const finish = (error?: string) => {
 			clearTimeout(timer)
-			const f: Partial<TaskResult> = final ?? {}
+			const err = error ?? out.error
 			resolve({
-				ok: !error && f.ok === true,
-				result: f.result ?? '',
-				costUsd: f.costUsd ?? 0,
-				outputTokens: f.outputTokens ?? 0,
+				ok: !err && out.ok === true,
+				result: out.result ?? '',
+				costUsd: out.costUsd ?? 0,
+				outputTokens: out.outputTokens ?? 0,
 				durationMs: Date.now() - started,
-				...(error ? { error } : {}),
+				...(err ? { error: err } : {}),
 			})
 		}
 		child.on('error', (err) => finish(`could not start ${bin}: ${err.message}`))
 		child.on('close', (code) => {
 			if (timedOut) return finish(`timed out after ${Math.round(t.timeoutMs / 60000)}m`)
-			if (code !== 0 && !final)
+			if (code !== 0 && out.ok === undefined)
 				return finish(`exited ${code}: ${stderr.trim().split('\n').at(-1) ?? ''}`)
 			finish()
 		})
