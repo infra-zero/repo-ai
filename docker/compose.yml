@@ -16,8 +16,10 @@ x-worker: &worker
   env_file: .env
   environment:
     REPO_AI_DASHBOARD_URL: http://dashboard:8080
-  # Workers never see the App key: the dashboard hands each task a one-hour token.
-  volumes: [repos:/repos]
+  # Workers never see the App key (the dashboard hands each task a one-hour
+  # token) and never mount the dashboard's clones: each task clones fresh into
+  # the worker's own /work, so an agent cannot plant git config or hooks that
+  # the dashboard's git would run beside the key.
   depends_on:
     dashboard: { condition: service_healthy }
   restart: unless-stopped
