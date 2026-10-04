@@ -9,7 +9,7 @@ description: Run the loop around the clock in Docker on your Mac — a dashboard
 
 - **dashboard** at `http://localhost:8080`, a TanStack Start app. It's where you add repos, assign agents, and watch the boards.
 - **api**, the only process that ticks. It reads the labels, applies `loop apply`, and queues the work. It isn't published to your Mac; the dashboard talks to it over the compose network.
-- **worker-1, worker-2, …**, one container per agent. Each one takes a task from the api, runs it with headless Claude Code, and reports back.
+- **worker-1, worker-2, …**, one container per agent. Each one takes a task from the api, runs it with a headless agent CLI (Claude Code by default, or Codex or Gemini), and reports back.
 
 The loop works the way it does in a terminal: GitHub labels hold all the state, two agents review every PR, and you merge by hand. It authenticates as a **GitHub App**, so there's no second account and no switching gh profiles.
 
@@ -44,7 +44,7 @@ claude setup-token     # paste as CLAUDE_CODE_OAUTH_TOKEN (or set ANTHROPIC_API_
 Fill in `docker/.env`. Both files are gitignored. On a Linux host, make the key readable by the containers' `node` user (uid 1000), for example with `chmod 644 docker/github-app.pem`. Docker Desktop on a Mac needs nothing. Each container gets only what it uses:
 
 - **api:** the App id and key (as a compose secret).
-- **workers:** the Claude credential. Workers never see the App key: each task arrives with a one-hour token scoped to its repo.
+- **workers:** the agent's credential. Workers never see the App key: each task arrives with a one-hour token scoped to its repo.
 - **dashboard:** neither.
 
 All three share `REPO_AI_WORKER_SECRET`.
@@ -74,10 +74,29 @@ Loop limits (`maxInFlight`, `maxFixRounds`, and so on) still come from each repo
 
 Copy a `worker-N` block in `docker/compose.yml`, bump the number, and run `docker compose … up -d`. The new worker shows up on the dashboard as `any`, ready to be assigned a role.
 
+## Other agent CLIs
+
+A worker runs Claude Code unless its block names another runner:
+
+```yaml
+  worker-3:
+    <<: *worker
+    hostname: worker-3
+    command: ["worker", "--runner", "codex"]   # or "gemini"
+```
+
+| Runner | CLI | Credential in `docker/.env` | Cost on the dashboard |
+|---|---|---|---|
+| `claude` | `claude -p` | `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` | yes |
+| `codex` | `codex exec --json` | `CODEX_API_KEY` | tokens only |
+| `gemini` | `gemini -p` | `GEMINI_API_KEY` | tokens only |
+
+The image installs all three. The prompts are the same for every runner.
+
 ## What it can and cannot do
 
 - **It never merges.** You do, as in the terminal loop.
-- **Agents run with `bypassPermissions`, but only inside their container.** The container has no host mounts besides its volumes, runs as a non-root user, and holds a token for one repo that expires after an hour.
+- **Agents run with their approval prompts off (`bypassPermissions`, `--dangerously-bypass-approvals-and-sandbox`, `--yolo`), but only inside their container.** The container has no host mounts besides its volumes, runs as a non-root user, and holds a token for one repo that expires after an hour.
   - A prompt-injected agent could push to branches and comment.
   - It cannot merge past your required checks or publish anything.
 - **The dashboard listens on `127.0.0.1` only, and answers only loopback `Host` headers.**

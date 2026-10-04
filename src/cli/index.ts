@@ -86,11 +86,16 @@ program
 program
 	.command('worker')
 	.description(
-		'🤖 A Docker agent worker: pull tasks from the dashboard and run them with Claude Code'
+		'🤖 A Docker agent worker: pull tasks from the dashboard and run them with an agent CLI'
 	)
 	.option('--url <url>', 'The dashboard', process.env.REPO_AI_DASHBOARD_URL ?? 'http://api:8080')
 	.option('--id <id>', 'Worker id (default: the hostname)')
 	.option('--work <dir>', 'Where each task gets its own fresh clone', '/work')
+	.option(
+		'--runner <name>',
+		'The agent CLI: claude, codex or gemini',
+		process.env.REPO_AI_RUNNER ?? 'claude'
+	)
 	.action(workerCommand)
 
 const loop = program.command('loop').description('🔁 ai-loop mechanics as tested commands')

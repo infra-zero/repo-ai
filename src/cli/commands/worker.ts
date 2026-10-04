@@ -7,6 +7,8 @@ import type { Task } from '../../daemon/queue.js'
 import {
 	agentEnv,
 	agentIdentity,
+	type RunnerName,
+	runners,
 	runTask,
 	type TaskResult,
 	trailer,
@@ -14,7 +16,7 @@ import {
 
 /**
  * `repo-ai worker` (#283): one agent container's loop — pull a task from
- * the dashboard, run it with headless Claude Code, report back. Stateless:
+ * the dashboard, run it with a headless agent CLI (`--runner`, #294), report back. Stateless:
  * the dashboard holds the queue and GitHub holds the state, so a worker can
  * be restarted or killed at any point.
  *
@@ -29,6 +31,8 @@ export interface WorkerOptions {
 	id?: string
 	/** Where each task's clone goes. */
 	work?: string
+	/** The agent CLI: claude (default), codex or gemini. */
+	runner?: string
 	/** Test seams. */
 	run?: typeof runTask
 	prepare?: typeof prepareCheckout
@@ -106,7 +110,12 @@ export async function prepareCheckout(
 export async function workerCommand(o: WorkerOptions): Promise<void> {
 	const id = o.id ?? os.hostname()
 	const secret = process.env.REPO_AI_WORKER_SECRET ?? ''
-	const claudeAuth = !!(process.env.CLAUDE_CODE_OAUTH_TOKEN || process.env.ANTHROPIC_API_KEY)
+	const runnerName = o.runner ?? 'claude'
+	if (!Object.hasOwn(runners, runnerName))
+		throw new Error(`unknown runner ${runnerName}: use ${Object.keys(runners).join(', ')}`)
+	const runner = runners[runnerName as RunnerName]
+	// ponytail: the heartbeat keeps the `claudeAuth` name for any runner's credential; rename with the api.
+	const claudeAuth = runner.auth.some((k) => !!process.env[k])
 	const f = o.fetch ?? fetch
 	const sleep = o.sleep ?? ((ms: number) => delay(ms))
 	const run = o.run ?? runTask
@@ -121,9 +130,8 @@ export async function workerCommand(o: WorkerOptions): Promise<void> {
 
 	if (!secret)
 		console.error('⚠ REPO_AI_WORKER_SECRET is unset: the dashboard will refuse this worker')
-	if (!claudeAuth)
-		console.error('⚠ no CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY: tasks will fail')
-	console.error(`worker ${id} → ${o.url}`)
+	if (!claudeAuth) console.error(`⚠ no ${runner.auth.join(' or ')}: tasks will fail`)
+	console.error(`worker ${id} (${runnerName}) → ${o.url}`)
 
 	for (let turn = 0; o.turns === undefined || turn < o.turns; turn++) {
 		try {
@@ -160,6 +168,7 @@ export async function workerCommand(o: WorkerOptions): Promise<void> {
 				const cwd = await prepare(task, dir, { ...agentEnv(process.env, taskEnv), ...taskEnv })
 				r = await run({
 					prompt: task.prompt,
+					runner,
 					cwd,
 					env: taskEnv,
 					model: profile?.model,
