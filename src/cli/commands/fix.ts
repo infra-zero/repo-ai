@@ -4,6 +4,7 @@ import chalk from 'chalk'
 import inquirer from 'inquirer'
 import { fixSandboxExcludes } from '../../base/allow-rules.js'
 import { setupAgentIdentity } from '../../base/ai-loop-identity.js'
+import { installClaudePlugin } from '../../base/claude-plugin.js'
 import { writeConfigSchema } from '../../base/config-schema.js'
 import { FixerAbort } from '../../base/fixer-abort.js'
 import { applyLoopLabels } from '../../base/labels.js'
@@ -66,6 +67,11 @@ export const FIXERS = {
 		description:
 			'Install the loop status segment to ~/.claude/ai-loop-statusline.sh; set it as the statusline only when none is configured',
 		run: () => installStatusline(os.homedir()),
+	},
+	'claude-plugin': {
+		description:
+			'Install the /ai-loop-dash pane plugin to ~/.claude/repo-ai-plugin and add it to CLAUDE_CODE_PLUGIN_DIRS in ~/.claude/settings.json',
+		run: () => installClaudePlugin(os.homedir()),
 	},
 	sandbox: {
 		description:
