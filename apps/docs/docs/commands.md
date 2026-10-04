@@ -54,3 +54,15 @@ The skills call these; you rarely need them directly.
 | `/ai-issue` | File an issue labelled `ai-ready` for the loop to pick up. |
 | `/ai-loop-status` | Read-only: what the loop is doing, and what is blocked. |
 | `/ai-loop-stop` | Stop this repo's loop in this session: its recurring job and `loop watch` watcher. Lists in-flight claims; never removes them. |
+
+## Live pane in Claude Code
+
+`loop dash` also comes as a Claude Code pane. The package ships a plugin in `claude-plugin/`. Load it for a session with `--plugin-dir`:
+
+```sh
+claude --plugin-dir node_modules/@rtorcato/repo-ai/claude-plugin
+```
+
+Then type `/ai-loop-dash` to open the `ai-loop` pane. It never opens unless you ask. Once open, it runs `repo-ai loop dash --json` (via `npx --no`, so the repo's own install) every `pollSeconds` from `.repo-ai.json` (180 by default, 60 at least) and draws the same sections as `loop dash`. The JSON carries no issue bodies, so the pane cannot show one. Polling continues until the session ends.
+
+To load it in every session, add the absolute path to `CLAUDE_CODE_PLUGIN_DIRS` in the `env` block of `~/.claude/settings.json`.
