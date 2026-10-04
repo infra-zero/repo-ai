@@ -75,6 +75,13 @@ export function AgentSheet({
 		tools: a.tools?.map((t) => t.trim()).filter(Boolean),
 	})
 	const names = [...new Set([...view.credentials, ...(d.credentials ?? [])])].sort()
+	const models = view.config.models
+	const m = models?.[d.runner ?? 'claude']
+	// Account labels from the Models section (#306), across runners.
+	const account = (c: string) =>
+		Object.values(models ?? {})
+			.flatMap((x) => x?.accounts ?? [])
+			.find((a) => a.credential === c)?.name
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
 			<SheetContent className="overflow-y-auto sm:max-w-md">
@@ -133,17 +140,30 @@ export function AgentSheet({
 							</Select>
 						</Field>
 						<Field label="Runner">
-							<Select value={d.runner ?? 'claude'} onChange={() => set({ runner: 'claude' })}>
-								<option value="claude">Claude Code</option>
+							<Select
+								value={d.runner ?? 'claude'}
+								onChange={(e) => set({ runner: e.target.value as Agent['runner'] })}
+							>
+								{view.runners.map((r) => (
+									<option key={r.name} value={r.name}>
+										{r.name}
+									</option>
+								))}
 							</Select>
 						</Field>
 						<Field label="Model">
 							<Input
-								placeholder="default"
+								placeholder={m?.defaultModel ?? 'default'}
+								list="agent-models"
 								value={d.model ?? ''}
 								onChange={(e) => set({ model: e.target.value })}
 								className="w-36 font-mono"
 							/>
+							<datalist id="agent-models">
+								{m?.models?.map((x) => (
+									<option key={x} value={x} />
+								))}
+							</datalist>
 						</Field>
 					</div>
 					<Field group label="Repos (none checked: every repo)">
@@ -182,6 +202,9 @@ export function AgentSheet({
 										}
 									/>
 									{c}
+									{account(c) && (
+										<span className="font-sans text-muted-foreground">({account(c)})</span>
+									)}
 									{!view.credentials.includes(c) && <span className="text-red-500">(missing)</span>}
 								</label>
 							))}

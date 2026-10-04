@@ -98,7 +98,7 @@ describe('workerCommand', () => {
 		})
 		// The clone is gone once the task is reported.
 		expect(existsSync(join(work, '0b9d2f3e-1c4a-4e5b-9a6d-7f8e9a0b1c2d'))).toBe(false)
-		expect(calls[0]?.body).toEqual({ claudeAuth: false, busy: false })
+		expect(calls[0]?.body).toEqual({ claudeAuth: false, busy: false, runner: 'claude' })
 		expect(calls.map((c) => c.path)).toEqual([
 			'/api/workers/worker-1/heartbeat',
 			'/api/workers/worker-1/next',

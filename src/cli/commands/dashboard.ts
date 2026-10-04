@@ -7,6 +7,9 @@ import {
 	credentialEnv,
 	type AgentSettings,
 	type DaemonConfig,
+	MCP_CREDENTIAL,
+	mcpEnv,
+	mcpFor,
 	limitsFor,
 	pollSecondsFor,
 	presentCredentials,
@@ -16,6 +19,7 @@ import {
 } from '../../daemon/config.js'
 import { HISTORY_MAX, parseHistory, type TaskRecord, toRecord } from '../../daemon/history.js'
 import { Queue, type Task } from '../../daemon/queue.js'
+import { type RunnerName, runners } from '../../daemon/run-task.js'
 import { type LoopEvent, type RepoState, tickRepo } from '../../daemon/scheduler.js'
 import type { DashboardView } from '../../daemon/view.js'
 
@@ -119,6 +123,13 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 			app: !!creds,
 			workerSecret: !!secret,
 			credentials: presentCredentials(),
+			mcpCredentials: presentCredentials(process.env, MCP_CREDENTIAL),
+			runners: Object.entries(runners).map(([name, r]) => ({
+				name,
+				auth: r.auth,
+				allowlist: r.allowlist,
+				mcp: r.mcp,
+			})),
 			repos: config.repos.map((r) => ({
 				...r,
 				state: states.get(r.repo) ?? null,
@@ -161,6 +172,11 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 				return send(res, 401, { error: 'worker secret missing or wrong' })
 			const id = parts[2] ?? ''
 			const body = (await readJson(req)) as Record<string, unknown>
+			// Own keys only; an unknown runner is claude, the worker's default.
+			const runner: RunnerName =
+				typeof body.runner === 'string' && Object.hasOwn(runners, body.runner)
+					? (body.runner as RunnerName)
+					: 'claude'
 			// An unbound slot reports as `any`, but `next` hands it nothing (#307).
 			const assign = (w: string) => agentOn(w) ?? { role: 'any' as const, repos: [] }
 			if (parts[1] === 'workers' && parts[3] === 'heartbeat') {
@@ -170,6 +186,7 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 					body.claudeAuth === true,
 					typeof body.busy === 'boolean' ? body.busy : undefined
 				)
+				if (body.runner) w.runner = runner
 				const a = agentOn(id)
 				return send(res, 200, {
 					role: w.role,
@@ -188,9 +205,21 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 				t.agent = p.id
 				try {
 					// The task gets only the credentials its agent's profile names (#295).
-					const env = { ...credentialEnv(p.credentials), ...(await mint(t.repo)) }
+					// Unset on the profile: the runner's defaults from the Models section (#306).
+					const m = config.models?.[runner]
+					const mcp = mcpFor(config, runner, p.id)
+					const env = {
+						...credentialEnv(p.credentials),
+						...mcpEnv(mcp),
+						...(await mint(t.repo)),
+					}
 					event({ repo: t.repo, number: t.number, what: `${t.label} → ${id}` })
-					return send(res, 200, { task: t, env, run: { model: p.model, tools: p.tools } })
+					const run = {
+						model: p.model ?? m?.defaultModel,
+						tools: p.tools ?? m?.tools,
+						...(mcp.length && { mcp }),
+					}
+					return send(res, 200, { task: t, env, run })
 				} catch (err) {
 					queue.done(t.id, {
 						ok: false,

@@ -66,6 +66,8 @@ Under **Setup**:
 - Optionally limit a worker to some repos.
 - Tick **Dependabot → review** to have new Dependabot PRs labelled `ai-review` and reviewed like any other PR.
 
+Under **Models**, each runner (Claude Code, Codex, Gemini) shows which credential names it needs and which the api and workers have — names only, never values. There you set its available models and default, its default tool allowlist, account labels for its credentials, and the MCP servers its agents may use: the command (or URL) you enter is the only one that ever runs, a server reads only `MCP_*` credentials from the api's env, and you tick which agents may use it. An agent profile's model and tools override the runner's defaults.
+
 Then label an issue `ai-ready`. The board shows it move through the stages: implemented, then reviewed by two agents, then `merge-ready` and assigned to you.
 
 Loop limits (`maxInFlight`, `maxFixRounds`, and so on) still come from each repo's own `.repo-ai.json`.

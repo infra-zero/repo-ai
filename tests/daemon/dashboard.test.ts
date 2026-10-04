@@ -8,6 +8,8 @@ import { ciOf } from '../../src/daemon/board.js'
 import { commentText } from '../../src/daemon/comments.js'
 import {
 	credentialEnv,
+	mcpEnv,
+	mcpFor,
 	type DaemonConfig,
 	limitsFor,
 	pollSecondsFor,
@@ -241,6 +243,66 @@ describe('validateConfig', () => {
 		expect(cfg({ runner: 'sh' })).toMatch(/runner/)
 		expect(cfg({ color: 'red;' })).toMatch(/color/)
 		expect(cfg({ avatar: 'https://x' })).toMatch(/avatar/)
+	})
+})
+
+describe('models section (#306)', () => {
+	const cfg = (models: unknown) => validateConfig({ repos: [], models })
+	const gh = {
+		name: 'github',
+		command: 'npx',
+		args: ['-y', '@modelcontextprotocol/server-github'],
+		env: ['MCP_GITHUB_TOKEN'],
+		enabled: true,
+		agents: ['w1'],
+	}
+
+	it('validates each runner entry as untrusted input', () => {
+		const ok = cfg({
+			claude: {
+				models: ['sonnet', 'opus'],
+				defaultModel: 'sonnet',
+				tools: ['Read'],
+				notes: 'no network',
+				accounts: [{ name: 'Team', credential: 'ANTHROPIC_API_KEY_TEAM' }],
+				mcp: [gh, { name: 'docs', url: 'https://mcp.example.com/sse', enabled: false, agents: [] }],
+			},
+			codex: { accounts: [{ name: 'Work', credential: 'OPENAI_API_KEY_WORK' }] },
+		})
+		expect(ok).toMatchObject({ models: { claude: { defaultModel: 'sonnet', mcp: [gh, {}] } } })
+		expect(cfg({ sh: {} })).toMatch(/not a runner/)
+		expect(cfg({ codex: { tools: ['Read'] } })).toMatch(/cannot enforce/)
+		expect(cfg({ gemini: { mcp: [gh] } })).toMatch(/cannot take MCP/)
+		expect(cfg({ claude: { accounts: [{ name: 'x', credential: 'OPENAI_API_KEY' }] } })).toMatch(
+			/not a claude credential/
+		)
+		const mcp = (s: Record<string, unknown>) => cfg({ claude: { mcp: [{ ...gh, ...s }] } })
+		// The command is an executable, never a shell line or a flag.
+		expect(mcp({ command: 'sh -c "curl x | sh"' })).toMatch(/not a command/)
+		expect(mcp({ command: '--help' })).toMatch(/not a command/)
+		expect(mcp({ url: 'https://x' })).toMatch(/command or a URL/)
+		expect(mcp({ command: undefined, url: 'file:///etc/passwd' })).toMatch(/http/)
+		// An MCP server can never be handed a worker, App or model secret.
+		expect(mcp({ env: ['REPO_AI_WORKER_SECRET'] })).toMatch(/MCP_/)
+		expect(mcp({ env: ['ANTHROPIC_API_KEY'] })).toMatch(/MCP_/)
+		expect(mcp({ agents: ['../x'] })).toMatch(/agent id/)
+		expect(cfg({ claude: { mcp: [gh, gh] } })).toMatch(/twice/)
+	})
+
+	it('hands a worker only the enabled servers it may use, with their credentials', () => {
+		const c = cfg({
+			claude: {
+				mcp: [gh, { ...gh, name: 'off', enabled: false }, { ...gh, name: 'other', agents: ['w2'] }],
+			},
+		})
+		if (typeof c === 'string') throw new Error(c)
+		expect(mcpFor(c, 'claude', 'w1').map((s) => s.name)).toEqual(['github'])
+		expect(mcpFor(c, 'codex', 'w1')).toEqual([])
+		const servers = mcpFor(c, 'claude', 'w1')
+		expect(mcpEnv(servers, { MCP_GITHUB_TOKEN: 't', OTHER: 'x' })).toEqual({
+			MCP_GITHUB_TOKEN: 't',
+		})
+		expect(() => mcpEnv(servers, {})).toThrow(/not set/)
 	})
 })
 
