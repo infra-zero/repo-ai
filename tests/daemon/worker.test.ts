@@ -56,6 +56,7 @@ describe('workerCommand', () => {
 							checkout: null,
 						},
 						env: { GH_TOKEN: 'ghs_x', REPO_AI_GH_LOGIN: 'loop[bot]' },
+						run: { model: 'sonnet', tools: ['Read'] },
 					}),
 					{ status: 200 }
 				)
@@ -86,6 +87,8 @@ describe('workerCommand', () => {
 			prompt: 'P',
 			cwd: join(work, '0b9d2f3e-1c4a-4e5b-9a6d-7f8e9a0b1c2d'),
 			env: { GH_TOKEN: 'ghs_x', REPO_AI_GH_LOGIN: 'loop[bot]', GH_REPO: 'o/r' },
+			model: 'sonnet',
+			tools: ['Read'],
 		})
 		// The clone is gone once the task is reported.
 		expect(existsSync(join(work, '0b9d2f3e-1c4a-4e5b-9a6d-7f8e9a0b1c2d'))).toBe(false)

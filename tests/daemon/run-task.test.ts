@@ -57,6 +57,21 @@ describe('runTask', () => {
 		expect(trailer(r.result, 'PR')).toBe('#12')
 	})
 
+	it('passes the profile model and turns a tool allowlist into dontAsk (#295)', async () => {
+		const dir = newTmpDir()
+		const file = join(dir, 'argv.mjs')
+		writeFileSync(
+			file,
+			'console.log(JSON.stringify({ type: "result", result: process.argv.slice(2).join(" ") }))'
+		)
+		const run = (o: { model?: string; tools?: string[] }) =>
+			runTask({ prompt: 'x', cwd: dir, timeoutMs: 10_000, command: [process.execPath, file], ...o })
+		const scoped = await run({ model: 'sonnet', tools: ['Read', 'Bash(git *)'] })
+		expect(scoped.result).toContain('--model sonnet')
+		expect(scoped.result).toContain('--permission-mode dontAsk --allowedTools Read,Bash(git *)')
+		expect((await run({})).result).toMatch(/--permission-mode bypassPermissions$/)
+	})
+
 	it('reports a crash without a result line', async () => {
 		const dir = newTmpDir()
 		const r = await runTask({
@@ -140,6 +155,15 @@ describe('agentEnv', () => {
 				GITHUB_APP_PRIVATE_KEY: 'k',
 			})
 		).toEqual({ PATH: '/bin', CLAUDE_CODE_OAUTH_TOKEN: 'c' })
+	})
+
+	it("drops every worker model credential when the task brings its profile's (#295)", () => {
+		expect(
+			agentEnv(
+				{ PATH: '/bin', CLAUDE_CODE_OAUTH_TOKEN: 'c', ANTHROPIC_API_KEY: 'a' },
+				{ ANTHROPIC_API_KEY: 'team' }
+			)
+		).toEqual({ PATH: '/bin' })
 	})
 })
 

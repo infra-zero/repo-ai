@@ -44,6 +44,12 @@ services:
       GITHUB_APP_ID: ${GITHUB_APP_ID:?set it in docker/.env}
       GITHUB_APP_PRIVATE_KEY_FILE: /run/secrets/github_app_key
       REPO_AI_WORKER_SECRET: ${REPO_AI_WORKER_SECRET:?set it in docker/.env}
+      # Model accounts a worker profile can name on the setup screen (#295).
+      # Only CLAUDE_CODE_OAUTH_TOKEN[_NAME] / ANTHROPIC_API_KEY[_NAME] can be
+      # named; the api hands a task just its profile's, and the dashboard shows
+      # only which names are set. Add one line per account, e.g.
+      #   ANTHROPIC_API_KEY_TEAM: ${ANTHROPIC_API_KEY_TEAM:-}
+      # A worker whose profile names none uses its own credential below.
     secrets: [github_app_key]
     volumes: [repos:/repos, data:/data]
     healthcheck:

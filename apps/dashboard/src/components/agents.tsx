@@ -47,6 +47,9 @@ export function Agents({ view }: { view: DashboardView }) {
 						<TableBody>
 							{view.workers.map((w) => {
 								const t = task(w.task)
+								const p = Object.hasOwn(view.config.workers, w.id)
+									? view.config.workers[w.id]
+									: undefined
 								return (
 									<TableRow key={w.id}>
 										<TableCell>
@@ -57,8 +60,15 @@ export function Agents({ view }: { view: DashboardView }) {
 														w.online ? 'bg-emerald-500' : 'bg-muted-foreground/40'
 													)}
 												/>
-												<span className="font-mono">{w.id}</span>
-												{w.claudeAuth === false && (
+												{p?.avatar && <span>{p.avatar}</span>}
+												<span style={p?.color ? { color: p.color } : undefined}>
+													{p?.name ?? <span className="font-mono">{w.id}</span>}
+												</span>
+												{p?.name && (
+													<span className="font-mono text-xs text-muted-foreground">{w.id}</span>
+												)}
+												{p?.model && <Badge variant="muted">{p.model}</Badge>}
+												{w.claudeAuth === false && !p?.credentials?.length && (
 													<Badge variant="danger">
 														<AlertTriangle className="size-3" />
 														no Claude credential

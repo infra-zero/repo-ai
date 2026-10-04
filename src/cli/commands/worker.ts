@@ -135,7 +135,15 @@ export async function workerCommand(o: WorkerOptions): Promise<void> {
 				await sleep(IDLE_MS)
 				continue
 			}
-			const { task, env } = (await res.json()) as { task: Task; env: Record<string, string> }
+			const {
+				task,
+				env,
+				run: profile,
+			} = (await res.json()) as {
+				task: Task
+				env: Record<string, string>
+				run?: { model?: string; tools?: string[] }
+			}
 			console.error(`→ ${task.repo} #${task.number} ${task.label}`)
 			const beat = setInterval(
 				() => void post(`/api/workers/${id}/heartbeat`, { claudeAuth, busy: true }).catch(() => {}),
@@ -149,11 +157,13 @@ export async function workerCommand(o: WorkerOptions): Promise<void> {
 			let r: TaskResult
 			try {
 				if (!safeId) throw new Error('task id is not a UUID')
-				const cwd = await prepare(task, dir, { ...agentEnv(process.env), ...taskEnv })
+				const cwd = await prepare(task, dir, { ...agentEnv(process.env, taskEnv), ...taskEnv })
 				r = await run({
 					prompt: task.prompt,
 					cwd,
 					env: taskEnv,
+					model: profile?.model,
+					tools: profile?.tools,
 					timeoutMs: TASK_TIMEOUT_MS,
 					onProgress: (line) =>
 						void post(`/api/tasks/${task.id}/progress`, { line }).catch(() => {}),

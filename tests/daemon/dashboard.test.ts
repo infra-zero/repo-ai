@@ -6,7 +6,7 @@ import { reviewOf, stageOf } from '../../src/base/stage.js'
 import { dashboardCommand, loopbackHost } from '../../src/cli/commands/dashboard.js'
 import { ciOf } from '../../src/daemon/board.js'
 import { commentText } from '../../src/daemon/comments.js'
-import { validateConfig } from '../../src/daemon/config.js'
+import { credentialEnv, presentCredentials, validateConfig } from '../../src/daemon/config.js'
 import { Queue } from '../../src/daemon/queue.js'
 import { useTmpDir } from '../helpers/tmp-dir.js'
 
@@ -140,6 +140,59 @@ describe('validateConfig', () => {
 				workers: { w: { role: 'any', repos: ['x/y', 'o/r'] } },
 			})
 		).toMatchObject({ workers: { w: { role: 'any', repos: ['o/r'] } } })
+	})
+
+	it('validates a worker profile as untrusted input (#295)', () => {
+		const cfg = (w: Record<string, unknown>) =>
+			validateConfig({ repos: [], workers: { w: { role: 'any', ...w } } })
+		expect(
+			cfg({
+				name: 'Ada',
+				color: '#ff8800',
+				avatar: '🦊',
+				runner: 'claude',
+				model: 'sonnet',
+				credentials: ['ANTHROPIC_API_KEY_TEAM'],
+				tools: ['Read', 'Bash(git *)', 'mcp__gh__issue'],
+			})
+		).toMatchObject({
+			workers: {
+				w: { name: 'Ada', model: 'sonnet', credentials: ['ANTHROPIC_API_KEY_TEAM'] },
+			},
+		})
+		// Blank fields drop out rather than being stored.
+		expect(cfg({ name: '', model: '', tools: [] })).toEqual({
+			pollSeconds: 180,
+			repos: [],
+			workers: { w: { role: 'any', repos: [] } },
+		})
+		// A profile can never name a secret that is not a model credential.
+		expect(cfg({ credentials: ['REPO_AI_WORKER_SECRET'] })).toMatch(/model credential/)
+		expect(cfg({ credentials: ['GITHUB_APP_PRIVATE_KEY_FILE'] })).toMatch(/model credential/)
+		expect(cfg({ credentials: ['ANTHROPIC_API_KEY_A', 'ANTHROPIC_API_KEY_B'] })).toMatch(
+			/at most one/
+		)
+		expect(cfg({ tools: ['--dangerously-skip-permissions'] })).toMatch(/tool rule/)
+		expect(cfg({ tools: ['Bash(a, b)'] })).toMatch(/tool rule/)
+		expect(cfg({ model: '--help' })).toMatch(/model/)
+		expect(cfg({ runner: 'sh' })).toMatch(/runner/)
+		expect(cfg({ color: 'red;' })).toMatch(/color/)
+		expect(cfg({ avatar: 'https://x' })).toMatch(/avatar/)
+	})
+})
+
+describe('credentialEnv', () => {
+	it('hands a task only the named credentials, under the name the runner reads', () => {
+		const env = {
+			ANTHROPIC_API_KEY_TEAM: 'k',
+			CLAUDE_CODE_OAUTH_TOKEN: 'o',
+			REPO_AI_WORKER_SECRET: 's',
+		}
+		expect(credentialEnv(['ANTHROPIC_API_KEY_TEAM'], env)).toEqual({ ANTHROPIC_API_KEY: 'k' })
+		expect(credentialEnv(undefined, env)).toEqual({})
+		expect(() => credentialEnv(['ANTHROPIC_API_KEY'], env)).toThrow(/not set/)
+		expect(() => credentialEnv(['REPO_AI_WORKER_SECRET'], env)).toThrow(/not a model credential/)
+		expect(presentCredentials(env)).toEqual(['ANTHROPIC_API_KEY_TEAM', 'CLAUDE_CODE_OAUTH_TOKEN'])
 	})
 })
 

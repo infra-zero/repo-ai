@@ -16,6 +16,10 @@ export interface TaskRun {
 	/** Merged over the worker's environment: `GH_TOKEN`, `REPO_AI_GH_LOGIN`. */
 	env?: Record<string, string>
 	timeoutMs: number
+	/** From the worker's profile (#295): `--model`. */
+	model?: string
+	/** From the worker's profile (#295): the only tools the agent may use. Unset: all. */
+	tools?: string[]
 	/** One short line per agent step, for the dashboard. */
 	onProgress?: (line: string) => void
 	/** Test seam: the executable and its leading args. */
@@ -50,15 +54,22 @@ export function describeEvent(ev: unknown): string | null {
 	return null
 }
 
+const MODEL_KEYS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY']
+
 /**
  * The worker's environment minus what the agent must never read: the
  * worker secret (it gets tokens from the dashboard) and any App credential.
- * The model credential stays — the agent cannot run without it.
+ * The worker's model credential stays — the agent cannot run without it —
+ * unless the task brings its own (#295), and then none of the worker's do.
  */
-export function agentEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+export function agentEnv(env: NodeJS.ProcessEnv, task?: Record<string, string>): NodeJS.ProcessEnv {
+	const own = MODEL_KEYS.some((k) => task?.[k])
 	return Object.fromEntries(
 		Object.entries(env).filter(
-			([k]) => k !== 'REPO_AI_WORKER_SECRET' && !k.startsWith('GITHUB_APP_')
+			([k]) =>
+				k !== 'REPO_AI_WORKER_SECRET' &&
+				!k.startsWith('GITHUB_APP_') &&
+				!(own && MODEL_KEYS.includes(k))
 		)
 	)
 }
@@ -85,15 +96,18 @@ export function runTask(t: TaskRun): Promise<TaskResult> {
 		'--output-format',
 		'stream-json',
 		'--verbose',
-		'--permission-mode',
-		'bypassPermissions',
+		...(t.model ? ['--model', t.model] : []),
+		// An allowlist needs `dontAsk`: under `bypassPermissions` every tool is already allowed.
+		...(t.tools?.length
+			? ['--permission-mode', 'dontAsk', '--allowedTools', t.tools.join(',')]
+			: ['--permission-mode', 'bypassPermissions']),
 	]
 	const started = Date.now()
 	return new Promise((resolve) => {
 		const id = agentIdentity()
 		const child = spawn(bin, args, {
 			cwd: t.cwd,
-			env: { ...agentEnv(process.env), ...(id && { HOME: id.home }), ...t.env },
+			env: { ...agentEnv(process.env, t.env), ...(id && { HOME: id.home }), ...t.env },
 			...(id && { uid: id.uid, gid: id.gid }),
 			stdio: ['ignore', 'pipe', 'pipe'],
 		})
