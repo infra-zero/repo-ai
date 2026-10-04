@@ -83,7 +83,7 @@ optional:
 | `agentUser` | string | none: the loop runs as whoever `gh` is signed in as | `loop guard`, which halts a tick running as anyone else; `loop tick`'s `.env`; `fix ai-loop-identity`; `doctor`. |
 | `humanUser` | string | the repo owner's login, when it is a user; empty on an organisation-owned repo | `loop tick`'s `.env.humanUser`, which the skill assigns merge-ready PRs, `ai-blocked` issues and declined issues to. `doctor` warns when an organisation-owned repo leaves it unset. |
 | `requiredSkills` | string[] | `[]`: no check | `doctor`, which reports any listed skill that is not installed. Checked only when `agentUser` is set. |
-| `pollSeconds` | integer | `180`; values below `60` are raised to `60` | `loop watch`, between polls. Each poll costs several GitHub API calls against the 5,000/h limit. |
+| `pollSeconds` | integer | `180`; values below `60` are raised to `60` | `loop watch`, `loop dash` and the `/ai-loop-dash` pane, between polls. Each poll costs several GitHub API calls against the 5,000/h limit. |
 | `budgetTokens` | integer | `400000`; values below `1000` are ignored | `loop tick`'s `.env.budgetTokens`, passed to the `ai-loop-pickup` and `ai-loop-recover` Workflow scripts, which enforce it — an agent past the cap is skipped and `log()`ged, not spawned. It bounds **output tokens only** (the Workflow runtime's `budget.spent()`, reported as `outputTokensSpent`); the harness's per-run total, input and cache reads included, runs several times higher. |
 | `quietStopMinutes` | integer | `120`; `0` disables | `loop tick`'s `.env.quietStopMinutes`. A tick that finds the status summary unchanged this long stops the loop — see [Driving it](#driving-it). |
 | `maxInFlight` | integer | `6`; values below `1` are ignored | `loop tick`'s `.env.maxInFlight`; its pickup `slots` are this minus the issues already `ai-wip`. |
@@ -655,6 +655,30 @@ so a repo with a few PRs in flight stays well under the 5,000/h limit. Raise
 can't go below 60. A halt prints once, and a failed poll is skipped. An
 `agentUser` mismatch does not halt the watcher; see
 [Running reviewers as a second identity](#running-reviewers-as-a-second-identity).
+
+**Want to see it all at once?** The statusline gives one line; `loop dash`
+gives the whole work list. It redraws every `pollSeconds`, with one section per
+non-empty list: pickups, reviews, fix rounds, handoffs, stalled, cleanup. It
+is read-only, so run it in a spare terminal or tmux split alongside the
+session driving the loop:
+
+```bash
+npx @rtorcato/repo-ai loop dash          # live, until Ctrl-C
+npx @rtorcato/repo-ai loop dash --once   # one frame
+```
+
+To see the same view inside Claude Code, load the shipped plugin and type
+`/ai-loop-dash` to open the `ai-loop` pane. It opens only when you ask:
+
+```bash
+claude --plugin-dir node_modules/@rtorcato/repo-ai/claude-plugin
+```
+
+Neither one shows an issue or PR body. Both poll the GitHub API as often as
+`loop watch` does, so a dashboard left open alongside the watcher roughly
+doubles the loop's API reads. See
+[Live pane in Claude Code](./commands.md#live-pane-in-claude-code) for loading
+it in every session.
 
 ### Stopping
 

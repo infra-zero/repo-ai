@@ -24,6 +24,7 @@ repo-ai targets **Claude Code** only for now; other agent harnesses aren't suppo
 | Parallel implement/review (`ai-loop` Pass 3 and Pass 4, via the `ai-loop-recover` and `ai-loop-pickup` workflows) | The **Workflow** tool. Named reviewer types (`code-reviewer`, `security-expert`) need them in the Agent tool's registry; otherwise the reviewers run as `general-purpose`. Without Workflow, `ai-loop` falls back to background Agent calls |
 | Self-scheduling (`/ai-loop` keeps itself going) | A session-scoped recurring **CronCreate** job |
 | Wake on change (`loop watch`) | The **Monitor** tool |
+| Live pane (`/ai-loop-dash`, `claude-plugin/`) | Claude Code plugin hooks, loaded with `--plugin-dir` or `CLAUDE_CODE_PLUGIN_DIRS` |
 | Statusline segment | Claude Code's statusline JSON |
 
 Workflow runs show in `/workflows`. If you edit the scripts in `workflows/`, load `/workflow-authoring` first.
@@ -72,6 +73,7 @@ The plugin carries the skills only. Pass 3 and Pass 4 run their Workflow scripts
 | `loop comment <pr>` / `loop verdict <pr>` | Upsert the decision comment, and read a reviewer's verdict marker. |
 | `loop tick` | Compute one tick's whole work list (guard, cleanup, reap, verdicts, pickups). `.skippedPickups[]` names each `ai-ready` issue it passed over and why (an untrusted author, or a file an `ai-wip` issue also names); `.dependabotRecreate` lists the red or `DIRTY` Dependabot PRs in the loop that `loop apply` asks to `@dependabot recreate`. Read-only: writes no GitHub state and removes no worktree — `loop apply` does that. |
 | `loop watch` | Poll `loop tick`'s work list every `pollSeconds` and print a line only when it changes: `HH:MM  <summary>  review #78 · pickup #39 …`. An `agentUser` mismatch warns on stderr instead of halting. Runs until killed. |
+| `loop dash` | Live terminal dashboard of `loop tick`'s work list, redrawn every `pollSeconds`: the summary, agents and one section per non-empty list. `--once` draws one frame (implied off a TTY); `--json` prints the tick result once with issue bodies removed. Read-only. The same view comes as a Claude Code pane: load `claude-plugin/` with `claude --plugin-dir` and type `/ai-loop-dash` ([details](https://docs.torcato.dev/repo-ai/docs/commands#live-pane-in-claude-code)). |
 | `loop tier <pr>` | Choose the review tier from the PR's changed paths: `both` (docs-only — one combined reviewer) or `split` (`code` + `sec`). Fails closed to `split`. |
 
 Every command takes `--json`. Configuration lives in the repo's `.repo-ai.json` (`agentUser`, `requiredSkills`). `doctor` reports it missing; `fix config` creates it.
