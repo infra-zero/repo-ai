@@ -57,10 +57,16 @@ export function Setup({ view }: { view: DashboardView }) {
 					{current === 3 && (
 						<>
 							<p>
-								Agents are worker containers. Start one with <code>docker compose up worker</code>;
-								it appears here when it connects.
+								Compose runs worker slots; an agent is a profile bound to one. Once a slot connects,
+								add an agent for it on the Agents page.
 							</p>
-							<p className="text-muted-foreground">Waiting for a worker…</p>
+							{view.workers.length === 0 ? (
+								<p className="text-muted-foreground">Waiting for a worker slot…</p>
+							) : (
+								<Button asChild className="w-fit">
+									<Link to="/agents">Add an agent</Link>
+								</Button>
+							)}
 						</>
 					)}
 					{current === 4 && (

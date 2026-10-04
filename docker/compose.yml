@@ -6,9 +6,10 @@
 #
 #   dashboard  the app you open (TanStack Start); talks only to api
 #   api        the scheduler and work queue (repo-ai dashboard); not published
-#   worker-N   one container per agent; each is its own service with a fixed
-#              hostname, because the dashboard keys a worker's role by it.
-#              Add one by copying a block and bumping the number. A worker
+#   worker-N   a generic worker slot, each its own service with a fixed
+#              hostname. A slot takes tasks only once an agent (a profile) is
+#              bound to it on the Agents page (#307). For more agents, add
+#              slots by copying a block and bumping the number. A worker
 #              runs Claude Code unless its block sets
 #              `command: ["worker", "--runner", "codex"]` (or gemini) and swaps
 #              its credential (see the commented worker-3 below).

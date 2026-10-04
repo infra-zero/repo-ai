@@ -5,6 +5,7 @@ import fs from 'fs-extra'
 import { appCredentialsFromEnv, appEnv, mintInstallationToken } from '../../base/app-auth.js'
 import {
 	credentialEnv,
+	type AgentSettings,
 	type DaemonConfig,
 	MCP_CREDENTIAL,
 	mcpEnv,
@@ -14,7 +15,6 @@ import {
 	presentCredentials,
 	readDaemonConfig,
 	validateConfig,
-	type WorkerSettings,
 	writeDaemonConfig,
 } from '../../daemon/config.js'
 import { HISTORY_MAX, parseHistory, type TaskRecord, toRecord } from '../../daemon/history.js'
@@ -98,11 +98,25 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 	const timer = setInterval(scan, SCAN_MS)
 	void scan()
 
-	const view = (): DashboardView => {
+	const agentOn = (slot: string) => config.agents.find((a) => a.slot === slot)
+	const endedToday = () => {
 		const today = new Date().toDateString()
-		const spent = [...queue.tasks.values()].filter(
+		return [...queue.tasks.values()].filter(
 			(t) => t.endedAt && new Date(t.endedAt).toDateString() === today
 		)
+	}
+	/** Today's spend is past one of the agent's daily budgets. */
+	const overBudget = (a: AgentSettings) => {
+		const mine = endedToday().filter((t) => t.agent === a.id)
+		const tokens = mine.reduce((n, t) => n + (t.result?.outputTokens ?? 0), 0)
+		const usd = mine.reduce((n, t) => n + (t.result?.costUsd ?? 0), 0)
+		return (
+			(!!a.tokenBudget && tokens >= a.tokenBudget) || (!!a.costBudgetUsd && usd >= a.costBudgetUsd)
+		)
+	}
+
+	const view = (): DashboardView => {
+		const spent = endedToday()
 		return {
 			now: Date.now(),
 			config,
@@ -158,17 +172,13 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 				return send(res, 401, { error: 'worker secret missing or wrong' })
 			const id = parts[2] ?? ''
 			const body = (await readJson(req)) as Record<string, unknown>
-			// Own keys only: a worker id like `constructor` must not read an inherited property.
-			// Own keys only, as below; an unknown runner is claude, the worker's default.
+			// Own keys only; an unknown runner is claude, the worker's default.
 			const runner: RunnerName =
 				typeof body.runner === 'string' && Object.hasOwn(runners, body.runner)
 					? (body.runner as RunnerName)
 					: 'claude'
-			const assign = (w: string) =>
-				(Object.hasOwn(config.workers, w) && config.workers[w]) || {
-					role: 'any' as const,
-					repos: [],
-				}
+			// An unbound slot reports as `any`, but `next` hands it nothing (#307).
+			const assign = (w: string) => agentOn(w) ?? { role: 'any' as const, repos: [] }
 			if (parts[1] === 'workers' && parts[3] === 'heartbeat') {
 				const w = queue.heartbeat(
 					id,
@@ -177,18 +187,27 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 					typeof body.busy === 'boolean' ? body.busy : undefined
 				)
 				if (body.runner) w.runner = runner
-				return send(res, 200, { role: w.role, repos: w.repos })
+				const a = agentOn(id)
+				return send(res, 200, {
+					role: w.role,
+					repos: w.repos,
+					agent: a?.id ?? null,
+					pollSeconds: a?.pollSeconds,
+				})
 			}
 			if (parts[1] === 'workers' && parts[3] === 'next') {
 				queue.heartbeat(id, assign)
+				// Only a slot with an agent bound, and within its budget, takes a task (#307).
+				const p = agentOn(id)
+				if (!p || overBudget(p)) return send(res, 204)
 				const t = queue.next(id)
 				if (!t) return send(res, 204)
+				t.agent = p.id
 				try {
-					// The task gets only the credentials its worker's profile names (#295).
+					// The task gets only the credentials its agent's profile names (#295).
 					// Unset on the profile: the runner's defaults from the Models section (#306).
-					const p = assign(id) as WorkerSettings
 					const m = config.models?.[runner]
-					const mcp = mcpFor(config, runner, id)
+					const mcp = mcpFor(config, runner, p.id)
 					const env = {
 						...credentialEnv(p.credentials),
 						...mcpEnv(mcp),
@@ -218,9 +237,7 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 			if (parts[1] === 'tasks' && parts[3] === 'done') {
 				const t = queue.done(id, doneResult(body))
 				if (!t) return send(res, 404, {})
-				const p = Object.hasOwn(config.workers, t.worker ?? '')
-					? config.workers[t.worker ?? '']
-					: undefined
+				const p = config.agents.find((a) => a.id === t.agent)
 				const rec = toRecord(t, p)
 				if (rec) {
 					history.push(rec)
@@ -251,6 +268,15 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 				return send(res, 415, { error: 'JSON only' })
 			const next = validateConfig(await readJson(req))
 			if (typeof next === 'string') return send(res, 400, { error: next })
+			// An agent cannot be removed or moved off a slot that is running its task.
+			queue.requeueStale()
+			for (const w of queue.workers.values()) {
+				const a = w.task ? agentOn(w.id) : undefined
+				if (a && !next.agents.some((x) => x.id === a.id && x.slot === w.id))
+					return send(res, 409, {
+						error: `${a.name || a.id} is running a task on ${w.id}; change it once that ends`,
+					})
+			}
 			// A newly added repo must have the App installed; it is cloned on its first tick.
 			if (creds)
 				for (const r of next.repos.filter((x) => !config.repos.some((y) => y.repo === x.repo))) {

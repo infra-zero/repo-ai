@@ -32,7 +32,7 @@ export const getState = createServerFn({ method: 'GET' }).handler(() => call('/a
 export const saveConfig = createServerFn({ method: 'POST' })
 	.validator((d: DaemonConfig) => {
 		// Shape only; the API validates fully.
-		if (!d || typeof d !== 'object' || !Array.isArray(d.repos) || typeof d.workers !== 'object')
+		if (!d || typeof d !== 'object' || !Array.isArray(d.repos) || !Array.isArray(d.agents))
 			throw new Error('invalid config')
 		return d
 	})

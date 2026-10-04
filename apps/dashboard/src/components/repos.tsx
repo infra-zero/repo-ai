@@ -167,9 +167,6 @@ export function RepoSettings({ view, repo }: { view: DashboardView; repo: string
 			return { ...x, limits }
 		})
 
-	const workerIds = [
-		...new Set([...view.workers.map((w) => w.id), ...Object.keys(draft.workers)]),
-	].sort()
 	const others = draft.repos.map((x) => x.repo).filter((x) => x !== repo)
 	return (
 		<div className="flex max-w-2xl flex-col gap-4">
@@ -253,9 +250,9 @@ export function RepoSettings({ view, repo }: { view: DashboardView; repo: string
 					</p>
 				</CardHeader>
 				<CardContent className="flex flex-col gap-2 text-sm">
-					{workerIds.length === 0 && <p className="text-muted-foreground">No agents yet.</p>}
-					{workerIds.map((id) => {
-						const w = draft.workers[id] ?? { role: 'any' as const, repos: [] }
+					{draft.agents.length === 0 && <p className="text-muted-foreground">No agents yet.</p>}
+					{draft.agents.map((w) => {
+						const id = w.id
 						const serves = w.repos.length === 0 || w.repos.includes(repo)
 						// Unassigning: an empty list would mean every repo, so the last one cannot go here.
 						const without = w.repos.length === 0 ? others : w.repos.filter((x) => x !== repo)
@@ -268,10 +265,11 @@ export function RepoSettings({ view, repo }: { view: DashboardView; repo: string
 									onChange={(e) =>
 										edit((d) => ({
 											...d,
-											workers: {
-												...d.workers,
-												[id]: { ...w, repos: e.target.checked ? [...w.repos, repo] : without },
-											},
+											agents: d.agents.map((a) =>
+												a.id === id
+													? { ...a, repos: e.target.checked ? [...a.repos, repo] : without }
+													: a
+											),
 										}))
 									}
 								/>

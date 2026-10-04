@@ -131,11 +131,23 @@ describe('validateConfig', () => {
 			repos: [{ repo: 'rtorcato/repo-ai' }],
 			workers: { 'repo-ai-worker-1': { role: 'reviewer', repos: ['rtorcato/repo-ai'] } },
 		})
+		// A pre-#307 config's worker profiles become agents bound to those workers.
 		expect(ok).toEqual({
 			pollSeconds: 120,
 			repos: [{ repo: 'rtorcato/repo-ai', enabled: true, dependabotAutoReview: false }],
-			workers: { 'repo-ai-worker-1': { role: 'reviewer', repos: ['rtorcato/repo-ai'] } },
+			agents: [
+				{
+					id: 'repo-ai-worker-1',
+					slot: 'repo-ai-worker-1',
+					role: 'reviewer',
+					repos: ['rtorcato/repo-ai'],
+				},
+			],
 		})
+		// A #309 worker's daily `budgetUsd` becomes its agent's `costBudgetUsd`.
+		expect(
+			validateConfig({ repos: [], workers: { w: { role: 'any', repos: [], budgetUsd: 5 } } })
+		).toMatchObject({ agents: [{ id: 'w', slot: 'w', costBudgetUsd: 5 }] })
 		expect(validateConfig({ repos: [], maxInFlight: 3, tokenBudget: 0 })).toMatchObject({
 			maxInFlight: 3,
 			tokenBudget: 0,
@@ -144,16 +156,34 @@ describe('validateConfig', () => {
 		expect(validateConfig({ repos: [{ repo: '../etc' }] })).toMatch(/not an owner\/repo/)
 		expect(validateConfig({ repos: [], pollSeconds: 5 })).toMatch(/pollSeconds/)
 		expect(validateConfig({ repos: [], workers: { w: { role: 'root' } } })).toMatch(/role/)
-		expect(
-			validateConfig(JSON.parse('{"repos":[],"workers":{"__proto__":{"role":"any"}}}'))
-		).toMatch(/not a worker id/)
 		// Removing a repo prunes it from every worker's list instead of refusing the save.
 		expect(
 			validateConfig({
 				repos: [{ repo: 'o/r' }],
 				workers: { w: { role: 'any', repos: ['x/y', 'o/r'] } },
 			})
-		).toMatchObject({ workers: { w: { role: 'any', repos: ['o/r'] } } })
+		).toMatchObject({ agents: [{ id: 'w', role: 'any', repos: ['o/r'] }] })
+	})
+
+	it('validates agents: one per slot, unique ids, sane overrides (#307)', () => {
+		const cfg = (...agents: Record<string, unknown>[]) =>
+			validateConfig({
+				repos: [],
+				agents: agents.map((a, i) => ({ id: `a${i}`, slot: `worker-${i}`, role: 'any', ...a })),
+			})
+		expect(cfg({ pollSeconds: 30, tokenBudget: 1000, costBudgetUsd: 2.5 })).toMatchObject({
+			agents: [
+				{ id: 'a0', slot: 'worker-0', pollSeconds: 30, tokenBudget: 1000, costBudgetUsd: 2.5 },
+			],
+		})
+		expect(cfg({}, { slot: 'worker-0' })).toMatch(/already a0's/)
+		expect(cfg({}, { id: 'a0' })).toMatch(/listed twice/)
+		expect(cfg({ slot: '../x' })).toMatch(/slot/)
+		expect(cfg({ id: 'a b' })).toMatch(/agent id/)
+		expect(cfg({ pollSeconds: 0 })).toMatch(/pollSeconds/)
+		expect(cfg({ tokenBudget: -1 })).toMatch(/tokenBudget/)
+		expect(cfg({ costBudgetUsd: '5' })).toMatch(/costBudgetUsd/)
+		expect(validateConfig({ repos: [], agents: [null] })).toMatch(/object/)
 	})
 
 	it('takes per-repo poll and limit overrides, else the global default (#305)', () => {
@@ -193,15 +223,13 @@ describe('validateConfig', () => {
 				tools: ['Read', 'Bash(git *)', 'mcp__gh__issue'],
 			})
 		).toMatchObject({
-			workers: {
-				w: { name: 'Ada', model: 'sonnet', credentials: ['ANTHROPIC_API_KEY_TEAM'] },
-			},
+			agents: [{ name: 'Ada', model: 'sonnet', credentials: ['ANTHROPIC_API_KEY_TEAM'] }],
 		})
 		// Blank fields drop out rather than being stored.
 		expect(cfg({ name: '', model: '', tools: [] })).toEqual({
 			pollSeconds: 180,
 			repos: [],
-			workers: { w: { role: 'any', repos: [] } },
+			agents: [{ id: 'w', slot: 'w', role: 'any', repos: [] }],
 		})
 		// A profile can never name a secret that is not a model credential.
 		expect(cfg({ credentials: ['REPO_AI_WORKER_SECRET'] })).toMatch(/model credential/)
@@ -257,7 +285,7 @@ describe('models section (#306)', () => {
 		// An MCP server can never be handed a worker, App or model secret.
 		expect(mcp({ env: ['REPO_AI_WORKER_SECRET'] })).toMatch(/MCP_/)
 		expect(mcp({ env: ['ANTHROPIC_API_KEY'] })).toMatch(/MCP_/)
-		expect(mcp({ agents: ['../x'] })).toMatch(/worker id/)
+		expect(mcp({ agents: ['../x'] })).toMatch(/agent id/)
 		expect(cfg({ claude: { mcp: [gh, gh] } })).toMatch(/twice/)
 	})
 
@@ -379,11 +407,26 @@ describe('dashboard HTTP', () => {
 			})
 		expect((await beat()).status).toBe(401)
 		expect((await beat('wrong!')).status).toBe(401)
-		expect(await (await beat('s3cret')).json()).toEqual({ role: 'any', repos: [] })
+		expect(await (await beat('s3cret')).json()).toEqual({ role: 'any', repos: [], agent: null })
 		const next = await fetch(`${base}/api/workers/w1/next`, {
 			method: 'POST',
 			headers: { 'x-repo-ai-worker': 's3cret' },
 		})
 		expect(next.status).toBe(204)
+		// Bind an agent to the slot: the worker learns it, with its poll override (#307).
+		await fetch(`${base}/api/config`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				repos: [],
+				agents: [{ id: 'ada', slot: 'w1', role: 'reviewer', repos: [], pollSeconds: 20 }],
+			}),
+		})
+		expect(await (await beat('s3cret')).json()).toEqual({
+			role: 'reviewer',
+			repos: [],
+			agent: 'ada',
+			pollSeconds: 20,
+		})
 	})
 })

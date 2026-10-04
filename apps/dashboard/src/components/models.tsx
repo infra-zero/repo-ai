@@ -46,9 +46,8 @@ const ofRunner = (r: RunnerInfo, name: string) =>
 export function Models({ view }: { view: DashboardView }) {
 	const form = useConfigForm(view, clean)
 	const { draft, edit } = form
-	const workerIds = [
-		...new Set([...view.workers.map((w) => w.id), ...Object.keys(draft.workers)]),
-	].sort()
+	// MCP access is per agent (#307), not per worker slot.
+	const agentIds = draft.agents.map((a) => a.id).sort()
 	return (
 		<div className="flex max-w-4xl flex-col gap-4">
 			<p className="text-sm text-muted-foreground">
@@ -61,7 +60,7 @@ export function Models({ view }: { view: DashboardView }) {
 					r={r}
 					view={view}
 					m={draft.models?.[r.name as Runner] ?? {}}
-					workerIds={workerIds}
+					agentIds={agentIds}
 					set={(patch) =>
 						edit((d) => ({
 							...d,
@@ -79,13 +78,13 @@ function RunnerCard({
 	r,
 	view,
 	m,
-	workerIds,
+	agentIds,
 	set,
 }: {
 	r: RunnerInfo
 	view: DashboardView
 	m: Model
-	workerIds: string[]
+	agentIds: string[]
 	set: (patch: Partial<Model>) => void
 }) {
 	const present = view.credentials.filter((c) => ofRunner(r, c))
@@ -260,7 +259,7 @@ function RunnerCard({
 									key={i}
 									label={`${r.name} mcp ${i + 1}`}
 									s={s}
-									workerIds={[...new Set([...workerIds, ...s.agents])].sort()}
+									agentIds={[...new Set([...agentIds, ...s.agents])].sort()}
 									mcpCredentials={view.mcpCredentials}
 									set={(patch) => setMcp(i, patch)}
 									remove={() => set({ mcp: mcp.filter((_, j) => j !== i) })}
@@ -285,14 +284,14 @@ function RunnerCard({
 function McpRow({
 	label,
 	s,
-	workerIds,
+	agentIds,
 	mcpCredentials,
 	set,
 	remove,
 }: {
 	label: string
 	s: Mcp
-	workerIds: string[]
+	agentIds: string[]
 	mcpCredentials: string[]
 	set: (patch: Partial<Mcp>) => void
 	remove: () => void
@@ -379,7 +378,7 @@ function McpRow({
 				</label>
 			</div>
 			<Row label="Agents">
-				{workerIds.map((w) => (
+				{agentIds.map((w) => (
 					<label key={w} className="flex items-center gap-1.5 font-mono">
 						<input
 							type="checkbox"
@@ -393,7 +392,7 @@ function McpRow({
 						{w}
 					</label>
 				))}
-				{workerIds.length === 0 && <span className="text-muted-foreground">no workers yet</span>}
+				{agentIds.length === 0 && <span className="text-muted-foreground">no agents yet</span>}
 			</Row>
 		</div>
 	)

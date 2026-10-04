@@ -34,6 +34,8 @@ export interface Task {
 	state: 'queued' | 'running' | 'done' | 'failed'
 	createdAt: number
 	worker?: string
+	/** The agent bound to that worker when it took the task (#307): its budget pays. */
+	agent?: string
 	startedAt?: number
 	endedAt?: number
 	progress?: string

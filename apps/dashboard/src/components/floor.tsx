@@ -4,7 +4,7 @@ import { cn } from '~/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { ago, clock, short, usd } from './common'
 
-type Profile = DashboardView['config']['workers'][string]
+type Profile = DashboardView['config']['agents'][number]
 
 const DEFAULT_COLOR = '#64748b'
 const VERDICT_TONE: Record<TaskRecord['verdict'], string> = {
@@ -15,8 +15,9 @@ const VERDICT_TONE: Record<TaskRecord['verdict'], string> = {
 	FAILED: 'bg-red-500/15 text-red-500',
 }
 
+/** The agent bound to a worker slot (#307); history and tasks are keyed by the worker id. */
 const profileOf = (view: DashboardView, id: string): Profile | undefined =>
-	Object.hasOwn(view.config.workers, id) ? view.config.workers[id] : undefined
+	view.config.agents.find((a) => a.slot === id)
 const label = (p: Profile | undefined, id: string) => p?.name ?? id
 const startOfDay = () => new Date().setHours(0, 0, 0, 0)
 
@@ -49,7 +50,7 @@ export function Kpis({ view }: { view: DashboardView }) {
 		0
 	)
 	const merged = view.events.filter((e) => e.t >= since && /\bmerged\b/i.test(e.what)).length
-	const budget = Object.values(view.config.workers).reduce((n, w) => n + (w.budgetUsd ?? 0), 0)
+	const budget = view.config.agents.reduce((n, a) => n + (a.costBudgetUsd ?? 0), 0)
 	const tiles: [string, string][] = [
 		['PRs merged today', String(merged)],
 		['In review', String(inReview)],
@@ -144,15 +145,15 @@ function AgentCard({ view, id, online }: { view: DashboardView; id: string; onli
 						<span>today</span>
 						<span className="tabular-nums">
 							{usd(spent)}
-							{p?.budgetUsd ? ` / ${usd(p.budgetUsd)}` : ''}
+							{p?.costBudgetUsd ? ` / ${usd(p.costBudgetUsd)}` : ''}
 						</span>
 					</div>
-					{p?.budgetUsd ? (
+					{p?.costBudgetUsd ? (
 						<div className="mt-1 h-1.5 rounded-full bg-muted">
 							<div
 								className="h-full rounded-full"
 								style={{
-									width: `${Math.min(100, (spent / p.budgetUsd) * 100)}%`,
+									width: `${Math.min(100, (spent / p.costBudgetUsd) * 100)}%`,
 									background: color,
 								}}
 							/>
