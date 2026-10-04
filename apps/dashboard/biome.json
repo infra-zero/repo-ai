@@ -1,0 +1,5 @@
+{
+  "root": false,
+  "extends": "//",
+  "files": { "includes": ["**", "!src/routeTree.gen.ts", "!.output", "!dist"] }
+}
