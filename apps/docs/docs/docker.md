@@ -44,7 +44,7 @@ claude setup-token     # paste as CLAUDE_CODE_OAUTH_TOKEN (or set ANTHROPIC_API_
 Fill in `docker/.env`. Both files are gitignored. On a Linux host, make the key readable by the containers' `node` user (uid 1000), for example with `chmod 644 docker/github-app.pem`. Docker Desktop on a Mac needs nothing. Each container gets only what it uses:
 
 - **api:** the App id and key (as a compose secret).
-- **workers:** the agent's credential. Workers never see the App key: each task arrives with a one-hour token scoped to its repo.
+- **workers:** only their own runner's model credential, so a codex worker never holds the Claude token. Workers never see the App key: each task arrives with a one-hour token scoped to its repo.
 - **dashboard:** neither.
 
 All three share `REPO_AI_WORKER_SECRET`.
@@ -85,7 +85,12 @@ A worker runs Claude Code unless its block names another runner:
     <<: *worker
     hostname: worker-3
     command: ["worker", "--runner", "codex"]   # or "gemini"
+    environment:
+      <<: *worker-env
+      CODEX_API_KEY: ${CODEX_API_KEY:?set it in docker/.env}   # or GEMINI_API_KEY
 ```
+
+The `environment` block replaces the Claude credential the default worker carries, so each worker container holds only the key its runner uses. The agent process gets only that key too: the worker strips every other runner's credential before it starts the agent.
 
 | Runner | CLI | Credential in `docker/.env` | Cost on the dashboard |
 |---|---|---|---|

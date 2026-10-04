@@ -34,6 +34,8 @@ export interface WorkerSettings {
 	 * (see `MODEL_CREDENTIAL`). Empty: the worker's own env, as before #295.
 	 */
 	credentials?: string[]
+	/** Daily spend target in USD, shown on the agent's card; not enforced. */
+	budgetUsd?: number
 	/** Claude Code `--allowedTools` rules; set, everything else is denied. Empty: all tools. */
 	tools?: string[]
 }
@@ -139,6 +141,11 @@ function validateProfile(id: string, w: Record<string, unknown>): Partial<Worker
 	if (w.model !== undefined && w.model !== '') {
 		if (typeof w.model !== 'string' || !MODEL.test(w.model)) return `${id}: not a model name`
 		p.model = w.model
+	}
+	if (w.budgetUsd !== undefined && w.budgetUsd !== '' && w.budgetUsd !== null) {
+		if (typeof w.budgetUsd !== 'number' || !(w.budgetUsd > 0) || w.budgetUsd > 100000)
+			return `${id}: budgetUsd must be a positive number`
+		p.budgetUsd = w.budgetUsd
 	}
 	for (const [key, re, what] of [
 		['credentials', MODEL_CREDENTIAL, 'a model credential name'],
