@@ -37,15 +37,19 @@ describe('mintInstallationToken', () => {
 				? { slug: 'repo-ai-loop' }
 				: url.endsWith('/installation')
 					? { id: 42 }
-					: { token: 'ghs_x', expires_at: '2026-10-04T12:00:00Z' }
+					: url.includes('/users/')
+						? { id: 99 }
+						: { token: 'ghs_x', expires_at: '2026-10-04T12:00:00Z' }
 			return new Response(JSON.stringify(json), { status: 200 })
 		}) as typeof fetch
 		expect(await mintInstallationToken(creds, 'rtorcato/repo-ai', fake)).toEqual({
 			token: 'ghs_x',
 			expiresAt: '2026-10-04T12:00:00Z',
 			login: 'repo-ai-loop[bot]',
+			email: '99+repo-ai-loop[bot]@users.noreply.github.com',
 		})
-		expect(calls.at(-1)).toEqual({
+		expect(calls.at(-1)?.url).toBe('https://api.github.com/users/repo-ai-loop%5Bbot%5D')
+		expect(calls.at(-2)).toEqual({
 			url: 'https://api.github.com/app/installations/42/access_tokens',
 			method: 'POST',
 			body: '{"repositories":["repo-ai"]}',

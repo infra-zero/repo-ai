@@ -38,8 +38,8 @@ export interface LoopEvent {
 export interface SchedulerDeps {
 	reposDir: string
 	queue: Queue
-	/** A fresh App token for the repo; its login names the App in REST. */
-	mint: (repo: string) => Promise<{ token: string; login: string }>
+	/** The env that puts gh and git on the App for this repo (`appEnv`). */
+	mint: (repo: string) => Promise<Record<string, string>>
 	event: (e: Omit<LoopEvent, 't'>) => void
 	/** Test seams. */
 	tick?: (root: string) => Promise<LoopTickResult>
@@ -65,10 +65,8 @@ export async function tickRepo(r: RepoSettings, deps: SchedulerDeps): Promise<Re
 		lastTick: now(),
 		releaseGated: false,
 	}
-	const { token, login } = await deps.mint(r.repo)
 	// ponytail: process-wide env, so repos tick one at a time; pass env through the gh/git seams to tick them in parallel.
-	process.env.GH_TOKEN = token
-	process.env.REPO_AI_GH_LOGIN = login
+	Object.assign(process.env, await deps.mint(r.repo))
 	const root = rootFor(deps.reposDir, r.repo)
 	const gh: GhExec = deps.gh ?? ((args, stdin) => realGhExec(args, stdin, root))
 

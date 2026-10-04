@@ -1,0 +1,56 @@
+# repo-ai in Docker (#284). From the repo root:
+#   cp docker/.env.example docker/.env   # fill it in
+#   cp ~/Downloads/<app>.private-key.pem docker/github-app.pem
+#   docker compose -f docker/compose.yml up --build
+# then open http://localhost:8080.
+#
+# One container per agent. Each worker is its own service with a fixed
+# hostname: the dashboard keys a worker's role by it. Add a worker by copying
+# a block and bumping the number.
+name: repo-ai
+
+x-worker: &worker
+  image: repo-ai:local
+  build: { context: .., dockerfile: docker/Dockerfile }
+  command: ["worker"]
+  env_file: .env
+  environment:
+    REPO_AI_DASHBOARD_URL: http://dashboard:8080
+  # Workers never see the App key: the dashboard hands each task a one-hour token.
+  volumes: [repos:/repos]
+  depends_on:
+    dashboard: { condition: service_healthy }
+  restart: unless-stopped
+
+services:
+  dashboard:
+    image: repo-ai:local
+    build: { context: .., dockerfile: docker/Dockerfile }
+    command: ["dashboard"]
+    env_file: .env
+    environment:
+      GITHUB_APP_PRIVATE_KEY_FILE: /run/secrets/github_app_key
+    secrets: [github_app_key]
+    # Loopback only: the page and its config endpoint are for this Mac.
+    ports: ["127.0.0.1:8080:8080"]
+    volumes: [repos:/repos, data:/data]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      start_period: 10s
+    restart: unless-stopped
+
+  worker-1:
+    <<: *worker
+    hostname: worker-1
+  worker-2:
+    <<: *worker
+    hostname: worker-2
+
+secrets:
+  github_app_key:
+    file: ./github-app.pem
+
+volumes:
+  repos: {}
+  data: {}

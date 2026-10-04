@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import path from 'node:path'
 import fs from 'fs-extra'
-import { appCredentialsFromEnv, mintInstallationToken } from '../../base/app-auth.js'
+import { appCredentialsFromEnv, appEnv, mintInstallationToken } from '../../base/app-auth.js'
 import {
 	type DaemonConfig,
 	readDaemonConfig,
@@ -52,7 +52,7 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 	}
 	const mint = async (repo: string) => {
 		if (!creds) throw new Error('GITHUB_APP_ID and the App private key are not set')
-		return mintInstallationToken(creds, repo)
+		return appEnv(await mintInstallationToken(creds, repo))
 	}
 
 	// The scheduler: one repo at a time (scheduler.ts says why), each on its own cadence.
@@ -146,9 +146,9 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 				const t = queue.next(id)
 				if (!t) return send(res, 204)
 				try {
-					const { token, login } = await mint(t.repo)
+					const env = await mint(t.repo)
 					event({ repo: t.repo, number: t.number, what: `${t.label} → ${id}` })
-					return send(res, 200, { task: t, env: { GH_TOKEN: token, REPO_AI_GH_LOGIN: login } })
+					return send(res, 200, { task: t, env })
 				} catch (err) {
 					queue.done(t.id, {
 						ok: false,

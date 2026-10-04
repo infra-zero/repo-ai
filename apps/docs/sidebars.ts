@@ -7,7 +7,7 @@ const sidebars: SidebarsConfig = {
 			type: 'category',
 			label: 'Guides',
 			collapsed: false,
-			items: ['getting-started', 'ai-loop', 'commands', 'risks'],
+			items: ['getting-started', 'ai-loop', 'docker', 'commands', 'risks'],
 		},
 		{ type: 'category', label: 'Releases', items: ['changelog'] },
 	],
