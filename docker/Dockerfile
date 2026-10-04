@@ -30,9 +30,10 @@ RUN apt-get update \
 COPY --from=build /out/*.tgz /tmp/repo-ai.tgz
 RUN npm install -g /tmp/repo-ai.tgz && rm /tmp/repo-ai.tgz \
 	# Named volumes copy this ownership on first creation, so the non-root user can write them.
+	# /work stays root-owned: the worker creates each task dir and hands only that dir to the agent.
 	&& mkdir -p /repos /data /work && chown node:node /repos /data \
 	# #293: a worker runs as root only to drop each agent to this uid, which cannot read the worker's /proc/<pid>/environ.
-	&& useradd --uid 1001 --create-home agent && chown agent:agent /work
+	&& useradd --uid 1001 --create-home agent && chown root:root /work
 # git authenticates through gh, which reads the GH_TOKEN each task is handed; no token is ever written to disk.
 RUN git config --system credential.https://github.com.helper '!gh auth git-credential' \
 	&& git config --system init.defaultBranch main

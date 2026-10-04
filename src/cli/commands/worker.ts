@@ -81,9 +81,12 @@ export async function prepareCheckout(
 	dir: string,
 	env: NodeJS.ProcessEnv
 ): Promise<string> {
-	await fs.ensureDir(dir)
+	// /work stays root-owned, so the agent cannot plant a symlink at `dir`: drop any stale
+	// leftover, create it fresh (mkdir fails on an existing entry), lchown only that dir (#293).
+	await fs.remove(dir)
+	await fs.mkdir(dir)
 	const id = agentIdentity()
-	if (id) await fs.chown(dir, id.uid, id.gid)
+	if (id) await fs.lchown(dir, id.uid, id.gid)
 	const c = task.checkout
 	if (!c) return dir
 	if (!/^[A-Za-z0-9-]+\/(?!\.\.?$)[\w.-]+$/.test(task.repo))
