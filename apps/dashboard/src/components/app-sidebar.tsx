@@ -3,6 +3,8 @@ import {
 	Activity,
 	Bot,
 	ChevronsUpDown,
+	Cpu,
+	FolderGit2,
 	GitBranch,
 	GitPullRequest,
 	LayoutGrid,
@@ -37,9 +39,11 @@ import { useDashboard } from '~/lib/use-dashboard'
 
 const NAV = [
 	{ to: '/', title: 'Board', icon: LayoutGrid },
+	{ to: '/repos', title: 'Repos', icon: FolderGit2 },
 	{ to: '/agents', title: 'Agents', icon: Bot },
+	{ to: '/models', title: 'Models', icon: Cpu },
 	{ to: '/activity', title: 'Activity', icon: Activity },
-	{ to: '/setup', title: 'Setup', icon: Settings },
+	{ to: '/settings', title: 'Settings', icon: Settings },
 ] as const
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
@@ -131,7 +135,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 						))}
 						{view?.repos.length === 0 && (
 							<p className="px-2 text-xs text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden">
-								None yet. Add one under Setup.
+								None yet. Add one under Repos.
 							</p>
 						)}
 					</SidebarMenu>
@@ -145,6 +149,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 							<DropdownMenuTrigger asChild>
 								<SidebarMenuButton
 									size="lg"
+									title="GitHub App menu"
 									className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
 								>
 									<Avatar className="size-8 rounded-lg">
@@ -177,7 +182,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 								<DropdownMenuItem asChild>
 									<Link to="/setup" onClick={closeSheet}>
 										<Settings />
-										Setup
+										Setup wizard
 									</Link>
 								</DropdownMenuItem>
 							</DropdownMenuContent>

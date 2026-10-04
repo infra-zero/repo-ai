@@ -1,4 +1,5 @@
-import { Check, Circle, CircleDashed, GitPullRequest, Shield, X } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { Check, Circle, CircleDashed, GitPullRequest, Plus, Shield, X } from 'lucide-react'
 import type { BoardItem } from '@repo-ai/daemon/board'
 import type { Stage } from '@repo-ai/base/stage'
 import type { DashboardView } from '~/lib/api'
@@ -6,6 +7,7 @@ import { cn } from '~/lib/utils'
 import { Badge, type BadgeVariant } from './ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { ageOf, ago, SafeLink, short } from './common'
+import { GettingStarted, progress } from './getting-started'
 
 type Repo = DashboardView['repos'][number]
 
@@ -168,13 +170,22 @@ function RepoBoard({ repo, now }: { repo: Repo; now: number }) {
 }
 
 export function Boards({ view }: { view: DashboardView }) {
-	if (view.repos.length === 0)
-		return <p className="text-sm text-muted-foreground">No repos yet. Add one under Setup.</p>
+	if (view.repos.length === 0) return <GettingStarted view={view} />
 	return (
-		<div className="grid gap-4 xl:grid-cols-2">
-			{view.repos.map((r) => (
-				<RepoBoard key={r.repo} repo={r} now={view.now} />
-			))}
+		<div className="flex flex-col gap-4">
+			<div className="grid gap-4 xl:grid-cols-2">
+				{view.repos.map((r) => (
+					<RepoBoard key={r.repo} repo={r} now={view.now} />
+				))}
+				<Link
+					to="/repos"
+					className="flex min-h-24 items-center justify-center gap-2 rounded-xl border border-dashed text-sm text-muted-foreground hover:bg-accent/50"
+				>
+					<Plus className="size-4" />
+					Add repo
+				</Link>
+			</div>
+			{!progress(view).issue && <GettingStarted view={view} />}
 		</div>
 	)
 }
