@@ -12,6 +12,7 @@ import {
 	validateConfig,
 	writeDaemonConfig,
 } from '../../daemon/config.js'
+import { HISTORY_MAX, parseHistory, type TaskRecord, toRecord } from '../../daemon/history.js'
 import { Queue, type Task } from '../../daemon/queue.js'
 import { type LoopEvent, type RepoState, tickRepo } from '../../daemon/scheduler.js'
 import type { DashboardView } from '../../daemon/view.js'
@@ -44,6 +45,8 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 	const states = new Map<string, RepoState>()
 	const due = new Set<string>()
 	const events: LoopEvent[] = []
+	const historyFile = path.join(o.data, 'tasks.jsonl')
+	const history: TaskRecord[] = parseHistory(await fs.readFile(historyFile, 'utf8').catch(() => ''))
 	const creds = await appCredentialsFromEnv()
 	const secret = process.env.REPO_AI_WORKER_SECRET?.trim() ?? ''
 
@@ -127,6 +130,7 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 				.slice(0, 60)
 				.map(({ prompt: _prompt, ...t }) => t),
 			events: events.slice(-100).reverse(),
+			history,
 			today: {
 				tasks: spent.length,
 				outputTokens: spent.reduce((n, t) => n + (t.result?.outputTokens ?? 0), 0),
@@ -201,6 +205,13 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 			if (parts[1] === 'tasks' && parts[3] === 'done') {
 				const t = queue.done(id, doneResult(body))
 				if (!t) return send(res, 404, {})
+				const p = config.agents.find((a) => a.id === t.agent)
+				const rec = toRecord(t, p)
+				if (rec) {
+					history.push(rec)
+					if (history.length > HISTORY_MAX) history.shift()
+					void fs.appendFile(historyFile, `${JSON.stringify(rec)}\n`).catch(() => {})
+				}
 				event({
 					repo: t.repo,
 					number: t.number,

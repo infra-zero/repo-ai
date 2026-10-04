@@ -236,16 +236,35 @@ describe('prompts', () => {
 })
 
 describe('agentEnv', () => {
-	it('keeps the model credential and drops the worker secret and App credentials', () => {
+	it("keeps only the runner's credential and drops the worker secret and App credentials", () => {
+		const env = {
+			PATH: '/bin',
+			CLAUDE_CODE_OAUTH_TOKEN: 'c',
+			CODEX_API_KEY: 'x',
+			GEMINI_API_KEY: 'g',
+			REPO_AI_WORKER_SECRET: 's',
+			GITHUB_APP_ID: '1',
+			GITHUB_APP_PRIVATE_KEY: 'k',
+		}
+		expect(agentEnv(env, undefined, runners.claude.auth)).toEqual({
+			PATH: '/bin',
+			CLAUDE_CODE_OAUTH_TOKEN: 'c',
+		})
+		expect(agentEnv(env, undefined, runners.codex.auth)).toEqual({
+			PATH: '/bin',
+			CODEX_API_KEY: 'x',
+		})
+		// git in prepare needs no model credential at all (#308).
+		expect(agentEnv(env)).toEqual({ PATH: '/bin' })
+	})
+
+	it("drops every worker model credential when the task brings its profile's (#295)", () => {
 		expect(
-			agentEnv({
-				PATH: '/bin',
-				CLAUDE_CODE_OAUTH_TOKEN: 'c',
-				REPO_AI_WORKER_SECRET: 's',
-				GITHUB_APP_ID: '1',
-				GITHUB_APP_PRIVATE_KEY: 'k',
-			})
-		).toEqual({ PATH: '/bin', CLAUDE_CODE_OAUTH_TOKEN: 'c' })
+			agentEnv(
+				{ PATH: '/bin', CLAUDE_CODE_OAUTH_TOKEN: 'c', ANTHROPIC_API_KEY: 'a' },
+				{ ANTHROPIC_API_KEY: 'team' }
+			)
+		).toEqual({ PATH: '/bin' })
 	})
 
 	it("drops every worker model credential when the task brings its profile's (#295)", () => {

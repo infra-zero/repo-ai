@@ -157,14 +157,14 @@ export function validateConfig(input: unknown): DaemonConfig | string {
 			dependabotAutoReview: r.dependabotAutoReview === true,
 		})
 	}
-	// Before #307 profiles were keyed by worker id: each becomes an agent bound to that worker.
+	// Before #307 profiles were keyed by worker id: each becomes an agent bound to that worker,
+	// its #309 `budgetUsd` becoming `costBudgetUsd`.
 	const raw =
 		c.agents ??
-		Object.entries((c as { workers?: Record<string, unknown> }).workers ?? {}).map(([id, w]) => ({
-			...(w as object),
-			id,
-			slot: id,
-		}))
+		Object.entries((c as { workers?: Record<string, unknown> }).workers ?? {}).map(([id, w]) => {
+			const { budgetUsd, ...rest } = (w ?? {}) as Record<string, unknown>
+			return { costBudgetUsd: budgetUsd ?? undefined, ...rest, id, slot: id }
+		})
 	if (!Array.isArray(raw) || raw.length > 100) return 'agents must be a list'
 	const agents: AgentSettings[] = []
 	for (const a of raw as AgentSettings[]) {

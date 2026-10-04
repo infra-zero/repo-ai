@@ -135,6 +135,10 @@ describe('validateConfig', () => {
 				},
 			],
 		})
+		// A #309 worker's daily `budgetUsd` becomes its agent's `costBudgetUsd`.
+		expect(
+			validateConfig({ repos: [], workers: { w: { role: 'any', repos: [], budgetUsd: 5 } } })
+		).toMatchObject({ agents: [{ id: 'w', slot: 'w', costBudgetUsd: 5 }] })
 		expect(validateConfig({ repos: [], maxInFlight: 3, tokenBudget: 0 })).toMatchObject({
 			maxInFlight: 3,
 			tokenBudget: 0,
