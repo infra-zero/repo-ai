@@ -89,11 +89,7 @@ program
 	.description(
 		'🤖 A Docker agent worker: pull tasks from the dashboard and run them with Claude Code'
 	)
-	.option(
-		'--url <url>',
-		'The dashboard',
-		process.env.REPO_AI_DASHBOARD_URL ?? 'http://dashboard:8080'
-	)
+	.option('--url <url>', 'The dashboard', process.env.REPO_AI_DASHBOARD_URL ?? 'http://api:8080')
 	.option('--id <id>', 'Worker id (default: the hostname)')
 	.option('--work <dir>', 'Where each task gets its own fresh clone', '/work')
 	.action(workerCommand)
