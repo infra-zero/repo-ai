@@ -4,7 +4,13 @@ import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import fs from 'fs-extra'
 import type { Task } from '../../daemon/queue.js'
-import { agentEnv, runTask, type TaskResult, trailer } from '../../daemon/run-task.js'
+import {
+	agentEnv,
+	agentIdentity,
+	runTask,
+	type TaskResult,
+	trailer,
+} from '../../daemon/run-task.js'
 
 /**
  * `repo-ai worker` (#283): one agent container's loop — pull a task from
@@ -48,8 +54,14 @@ export function summarize(kind: Task['kind'], r: TaskResult): string {
 const SAFE_REF = /^(?!-)[\w./-]{1,200}$/
 
 function exec(cmd: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<void> {
+	const id = agentIdentity()
 	return new Promise((resolve, reject) => {
-		const child = spawn(cmd, args, { cwd, env, stdio: ['ignore', 'ignore', 'pipe'] })
+		const child = spawn(cmd, args, {
+			cwd,
+			env: { ...env, ...(id && { HOME: id.home }) },
+			...(id && { uid: id.uid, gid: id.gid }),
+			stdio: ['ignore', 'ignore', 'pipe'],
+		})
 		let err = ''
 		child.stderr.on('data', (d) => {
 			err = (err + d).slice(-500)
@@ -70,6 +82,8 @@ export async function prepareCheckout(
 	env: NodeJS.ProcessEnv
 ): Promise<string> {
 	await fs.ensureDir(dir)
+	const id = agentIdentity()
+	if (id) await fs.chown(dir, id.uid, id.gid)
 	const c = task.checkout
 	if (!c) return dir
 	if (!/^[A-Za-z0-9-]+\/(?!\.\.?$)[\w.-]+$/.test(task.repo))

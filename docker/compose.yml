@@ -13,6 +13,9 @@ x-worker: &worker
   image: repo-ai:local
   build: { context: .., dockerfile: docker/Dockerfile }
   command: ["worker"]
+  # Root only to run each agent as the unprivileged `agent` uid (#293), so an
+  # agent cannot read the worker secret from /proc/<worker-pid>/environ.
+  user: root
   env_file: .env
   environment:
     REPO_AI_DASHBOARD_URL: http://dashboard:8080
