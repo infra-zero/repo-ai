@@ -75,7 +75,9 @@ program
 
 program
 	.command('dashboard')
-	.description('🖥️  The Docker dashboard: setup, the scheduler, the worker queue and the view')
+	.description(
+		'🖥️  The Docker API: the scheduler, the worker queue, and the state the dashboard app draws'
+	)
 	.option('--port <n>', 'Port', (v) => Number(v), 8080)
 	.option('--host <addr>', 'Address to bind (compose maps it to 127.0.0.1 on the host)', '0.0.0.0')
 	.option('--data <dir>', 'Config, events', '/data')
