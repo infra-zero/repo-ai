@@ -22,6 +22,8 @@ export interface InstallationToken {
 	expiresAt: string
 	/** `<slug>[bot]` — what REST shows as the author of the App's comments and reviews. */
 	login: string
+	/** The bot user's noreply address, so its commits are attributed to it. */
+	email: string
 }
 
 type Fetch = typeof fetch
@@ -72,7 +74,30 @@ export async function mintInstallationToken(
 		`/app/installations/${id}/access_tokens`,
 		{ method: 'POST', body: JSON.stringify({ repositories: [repo] }) }
 	)
-	return { token, expiresAt: expires_at, login: `${slug}[bot]` }
+	const login = `${slug}[bot]`
+	botIds[login] ??= (await call<{ id: number }>(f, token, `/users/${encodeURIComponent(login)}`)).id
+	const botId = botIds[login]
+	return {
+		token,
+		expiresAt: expires_at,
+		login,
+		email: `${botId}+${login}@users.noreply.github.com`,
+	}
+}
+
+// ponytail: a bot user's id never changes, so it is fetched once per process.
+const botIds: Record<string, number> = {}
+
+/** What gh and git need to act as the App: its token, its login, and its commit identity. */
+export function appEnv(t: InstallationToken): Record<string, string> {
+	return {
+		GH_TOKEN: t.token,
+		REPO_AI_GH_LOGIN: t.login,
+		GIT_AUTHOR_NAME: t.login,
+		GIT_AUTHOR_EMAIL: t.email,
+		GIT_COMMITTER_NAME: t.login,
+		GIT_COMMITTER_EMAIL: t.email,
+	}
 }
 
 /** `GITHUB_APP_ID` plus `GITHUB_APP_PRIVATE_KEY`, or a file at `GITHUB_APP_PRIVATE_KEY_FILE`. */
