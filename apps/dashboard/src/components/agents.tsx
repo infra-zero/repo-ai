@@ -61,7 +61,7 @@ export function Agents({ view }: { view: DashboardView }) {
 												{w.claudeAuth === false && (
 													<Badge variant="danger">
 														<AlertTriangle className="size-3" />
-														no Claude credential
+														no agent credential
 													</Badge>
 												)}
 											</span>
