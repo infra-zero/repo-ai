@@ -93,6 +93,7 @@ program
 		process.env.REPO_AI_DASHBOARD_URL ?? 'http://dashboard:8080'
 	)
 	.option('--id <id>', 'Worker id (default: the hostname)')
+	.option('--work <dir>', 'Where each task gets its own fresh clone', '/work')
 	.action(workerCommand)
 
 const loop = program.command('loop').description('🔁 ai-loop mechanics as tested commands')
