@@ -13,6 +13,8 @@ export interface DashboardView {
 	/** GitHub App credentials are present (never their values). */
 	app: boolean
 	workerSecret: boolean
+	/** Names of the model credentials the api holds, for profiles to reference (#295). */
+	credentials: string[]
 	repos: (RepoSettings & { state: RepoState | null; nextTick: number })[]
 	workers: (WorkerInfo & { online: boolean })[]
 	tasks: Omit<Task, 'prompt'>[]

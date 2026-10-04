@@ -58,6 +58,21 @@ describe('runTask', () => {
 		expect(trailer(r.result, 'PR')).toBe('#12')
 	})
 
+	it('passes the profile model and turns a tool allowlist into dontAsk (#295)', async () => {
+		const dir = newTmpDir()
+		const file = join(dir, 'argv.mjs')
+		writeFileSync(
+			file,
+			'console.log(JSON.stringify({ type: "result", result: process.argv.slice(2).join(" ") }))'
+		)
+		const run = (o: { model?: string; tools?: string[] }) =>
+			runTask({ prompt: 'x', cwd: dir, timeoutMs: 10_000, command: [process.execPath, file], ...o })
+		const scoped = await run({ model: 'sonnet', tools: ['Read', 'Bash(git *)'] })
+		expect(scoped.result).toContain('--model sonnet')
+		expect(scoped.result).toContain('--permission-mode dontAsk --allowedTools Read,Bash(git *)')
+		expect((await run({})).result).toMatch(/--permission-mode bypassPermissions$/)
+	})
+
 	it('reports a crash without a result line', async () => {
 		const dir = newTmpDir()
 		const r = await runTask({
@@ -166,7 +181,7 @@ describe('runners', () => {
 	})
 
 	it('builds each CLI headless with its prompts off', () => {
-		expect(runners.codex.args('P')).toEqual([
+		expect(runners.codex.args('P', {})).toEqual([
 			'exec',
 			'--json',
 			'--dangerously-bypass-approvals-and-sandbox',
@@ -174,7 +189,7 @@ describe('runners', () => {
 			'--',
 			'P',
 		])
-		expect(runners.gemini.args('P')).toEqual([
+		expect(runners.gemini.args('P', {})).toEqual([
 			'-p',
 			'P',
 			'--output-format',
@@ -232,6 +247,15 @@ describe('agentEnv', () => {
 			})
 		).toEqual({ PATH: '/bin', CLAUDE_CODE_OAUTH_TOKEN: 'c' })
 	})
+
+	it("drops every worker model credential when the task brings its profile's (#295)", () => {
+		expect(
+			agentEnv(
+				{ PATH: '/bin', CLAUDE_CODE_OAUTH_TOKEN: 'c', ANTHROPIC_API_KEY: 'a' },
+				{ ANTHROPIC_API_KEY: 'team' }
+			)
+		).toEqual({ PATH: '/bin' })
+	})
 })
 
 describe('implementPrompt title', () => {
@@ -254,5 +278,40 @@ describe('agentIdentity', () => {
 		expect(agentIdentity({ REPO_AI_AGENT_UID: '0' })).toBeNull()
 		// Tests do not run as root.
 		if (process.getuid?.() !== 0) expect(agentIdentity({ REPO_AI_AGENT_UID: '1001' })).toBeNull()
+	})
+})
+
+describe('profile options across runners (#294 + #295)', () => {
+	it('passes the model to every runner, and the allowlist to claude only', () => {
+		expect(runners.claude.args('P', { model: 'opus', tools: ['Read', 'Bash(gh:*)'] })).toEqual(
+			expect.arrayContaining([
+				'--model',
+				'opus',
+				'--permission-mode',
+				'dontAsk',
+				'--allowedTools',
+				'Read,Bash(gh:*)',
+			])
+		)
+		expect(runners.claude.args('P', {})).toContain('bypassPermissions')
+		expect(runners.codex.args('P', { model: 'gpt-5' })).toEqual(
+			expect.arrayContaining(['--model', 'gpt-5'])
+		)
+		expect(runners.gemini.args('P', { model: 'gemini-2.5-pro' })).toEqual(
+			expect.arrayContaining(['--model', 'gemini-2.5-pro'])
+		)
+	})
+
+	it('refuses a tool allowlist a runner cannot enforce, before spawning anything', async () => {
+		const r = await runTask({
+			prompt: 'x',
+			cwd: '/nonexistent',
+			timeoutMs: 1000,
+			runner: runners.codex,
+			tools: ['Read'],
+			command: ['/nope/never-run'],
+		})
+		expect(r.ok).toBe(false)
+		expect(r.error).toMatch(/cannot enforce a tool allowlist/)
 	})
 })

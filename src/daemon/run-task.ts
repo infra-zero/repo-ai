@@ -18,6 +18,10 @@ export interface TaskRun {
 	/** Merged over the worker's environment: `GH_TOKEN`, `REPO_AI_GH_LOGIN`. */
 	env?: Record<string, string>
 	timeoutMs: number
+	/** From the worker's profile (#295): `--model`. */
+	model?: string
+	/** From the worker's profile (#295): the only tools the agent may use. Unset: all. */
+	tools?: string[]
 	/** One short line per agent step, for the dashboard. */
 	onProgress?: (line: string) => void
 	/** Which agent CLI runs the task. Default: Claude Code. */
@@ -64,6 +68,11 @@ export function describeEvent(ev: unknown): string | null {
 }
 
 /** The run's outcome so far, which a runner fills in as its events arrive. */
+export interface RunOptions {
+	model?: string
+	tools?: string[]
+}
+
 type Outcome = Partial<Pick<TaskResult, 'ok' | 'result' | 'costUsd' | 'outputTokens' | 'error'>>
 
 /**
@@ -74,7 +83,10 @@ type Outcome = Partial<Pick<TaskResult, 'ok' | 'result' | 'costUsd' | 'outputTok
  */
 export interface Runner {
 	bin: string
-	args: (prompt: string) => string[]
+	/** `model` and `tools` come from the worker's profile (#295). */
+	args: (prompt: string, o: RunOptions) => string[]
+	/** It can confine the agent to `tools`; a runner that cannot refuses a task that sets them. */
+	allowlist: boolean
 	/** Any one of these set means the worker can run tasks. */
 	auth: string[]
 	/** Fold one event into `out`; return a progress line, or null. */
@@ -88,15 +100,19 @@ export const runners = {
 	/** `claude -p`: one `result` event at the end carries everything. */
 	claude: {
 		bin: 'claude',
-		args: (prompt) => [
+		args: (prompt, o) => [
 			'-p',
 			prompt,
 			'--output-format',
 			'stream-json',
 			'--verbose',
-			'--permission-mode',
-			'bypassPermissions',
+			...(o.model ? ['--model', o.model] : []),
+			// An allowlist needs `dontAsk`: under `bypassPermissions` every tool is already allowed.
+			...(o.tools?.length
+				? ['--permission-mode', 'dontAsk', '--allowedTools', o.tools.join(',')]
+				: ['--permission-mode', 'bypassPermissions']),
 		],
+		allowlist: true,
 		auth: ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'],
 		event: (ev: Json, out) => {
 			if (ev.type !== 'result') return describeEvent(ev)
@@ -110,14 +126,16 @@ export const runners = {
 	/** `codex exec --json`: items as they start and finish; usage on `turn.completed`, no cost. */
 	codex: {
 		bin: 'codex',
-		args: (prompt) => [
+		args: (prompt, o) => [
 			'exec',
 			'--json',
+			...(o.model ? ['--model', o.model] : []),
 			'--dangerously-bypass-approvals-and-sandbox',
 			'--skip-git-repo-check',
 			'--',
 			prompt,
 		],
+		allowlist: false,
 		auth: ['CODEX_API_KEY', 'OPENAI_API_KEY'],
 		event: (ev: Json, out) => {
 			const item = ev.item ?? {}
@@ -142,7 +160,15 @@ export const runners = {
 	/** `gemini --output-format stream-json`: streamed message deltas; token stats on `result`, no cost. */
 	gemini: {
 		bin: 'gemini',
-		args: (prompt) => ['-p', prompt, '--output-format', 'stream-json', '--yolo'],
+		args: (prompt, o) => [
+			'-p',
+			prompt,
+			'--output-format',
+			'stream-json',
+			'--yolo',
+			...(o.model ? ['--model', o.model] : []),
+		],
+		allowlist: false,
 		auth: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
 		event: (ev: Json, out) => {
 			if (ev.type === 'message' && ev.role === 'assistant')
@@ -164,15 +190,23 @@ export const runners = {
 
 export type RunnerName = keyof typeof runners
 
+/** Every runner's credential names: a task that brings one replaces all of the worker's (#295). */
+const MODEL_KEYS: string[] = Object.values(runners).flatMap((r) => r.auth)
+
 /**
  * The worker's environment minus what the agent must never read: the
  * worker secret (it gets tokens from the dashboard) and any App credential.
- * The model credential stays — the agent cannot run without it.
+ * The worker's model credential stays — the agent cannot run without it —
+ * unless the task brings its own (#295), and then none of the worker's do.
  */
-export function agentEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+export function agentEnv(env: NodeJS.ProcessEnv, task?: Record<string, string>): NodeJS.ProcessEnv {
+	const own = MODEL_KEYS.some((k) => task?.[k])
 	return Object.fromEntries(
 		Object.entries(env).filter(
-			([k]) => k !== 'REPO_AI_WORKER_SECRET' && !k.startsWith('GITHUB_APP_')
+			([k]) =>
+				k !== 'REPO_AI_WORKER_SECRET' &&
+				!k.startsWith('GITHUB_APP_') &&
+				!(own && MODEL_KEYS.includes(k))
 		)
 	)
 }
@@ -193,13 +227,23 @@ export function agentIdentity(
 export function runTask(t: TaskRun): Promise<TaskResult> {
 	const runner: Runner = t.runner ?? runners.claude
 	const [bin, ...lead] = t.command ?? [runner.bin]
-	const args = [...lead, ...runner.args(t.prompt)]
+	const args = [...lead, ...runner.args(t.prompt, { model: t.model, tools: t.tools })]
+	// Fail closed: a profile's tool allowlist that the runner cannot enforce must not run unconfined.
+	if (t.tools?.length && !runner.allowlist)
+		return Promise.resolve({
+			ok: false,
+			result: '',
+			costUsd: 0,
+			outputTokens: 0,
+			durationMs: 0,
+			error: `${runner.bin} cannot enforce a tool allowlist; clear the profile's tools or use claude`,
+		})
 	const started = Date.now()
 	return new Promise((resolve) => {
 		const id = agentIdentity()
 		const child = spawn(bin, args, {
 			cwd: t.cwd,
-			env: { ...agentEnv(process.env), ...(id && { HOME: id.home }), ...t.env },
+			env: { ...agentEnv(process.env, t.env), ...(id && { HOME: id.home }), ...t.env },
 			...(id && { uid: id.uid, gid: id.gid }),
 			stdio: ['ignore', 'pipe', 'pipe'],
 		})

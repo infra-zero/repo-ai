@@ -4,9 +4,12 @@ import path from 'node:path'
 import fs from 'fs-extra'
 import { appCredentialsFromEnv, appEnv, mintInstallationToken } from '../../base/app-auth.js'
 import {
+	credentialEnv,
 	type DaemonConfig,
+	presentCredentials,
 	readDaemonConfig,
 	validateConfig,
+	type WorkerSettings,
 	writeDaemonConfig,
 } from '../../daemon/config.js'
 import { Queue, type Task } from '../../daemon/queue.js'
@@ -95,6 +98,7 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 			config,
 			app: !!creds,
 			workerSecret: !!secret,
+			credentials: presentCredentials(),
 			repos: config.repos.map((r) => ({
 				...r,
 				state: states.get(r.repo) ?? null,
@@ -156,9 +160,11 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 				const t = queue.next(id)
 				if (!t) return send(res, 204)
 				try {
-					const env = await mint(t.repo)
+					// The task gets only the credentials its worker's profile names (#295).
+					const p = assign(id) as WorkerSettings
+					const env = { ...credentialEnv(p.credentials), ...(await mint(t.repo)) }
 					event({ repo: t.repo, number: t.number, what: `${t.label} → ${id}` })
-					return send(res, 200, { task: t, env })
+					return send(res, 200, { task: t, env, run: { model: p.model, tools: p.tools } })
 				} catch (err) {
 					queue.done(t.id, {
 						ok: false,
