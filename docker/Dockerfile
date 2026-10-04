@@ -28,7 +28,7 @@ RUN apt-get update \
 COPY --from=build /out/*.tgz /tmp/repo-ai.tgz
 RUN npm install -g /tmp/repo-ai.tgz && rm /tmp/repo-ai.tgz \
 	# Named volumes copy this ownership on first creation, so the non-root user can write them.
-	&& mkdir -p /repos /data && chown node:node /repos /data
+	&& mkdir -p /repos /data /work && chown node:node /repos /data /work
 
 USER node
 # git authenticates through gh, which reads the GH_TOKEN each task is handed; no token is ever written to disk.

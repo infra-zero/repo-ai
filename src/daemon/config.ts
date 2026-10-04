@@ -53,7 +53,8 @@ export function validateConfig(input: unknown): DaemonConfig | string {
 	}
 	const workers: Record<string, WorkerSettings> = {}
 	for (const [id, w] of Object.entries(c.workers ?? {})) {
-		if (!/^[\w.-]{1,64}$/.test(id)) return `not a worker id: ${id}`
+		if (!/^[\w.-]{1,64}$/.test(id) || /^(__proto__|constructor|prototype)$/.test(id))
+			return `not a worker id: ${id}`
 		if (!ROLES.includes(w?.role)) return `${id}: role must be one of ${ROLES.join(', ')}`
 		const wr = Array.isArray(w.repos) ? w.repos.filter((x) => typeof x === 'string') : []
 		const unknown = wr.find((x) => !repos.some((r) => r.repo === x))

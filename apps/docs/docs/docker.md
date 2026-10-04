@@ -41,7 +41,7 @@ openssl rand -hex 32   # paste as REPO_AI_WORKER_SECRET
 claude setup-token     # paste as CLAUDE_CODE_OAUTH_TOKEN (or set ANTHROPIC_API_KEY)
 ```
 
-Fill in `docker/.env`. Both files are gitignored. Each container gets only what it uses:
+Fill in `docker/.env`. Both files are gitignored. On a Linux host, make the key readable by the containers' `node` user (uid 1000), for example with `chmod 644 docker/github-app.pem`. Docker Desktop on a Mac needs nothing. Each container gets only what it uses:
 
 - **api:** the App id and key (as a compose secret).
 - **workers:** the Claude credential. Workers never see the App key: each task arrives with a one-hour token scoped to its repo.
@@ -84,4 +84,5 @@ Copy a `worker-N` block in `docker/compose.yml`, bump the number, and run `docke
   - It reaches the api through server functions, so the shared secret never reaches the browser.
 - **Every api endpoint needs `REPO_AI_WORKER_SECRET`.**
 - **Titles are shown inert; issue and PR bodies are never shown.**
+- **Agents never touch the api's clones.** Each task runs in a fresh clone inside its worker, deleted when it ends.
 - **Restarting is safe:** the labels are the state. A task that was running when its worker died is re-queued after 90 seconds. A claim left behind is released by stall reaping.

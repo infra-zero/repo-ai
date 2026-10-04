@@ -1,6 +1,7 @@
 import path from 'node:path'
 import fs from 'fs-extra'
 import { type GhExec, realGhExec } from '../base/gh.js'
+import { safeText } from '../base/sanitize.js'
 import { realGitExec } from '../base/git.js'
 import { type LoopApplyResult, runLoopApply } from '../cli/commands/loop-apply.js'
 import { runLoopComment } from '../cli/commands/loop-marker.js'
@@ -164,7 +165,7 @@ export async function tickRepo(r: RepoSettings, deps: SchedulerDeps): Promise<Re
 			kind: 'fix',
 			number: f.pr,
 			label: conflicts ? 'fix:conflicts' : 'fix',
-			cwd: f.worktree,
+			checkout: { pr: f.pr },
 			prompt: fixPrompt({
 				repo: r.repo,
 				pr: f.pr,
@@ -179,7 +180,7 @@ export async function tickRepo(r: RepoSettings, deps: SchedulerDeps): Promise<Re
 			kind: 'review',
 			number: v.pr,
 			label: `review:${v.arm}`,
-			cwd: root,
+			checkout: null,
 			prompt: reviewPrompt({ repo: r.repo, pr: v.pr, issue: v.issue, arm: v.arm }),
 		})
 	}
@@ -189,15 +190,16 @@ export async function tickRepo(r: RepoSettings, deps: SchedulerDeps): Promise<Re
 			kind: 'implement',
 			number: p.number,
 			label: 'implement',
-			cwd: p.worktree,
+			checkout: { branch: p.slug, from: p.base ?? tick.env.defaultBranch },
 			prompt: implementPrompt({
 				repo: r.repo,
 				issue: p.number,
-				title: p.title,
+				title: safeText(p.title, 200),
 				slug: p.slug,
 				base: p.base,
 				stackedOn: p.stackedOn,
-				install: p.needsInstall,
+				// The worker's clone is fresh: nothing is installed.
+				install: true,
 			}),
 		})
 	}

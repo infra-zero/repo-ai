@@ -63,7 +63,7 @@ describe('Queue', () => {
 		number,
 		label: kind,
 		prompt: 'p',
-		cwd: '/w',
+		checkout: null,
 	})
 	const any = () => ({ role: 'any' as const, repos: [] })
 
@@ -101,6 +101,18 @@ describe('Queue', () => {
 			'done'
 		)
 	})
+
+	it('frees a live worker that reports itself idle while still holding a task (#289 review)', () => {
+		const q = new Queue()
+		const t = q.enqueue(task('fix', 3))
+		q.heartbeat('a', any)
+		q.next('a')
+		// Its `done` never arrived (or it restarted): it beats, idle, with the task still on it.
+		q.heartbeat('a', any, true, true)
+		expect(q.next('a')).toBeNull()
+		q.heartbeat('a', any, true, false)
+		expect(q.next('a')?.id).toBe(t?.id)
+	})
 })
 
 describe('validateConfig', () => {
@@ -118,6 +130,9 @@ describe('validateConfig', () => {
 		expect(validateConfig({ repos: [{ repo: '../etc' }] })).toMatch(/not an owner\/repo/)
 		expect(validateConfig({ repos: [], pollSeconds: 5 })).toMatch(/pollSeconds/)
 		expect(validateConfig({ repos: [], workers: { w: { role: 'root' } } })).toMatch(/role/)
+		expect(
+			validateConfig(JSON.parse('{"repos":[],"workers":{"__proto__":{"role":"any"}}}'))
+		).toMatch(/not a worker id/)
 		expect(validateConfig({ repos: [], workers: { w: { role: 'any', repos: ['x/y'] } } })).toMatch(
 			/not a configured repo/
 		)

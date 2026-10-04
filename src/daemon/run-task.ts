@@ -50,6 +50,19 @@ export function describeEvent(ev: unknown): string | null {
 	return null
 }
 
+/**
+ * The worker's environment minus what the agent must never read: the
+ * worker secret (it gets tokens from the dashboard) and any App credential.
+ * The model credential stays — the agent cannot run without it.
+ */
+export function agentEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+	return Object.fromEntries(
+		Object.entries(env).filter(
+			([k]) => k !== 'REPO_AI_WORKER_SECRET' && !k.startsWith('GITHUB_APP_')
+		)
+	)
+}
+
 export function runTask(t: TaskRun): Promise<TaskResult> {
 	const [bin, ...lead] = t.command ?? ['claude']
 	const args = [
@@ -66,7 +79,7 @@ export function runTask(t: TaskRun): Promise<TaskResult> {
 	return new Promise((resolve) => {
 		const child = spawn(bin, args, {
 			cwd: t.cwd,
-			env: { ...process.env, ...t.env },
+			env: { ...agentEnv(process.env), ...t.env },
 			stdio: ['ignore', 'pipe', 'pipe'],
 		})
 		let final: Partial<TaskResult> | null = null
@@ -75,6 +88,8 @@ export function runTask(t: TaskRun): Promise<TaskResult> {
 		const timer = setTimeout(() => {
 			timedOut = true
 			child.kill('SIGTERM')
+			// One that ignores SIGTERM still has to end, or the worker waits on it forever.
+			setTimeout(() => child.kill('SIGKILL'), 10_000).unref()
 		}, t.timeoutMs)
 		child.stderr.on('data', (d) => {
 			stderr = (stderr + d).slice(-2000)

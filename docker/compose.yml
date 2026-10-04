@@ -26,8 +26,10 @@ x-worker: &worker
     REPO_AI_WORKER_SECRET: ${REPO_AI_WORKER_SECRET:?set it in docker/.env}
     CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
     ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-  # Workers never see the App key: the api hands each task a one-hour token.
-  volumes: [repos:/repos]
+  # Workers never see the App key (the api hands each task a one-hour token)
+  # and never mount the api's clones: each task clones fresh into the worker's
+  # own /work, so an agent cannot plant git config or hooks that the api's git
+  # would run beside the key.
   depends_on:
     api: { condition: service_healthy }
 
