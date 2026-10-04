@@ -1,5 +1,6 @@
 import path from 'node:path'
 import fs from 'fs-extra'
+import { ghLogin } from '../../base/app-auth.js'
 import { type GhExec, ghPaginated, realGhExec } from '../../base/gh.js'
 import { ghOut } from './loop-env.js'
 
@@ -46,7 +47,7 @@ async function resolveTarget(
 		'.nameWithOwner',
 	])
 	if (!ownerRepo) return 'could not resolve the GitHub repo from the working directory'
-	const me = await ghOut(exec, ['api', 'user', '--jq', '.login'])
+	const me = await ghLogin(exec)
 	if (!me) return 'could not resolve the gh login'
 	return { ownerRepo, me, gh: exec }
 }
