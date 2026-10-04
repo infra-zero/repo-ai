@@ -1,6 +1,7 @@
 import path from 'node:path'
 import chalk from 'chalk'
 import fs from 'fs-extra'
+import { sameLogin } from '../../base/app-auth.js'
 import { type GitExec, realGitExec } from '../../base/git.js'
 import { type GhExec, ghPaginated, realGhExec } from '../../base/gh.js'
 import {
@@ -538,10 +539,10 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		if (!loopPr) {
 			// With agentUser, `loop guard` pins the tick to that account, so its PRs are the loop's (#115).
 			// Without it every agent is the owner's login, and the 🤖 header is the discriminator.
-			const author = pr.author?.login.toLowerCase()
+			const author = pr.author?.login
 			const adopt = env.agentUser
-				? author === env.agentUser.toLowerCase()
-				: !!env.me && author === env.me.toLowerCase() && (pr.body ?? '').startsWith('🤖 ')
+				? sameLogin(author, env.agentUser)
+				: sameLogin(author, env.me) && (pr.body ?? '').startsWith('🤖 ')
 			if (adopt) result.adopt.push(pr.number)
 			continue
 		}

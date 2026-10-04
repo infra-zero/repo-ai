@@ -3,6 +3,7 @@
 import { Command } from 'commander'
 import { mainCheckout } from '../base/git.js'
 import { doctorCommand } from './commands/doctor.js'
+import { appTokenCommand } from './commands/auth.js'
 import { FIXERS, fixCommand } from './commands/fix.js'
 import { loopApplyCommand } from './commands/loop-apply.js'
 import { loopCleanupCommand } from './commands/loop-cleanup.js'
@@ -60,6 +61,15 @@ program
 	.option('--gh-config-dir <path>', 'ai-loop-identity: the agent gh profile directory')
 	.option('--json', 'Emit machine-readable JSON output (implies --yes)')
 	.action(fixCommand)
+
+program
+	.command('auth')
+	.description('🔑 Credentials for running the loop as a GitHub App')
+	.command('app-token')
+	.description('Print an installation token for the App on one repo (GITHUB_APP_ID + private key)')
+	.requiredOption('--repo <owner/repo>', 'The repo to scope the token to')
+	.option('--json', 'Print {token, expiresAt, login}')
+	.action(appTokenCommand)
 
 const loop = program.command('loop').description('🔁 ai-loop mechanics as tested commands')
 
