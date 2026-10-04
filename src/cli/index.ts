@@ -14,7 +14,6 @@ import { loopGuardCommand } from './commands/loop-guard.js'
 import { loopCommentCommand, loopVerdictCommand } from './commands/loop-marker.js'
 import { loopReapCommand } from './commands/loop-reap.js'
 import { loopTickCommand, loopTierCommand } from './commands/loop-tick.js'
-import { loopDashCommand } from './commands/loop-dash.js'
 import { loopWatchCommand } from './commands/loop-watch.js'
 import { loopWorktreeAddCommand } from './commands/loop-worktree.js'
 import { setupCommand } from './commands/setup.js'
@@ -33,7 +32,7 @@ program
 program
 	.command('setup')
 	.description(
-		'🚀 Onboard a repo: claude-skills, labels, ai-loop-identity, statusline, claude-plugin — asking before each — then doctor'
+		'🚀 Onboard a repo: claude-skills, labels, ai-loop-identity, statusline — asking before each — then doctor'
 	)
 	.option('-d, --dir <path>', 'Repository to set up', process.cwd())
 	.option('-y, --yes', 'Run every step without prompting')
@@ -241,19 +240,5 @@ loop
 			'nothing: worktrees whose PR landed or closed come back in `toClean`.\n'
 	)
 	.action(loopWatchCommand)
-
-loop
-	.command('dash')
-	.description("📊 Live terminal view of the tick's work list (read-only)")
-	.option('--root <path>', 'Main checkout, or any worktree of it', process.cwd())
-	.option('--once', 'Render one frame and exit (implied when stdout is not a TTY)')
-	.option('--json', 'Print the tick result once, issue bodies removed')
-	.addHelpText(
-		'after',
-		'\nPolls every `pollSeconds` from .repo-ai.json and redraws until killed. Prints numbers,\n' +
-			'labels and reasons only, never an issue or PR body. Writes nothing to GitHub and\n' +
-			'leaves the status file alone.\n'
-	)
-	.action(loopDashCommand)
 
 await program.parseAsync()

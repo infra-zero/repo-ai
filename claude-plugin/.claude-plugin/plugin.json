@@ -1,7 +1,0 @@
-{
-  "name": "repo-ai",
-  "version": "0.1.0",
-  "author": { "name": "Richard Torcato" },
-  "description": "A live pane of the ai-loop's state: /ai-loop-dash opens what `repo-ai loop dash` draws",
-  "types": "./types/index.d.ts"
-}
