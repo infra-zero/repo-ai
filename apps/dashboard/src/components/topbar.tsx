@@ -42,6 +42,8 @@ export function Topbar() {
 	const { data: view, error } = useDashboard()
 	const { pathname, search } = useRouterState({ select: (s) => s.location })
 	const repo = (search as { repo?: string }).repo
+	// `/repos/owner/name` is titled by its section.
+	const title = TITLES[pathname] ?? TITLES[`/${pathname.split('/')[1]}`] ?? ''
 	const online = view?.workers.filter((w) => w.online).length ?? 0
 	const running = view?.tasks.filter((t) => t.state === 'running').length ?? 0
 	const warnings = [
@@ -65,10 +67,10 @@ export function Topbar() {
 					<BreadcrumbItem>
 						{repo ? (
 							<Link to="/" search={{}} className="hover:text-foreground">
-								{TITLES[pathname]}
+								{title}
 							</Link>
 						) : (
-							<BreadcrumbPage>{TITLES[pathname] ?? ''}</BreadcrumbPage>
+							<BreadcrumbPage>{title}</BreadcrumbPage>
 						)}
 					</BreadcrumbItem>
 					{repo && (
