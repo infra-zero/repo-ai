@@ -51,6 +51,7 @@ export function summarize(kind: Task['kind'], r: TaskResult): string {
 	return t ? `${key} ${t}` : (r.result.trim().split('\n').at(-1) ?? '').slice(0, 200)
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const SAFE_REF = /^(?!-)[\w./-]{1,200}$/
 
 function exec(cmd: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<void> {
@@ -141,9 +142,13 @@ export async function workerCommand(o: WorkerOptions): Promise<void> {
 				BEAT_MS
 			)
 			const taskEnv = { ...env, GH_REPO: task.repo }
-			const dir = path.join(work, task.id)
+			// Root removes this directory (#293 review): only a UUID — what the api's
+			// randomUUID makes — may name it, so a hostile id cannot point outside /work.
+			const safeId = UUID.test(task.id)
+			const dir = path.join(work, safeId ? task.id : 'rejected')
 			let r: TaskResult
 			try {
+				if (!safeId) throw new Error('task id is not a UUID')
 				const cwd = await prepare(task, dir, { ...agentEnv(process.env), ...taskEnv })
 				r = await run({
 					prompt: task.prompt,
