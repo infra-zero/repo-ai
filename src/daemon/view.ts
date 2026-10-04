@@ -1,4 +1,5 @@
 import type { DaemonConfig, RepoSettings } from './config.js'
+import type { TaskRecord } from './history.js'
 import type { Task, WorkerInfo } from './queue.js'
 import type { LoopEvent, RepoState } from './scheduler.js'
 
@@ -19,5 +20,7 @@ export interface DashboardView {
 	workers: (WorkerInfo & { online: boolean })[]
 	tasks: Omit<Task, 'prompt'>[]
 	events: LoopEvent[]
+	/** Finished tasks, oldest first: the per-agent history (#296). */
+	history: TaskRecord[]
 	today: { tasks: number; outputTokens: number; costUsd: number }
 }

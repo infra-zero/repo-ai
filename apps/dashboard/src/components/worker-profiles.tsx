@@ -176,6 +176,16 @@ function Profile({
 					onChange={(e) => set({ model: e.target.value })}
 					className="h-8 w-40 font-mono"
 				/>
+				<Input
+					aria-label={`${id} daily budget`}
+					type="number"
+					min="0"
+					step="any"
+					placeholder="$/day"
+					value={w.budgetUsd ?? ''}
+					onChange={(e) => set({ budgetUsd: e.target.value ? Number(e.target.value) : undefined })}
+					className="h-8 w-24"
+				/>
 			</div>
 			<div className="flex flex-wrap items-center gap-x-4 gap-y-1">
 				<span className="text-muted-foreground">Credentials</span>
