@@ -133,9 +133,13 @@ describe('validateConfig', () => {
 		expect(
 			validateConfig(JSON.parse('{"repos":[],"workers":{"__proto__":{"role":"any"}}}'))
 		).toMatch(/not a worker id/)
-		expect(validateConfig({ repos: [], workers: { w: { role: 'any', repos: ['x/y'] } } })).toMatch(
-			/not a configured repo/
-		)
+		// Removing a repo prunes it from every worker's list instead of refusing the save.
+		expect(
+			validateConfig({
+				repos: [{ repo: 'o/r' }],
+				workers: { w: { role: 'any', repos: ['x/y', 'o/r'] } },
+			})
+		).toMatchObject({ workers: { w: { role: 'any', repos: ['o/r'] } } })
 	})
 })
 
