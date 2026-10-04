@@ -35,6 +35,7 @@ The skills call these; you rarely need them directly.
 |---|---|
 | `loop tick` | Compute one tick's whole work list (guard, cleanup, reap, verdicts, pickups). `.skippedPickups[]` names each `ai-ready` issue it passed over and why (an untrusted author, or a file an `ai-wip` issue also names); `.dependabotRecreate` lists the red or `DIRTY` Dependabot PRs in the loop that `loop apply` asks to `@dependabot recreate`. Read-only: writes no GitHub state and removes no worktree — `loop apply` does that. |
 | `loop watch` | Poll `loop tick`'s work list every `pollSeconds` and print a line only when it changes: `HH:MM  <summary>  review #78 · pickup #39 …`. An `agentUser` mismatch warns on stderr instead of halting. Runs until killed. |
+| `loop dash` | Live terminal dashboard of `loop tick`'s work list: redraws every `pollSeconds` with the summary, agents, and one section per non-empty list (pickups, reviews, fix rounds, handoffs, stalled, …). `--once` renders one frame (implied off a TTY); `--json` prints the tick result once with issue bodies removed. Bodies are never shown. Read-only: writes nothing to GitHub and leaves the status file alone. |
 | `loop guard` | Repair a wrongly-bare main checkout, gate the `node_modules` rebuild, and assert the agent identity. |
 | `loop env` | Print a tick's values (root, worktree root, owner/repo, agent and human users) for a human; the skill reads them from `loop tick --json`. |
 | `loop worktree add <slug>` | Create an `ai-*` worktree off `origin/main` and link its dependencies. |

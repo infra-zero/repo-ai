@@ -1,0 +1,24 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderDash > renders a busy tick, without the body 1`] = `
+"1pick 1rev  agents 2/6
+status: line one
+────────────────────────────────────────
+pickups (1)
+  #41
+skipped pickups (1)
+  #42  untrusted author
+reviews to spawn (1)
+  #7  code
+handoffs (1)
+  #8  auto-merge
+release-gated
+warn: careful"
+`;
+
+exports[`renderDash > renders a halt 1`] = `
+"⚠halt  agents 0/6
+⚠ halt: agent identity mismatch
+────────────────────────────────────────
+nothing to do"
+`;
