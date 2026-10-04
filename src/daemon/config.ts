@@ -3,8 +3,8 @@ import type { Role } from './queue.js'
 
 /**
  * What the dashboard's setup screen edits (#282), kept in `/data/config.json`.
- * Per-repo loop limits stay where they already live: each repo's own
- * `.repo-ai.json`, which the tick reads from the clone.
+ * Loop limits set here (global, or per repo since #305) override the repo's
+ * own `.repo-ai.json`; unset, the tick reads that file from the clone.
  */
 
 export interface RepoSettings {
@@ -12,6 +12,10 @@ export interface RepoSettings {
 	enabled: boolean
 	/** Label new Dependabot PRs `ai-review` so the loop reviews them (#240). */
 	dependabotAutoReview: boolean
+	/** Overrides the global `pollSeconds` (#305); unset: the global default. */
+	pollSeconds?: number
+	/** Overrides the global limits key by key (#305). */
+	limits?: GlobalLimits
 }
 
 export interface WorkerSettings {
@@ -55,6 +59,17 @@ export interface DaemonConfig extends GlobalLimits {
 }
 
 export const DEFAULT_CONFIG: DaemonConfig = { pollSeconds: 180, repos: [], workers: {} }
+
+/** A repo's own value, else the global default (#305). */
+export const pollSecondsFor = (c: DaemonConfig, r: RepoSettings) => r.pollSeconds ?? c.pollSeconds
+
+export function limitsFor(c: DaemonConfig, r: RepoSettings): GlobalLimits {
+	return {
+		maxInFlight: r.limits?.maxInFlight ?? c.maxInFlight,
+		maxFixRounds: r.limits?.maxFixRounds ?? c.maxFixRounds,
+		tokenBudget: r.limits?.tokenBudget ?? c.tokenBudget,
+	}
+}
 
 const REPO = /^[A-Za-z0-9-]+\/(?!\.\.?$)[\w.-]+$/
 const ROLES: Role[] = ['any', 'implementer', 'reviewer', 'fixer']
@@ -118,13 +133,8 @@ function validateProfile(id: string, w: Record<string, unknown>): Partial<Worker
 	return p
 }
 
-/** The config, or what is wrong with it. Input comes from the browser: trust nothing. */
-export function validateConfig(input: unknown): DaemonConfig | string {
-	const c = input as Partial<DaemonConfig> | null
-	if (!c || typeof c !== 'object') return 'config must be an object'
-	const pollSeconds = Number(c.pollSeconds ?? DEFAULT_CONFIG.pollSeconds)
-	if (!Number.isInteger(pollSeconds) || pollSeconds < 60)
-		return 'pollSeconds must be an integer ≥ 60'
+/** The set limits, bounded like the global ones, or what is wrong with them. */
+function validateLimits(c: GlobalLimits, where: string): GlobalLimits | string {
 	const limits: GlobalLimits = {}
 	for (const [key, min] of [
 		['maxInFlight', 1],
@@ -133,19 +143,44 @@ export function validateConfig(input: unknown): DaemonConfig | string {
 	] as const) {
 		const v = c[key]
 		if (v === undefined || v === null) continue
-		if (!Number.isInteger(v) || v < min) return `${key} must be an integer ≥ ${min}`
+		if (!Number.isInteger(v) || v < min) return `${where}${key} must be an integer ≥ ${min}`
 		limits[key] = v
 	}
+	return limits
+}
+
+/** The config, or what is wrong with it. Input comes from the browser: trust nothing. */
+export function validateConfig(input: unknown): DaemonConfig | string {
+	const c = input as Partial<DaemonConfig> | null
+	if (!c || typeof c !== 'object') return 'config must be an object'
+	const pollSeconds = Number(c.pollSeconds ?? DEFAULT_CONFIG.pollSeconds)
+	if (!Number.isInteger(pollSeconds) || pollSeconds < 60)
+		return 'pollSeconds must be an integer ≥ 60'
+	const limits = validateLimits(c, '')
+	if (typeof limits === 'string') return limits
 	if (!Array.isArray(c.repos)) return 'repos must be a list'
 	const repos: RepoSettings[] = []
 	for (const r of c.repos) {
 		if (typeof r?.repo !== 'string' || !REPO.test(r.repo))
 			return `not an owner/repo: ${String(r?.repo)}`
 		if (repos.some((x) => x.repo === r.repo)) return `${r.repo} is listed twice`
+		const own: Pick<RepoSettings, 'pollSeconds' | 'limits'> = {}
+		if (r.pollSeconds !== undefined && r.pollSeconds !== null) {
+			if (!Number.isInteger(r.pollSeconds) || r.pollSeconds < 60)
+				return `${r.repo}: pollSeconds must be an integer ≥ 60`
+			own.pollSeconds = r.pollSeconds
+		}
+		if (r.limits !== undefined && r.limits !== null) {
+			if (typeof r.limits !== 'object') return `${r.repo}: limits must be an object`
+			const l = validateLimits(r.limits, `${r.repo}: `)
+			if (typeof l === 'string') return l
+			if (Object.keys(l).length) own.limits = l
+		}
 		repos.push({
 			repo: r.repo,
 			enabled: r.enabled !== false,
 			dependabotAutoReview: r.dependabotAutoReview === true,
+			...own,
 		})
 	}
 	const workers: Record<string, WorkerSettings> = {}

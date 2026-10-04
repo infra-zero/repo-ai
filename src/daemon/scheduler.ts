@@ -8,7 +8,7 @@ import { runLoopComment } from '../cli/commands/loop-marker.js'
 import { type LoopTickResult, runLoopTick } from '../cli/commands/loop-tick.js'
 import { type BoardItem, fetchBoard } from './board.js'
 import { commentText } from './comments.js'
-import type { RepoSettings } from './config.js'
+import type { GlobalLimits, RepoSettings } from './config.js'
 import { fixPrompt, implementPrompt, reviewPrompt } from './prompts.js'
 import type { Queue } from './queue.js'
 
@@ -42,6 +42,8 @@ export interface SchedulerDeps {
 	/** The env that puts gh and git on the App for this repo (`appEnv`). */
 	mint: (repo: string) => Promise<Record<string, string>>
 	event: (e: Omit<LoopEvent, 't'>) => void
+	/** This repo's effective limits (`limitsFor`, #305). */
+	limits?: GlobalLimits
 	/** Test seams. */
 	tick?: (root: string) => Promise<LoopTickResult>
 	apply?: (root: string) => Promise<LoopApplyResult>
@@ -90,7 +92,8 @@ export async function tickRepo(r: RepoSettings, deps: SchedulerDeps): Promise<Re
 		state.errors.push((err as Error).message)
 	}
 
-	const tick = await (deps.tick ?? ((root) => runLoopTick({ root })))(root)
+	const limits = { maxInFlight: deps.limits?.maxInFlight, maxFixRounds: deps.limits?.maxFixRounds }
+	const tick = await (deps.tick ?? ((root) => runLoopTick({ root, limits })))(root)
 	state.warnings = tick.warnings
 	state.releaseGated = tick.releaseGated
 	if (tick.halt) {
@@ -125,7 +128,7 @@ export async function tickRepo(r: RepoSettings, deps: SchedulerDeps): Promise<Re
 	}
 
 	// Passes 1, 2 and the claims for 3 and 4.
-	const apply = await (deps.apply ?? ((root) => runLoopApply({ root })))(root)
+	const apply = await (deps.apply ?? ((root) => runLoopApply({ root, limits })))(root)
 	state.errors.push(...apply.errors)
 	if (apply.halt) {
 		state.halt = apply.halt

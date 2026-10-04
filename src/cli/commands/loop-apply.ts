@@ -8,6 +8,7 @@ import type { ReapEntry } from './loop-reap.js'
 import {
 	type FixRound,
 	type Handoff,
+	type LoopTickOptions,
 	type LoopTickResult,
 	namedFiles,
 	recreateMarker,
@@ -131,6 +132,7 @@ export interface LoopApplyOptions {
 	root?: string
 	worktreeRoot?: string
 	json?: boolean
+	limits?: LoopTickOptions['limits']
 	/** Test seams. `tick` skips the read and applies that work list. */
 	tick?: LoopTickResult
 	git?: GitExec
@@ -149,6 +151,7 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 		options.tick ??
 		(await runLoopTick({
 			root: options.root,
+			limits: options.limits,
 			git: options.git,
 			gh: options.gh,
 			install: options.install,
