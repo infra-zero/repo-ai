@@ -33,7 +33,7 @@ program
 program
 	.command('setup')
 	.description(
-		'🚀 Onboard a repo: claude-skills, labels, ai-loop-identity, statusline — asking before each — then doctor'
+		'🚀 Onboard a repo: claude-skills, labels, ai-loop-identity, statusline, claude-plugin — asking before each — then doctor'
 	)
 	.option('-d, --dir <path>', 'Repository to set up', process.cwd())
 	.option('-y, --yes', 'Run every step without prompting')
@@ -93,6 +93,7 @@ program
 		process.env.REPO_AI_DASHBOARD_URL ?? 'http://dashboard:8080'
 	)
 	.option('--id <id>', 'Worker id (default: the hostname)')
+	.option('--work <dir>', 'Where each task gets its own fresh clone', '/work')
 	.action(workerCommand)
 
 const loop = program.command('loop').description('🔁 ai-loop mechanics as tested commands')

@@ -1,6 +1,12 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { summarize, workerCommand } from '../../src/cli/commands/worker.js'
+import { prepareCheckout, summarize, workerCommand } from '../../src/cli/commands/worker.js'
+import type { Task } from '../../src/daemon/queue.js'
+import { useTmpDir } from '../helpers/tmp-dir.js'
 import type { TaskRun } from '../../src/daemon/run-task.js'
+
+const newTmpDir = useTmpDir()
 
 const result = (over = {}) => ({
 	ok: true,
@@ -47,7 +53,7 @@ describe('workerCommand', () => {
 							number: 5,
 							label: 'implement',
 							prompt: 'P',
-							cwd: '/w',
+							checkout: null,
 						},
 						env: { GH_TOKEN: 'ghs_x', REPO_AI_GH_LOGIN: 'loop[bot]' },
 					}),
@@ -56,10 +62,17 @@ describe('workerCommand', () => {
 			return new Response('{}', { status: 200 })
 		}) as unknown as typeof fetch
 		let ran: TaskRun | undefined
+		const work = newTmpDir()
+		let prepared = ''
 		await workerCommand({
 			url: 'http://dash',
 			id: 'worker-1',
+			work,
 			fetch: fake,
+			prepare: async (task, dir) => {
+				prepared = dir
+				return dir
+			},
 			sleep: async () => {},
 			turns: 1,
 			run: async (t) => {
@@ -68,11 +81,15 @@ describe('workerCommand', () => {
 				return result({ result: 'PR: #9' })
 			},
 		})
+		expect(prepared).toBe(join(work, 't1'))
 		expect(ran).toMatchObject({
 			prompt: 'P',
-			cwd: '/w',
-			env: { GH_TOKEN: 'ghs_x', REPO_AI_GH_LOGIN: 'loop[bot]' },
+			cwd: join(work, 't1'),
+			env: { GH_TOKEN: 'ghs_x', REPO_AI_GH_LOGIN: 'loop[bot]', GH_REPO: 'o/r' },
 		})
+		// The clone is gone once the task is reported.
+		expect(existsSync(join(work, 't1'))).toBe(false)
+		expect(calls[0]?.body).toEqual({ claudeAuth: false, busy: false })
 		expect(calls.map((c) => c.path)).toEqual([
 			'/api/workers/worker-1/heartbeat',
 			'/api/workers/worker-1/next',
@@ -104,5 +121,26 @@ describe('workerCommand', () => {
 			turns: 2,
 		})
 		expect(sleeps).toEqual([10_000, 5_000])
+	})
+})
+
+describe('prepareCheckout', () => {
+	const task = (checkout: Task['checkout']): Task => ({
+		id: 't',
+		repo: 'o/r',
+		kind: 'implement',
+		number: 1,
+		label: 'implement',
+		prompt: '',
+		checkout,
+		state: 'running',
+		createdAt: 0,
+	})
+	it('needs no clone for a review, and refuses an option-shaped branch before cloning', async () => {
+		const dir = join(newTmpDir(), 'x')
+		expect(await prepareCheckout(task(null), dir, {})).toBe(dir)
+		await expect(
+			prepareCheckout(task({ branch: '--upload-pack=evil', from: 'main' }), dir, {})
+		).rejects.toThrow('unsafe branch name')
 	})
 })

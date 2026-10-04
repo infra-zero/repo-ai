@@ -121,7 +121,7 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 		try {
 			await route(req, res)
 		} catch (err) {
-			send(res, 500, { error: (err as Error).message })
+			send(res, err instanceof BadRequest ? 400 : 500, { error: (err as Error).message })
 		}
 	})
 
@@ -136,9 +136,19 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 				return send(res, 401, { error: 'worker secret missing or wrong' })
 			const id = parts[2] ?? ''
 			const body = (await readJson(req)) as Record<string, unknown>
-			const assign = (w: string) => config.workers[w] ?? { role: 'any' as const, repos: [] }
+			// Own keys only: a worker id like `constructor` must not read an inherited property.
+			const assign = (w: string) =>
+				(Object.hasOwn(config.workers, w) && config.workers[w]) || {
+					role: 'any' as const,
+					repos: [],
+				}
 			if (parts[1] === 'workers' && parts[3] === 'heartbeat') {
-				const w = queue.heartbeat(id, assign, body.claudeAuth === true)
+				const w = queue.heartbeat(
+					id,
+					assign,
+					body.claudeAuth === true,
+					typeof body.busy === 'boolean' ? body.busy : undefined
+				)
 				return send(res, 200, { role: w.role, repos: w.repos })
 			}
 			if (parts[1] === 'workers' && parts[3] === 'next') {
@@ -214,6 +224,8 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 	return server
 }
 
+class BadRequest extends Error {}
+
 function doneResult(b: Record<string, unknown>): NonNullable<Task['result']> {
 	return {
 		ok: b.ok === true,
@@ -238,9 +250,13 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 	let raw = ''
 	for await (const chunk of req) {
 		raw += chunk
-		if (raw.length > 100_000) throw new Error('body too large')
+		if (raw.length > 100_000) throw new BadRequest('body too large')
 	}
-	return raw ? JSON.parse(raw) : {}
+	try {
+		return raw ? JSON.parse(raw) : {}
+	} catch {
+		throw new BadRequest('body is not JSON')
+	}
 }
 
 function send(res: ServerResponse, status: number, body?: unknown): void {

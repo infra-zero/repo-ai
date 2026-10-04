@@ -40,6 +40,7 @@ const STEPS: Record<string, StepRun> = {
 	labels: (dir) => applyLoopLabels(dir, undefined, { bootstrap: true }),
 	'ai-loop-identity': FIXERS['ai-loop-identity'].run,
 	statusline: FIXERS.statusline.run,
+	'claude-plugin': FIXERS['claude-plugin'].run,
 }
 
 /** The steps, in order. The identity step only means something with an agent user. */
@@ -50,6 +51,7 @@ export function setupSteps(agentUser: string | null | undefined): string[] {
 		'labels',
 		...(agentUser ? ['ai-loop-identity'] : []),
 		'statusline',
+		'claude-plugin',
 	]
 }
 
