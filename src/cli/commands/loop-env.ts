@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { LOGIN } from '../../base/agent-user.js'
+import { ghLogin } from '../../base/app-auth.js'
 import {
 	DEFAULT_BUDGET_TOKENS,
 	DEFAULT_QUIET_STOP_MINUTES,
@@ -113,7 +114,7 @@ export async function resolveLoopEnv(options: LoopEnvOptions = {}): Promise<Loop
 					'if .owner.type == "User" then .owner.login else "" end',
 				])
 			: '')
-	const me = await ghOut(gh, ['api', 'user', '--jq', '.login'])
+	const me = await ghLogin(gh, env)
 	const budgetTokens = config?.budgetTokens ?? DEFAULT_BUDGET_TOKENS
 	const quietStopMinutes = config?.quietStopMinutes ?? DEFAULT_QUIET_STOP_MINUTES
 

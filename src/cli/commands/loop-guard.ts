@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import path from 'node:path'
 import chalk from 'chalk'
 import fs from 'fs-extra'
+import { ghLogin } from '../../base/app-auth.js'
 import { readConfig } from '../../base/config.js'
 import { type GitExec, realGitExec } from '../../base/git.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
@@ -107,8 +108,7 @@ export async function checkAgentIdentity(
 			message: 'no agentUser configured in .repo-ai.json — identity check skipped',
 		}
 	}
-	const r = await gh(['api', 'user', '--jq', '.login'])
-	const effective = r.ok ? r.stdout.trim() : ''
+	const effective = await ghLogin(gh)
 	// GitHub logins are case-insensitive, so a case difference is one account.
 	if (effective !== '' && effective.toLowerCase() === configured.toLowerCase()) {
 		return {
