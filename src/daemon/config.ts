@@ -56,9 +56,11 @@ export function validateConfig(input: unknown): DaemonConfig | string {
 		if (!/^[\w.-]{1,64}$/.test(id) || /^(__proto__|constructor|prototype)$/.test(id))
 			return `not a worker id: ${id}`
 		if (!ROLES.includes(w?.role)) return `${id}: role must be one of ${ROLES.join(', ')}`
-		const wr = Array.isArray(w.repos) ? w.repos.filter((x) => typeof x === 'string') : []
-		const unknown = wr.find((x) => !repos.some((r) => r.repo === x))
-		if (unknown) return `${id}: ${unknown} is not a configured repo`
+		// A repo that is no longer configured drops out of the worker's list rather than refusing the
+		// save — removing a repo would otherwise be impossible while any worker is scoped to it (#288 review).
+		const wr = Array.isArray(w.repos)
+			? w.repos.filter((x) => typeof x === 'string' && repos.some((r) => r.repo === x))
+			: []
 		workers[id] = { role: w.role, repos: wr }
 	}
 	return { pollSeconds, repos, workers }
