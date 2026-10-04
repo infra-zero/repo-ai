@@ -1,0 +1,8 @@
+.git
+**/node_modules
+dist
+apps/docs/build
+apps/docs/.docusaurus
+docker/.env
+docker/*.pem
+.claude

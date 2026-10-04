@@ -44,7 +44,7 @@ function deps(over: Partial<SchedulerDeps> = {}) {
 	const d: SchedulerDeps = {
 		reposDir,
 		queue: new Queue(),
-		mint: async () => ({ token: 'ghs_t', login: 'loop[bot]' }),
+		mint: async () => ({ GH_TOKEN: 'ghs_t', REPO_AI_GH_LOGIN: 'loop[bot]' }),
 		event: (e) => events.push(`${e.number ?? '-'} ${e.what}`),
 		board: async () => [],
 		gh,

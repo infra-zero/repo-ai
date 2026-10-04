@@ -8,3 +8,7 @@ apps/docs/build
 .docusaurus
 apps/docs/docs/changelog.md
 .claude/ai-loop-status
+
+# Docker secrets (#284)
+docker/.env
+docker/*.pem
