@@ -12,9 +12,11 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 RUN pnpm run build && mkdir /out && npm pack --ignore-scripts --pack-destination /out
 
-# ── runtime: node, git, gh, Claude Code, repo-ai ─────────────────────────────
+# ── runtime: node, git, gh, the agent CLIs (Claude Code, Codex, Gemini), repo-ai
 FROM node:24-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
 ARG CLAUDE_CODE_VERSION=2.1.289
+ARG CODEX_VERSION=0.160.0
+ARG GEMINI_CLI_VERSION=0.62.0
 ARG GH_KEY_SHA256=6084d5d7bd8e288441e0e94fc6275570895da18e6751f70f057485dc2d1a811b
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates curl git openssh-client \
@@ -26,7 +28,9 @@ RUN apt-get update \
 	&& apt-get update && apt-get install -y --no-install-recommends gh \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& corepack enable \
-	&& npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+	# #294: every runner a worker's `--runner` can name.
+	&& npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+		"@openai/codex@${CODEX_VERSION}" "@google/gemini-cli@${GEMINI_CLI_VERSION}"
 COPY --from=build /out/*.tgz /tmp/repo-ai.tgz
 RUN npm install -g /tmp/repo-ai.tgz && rm /tmp/repo-ai.tgz \
 	# Named volumes copy this ownership on first creation, so the non-root user can write them.
