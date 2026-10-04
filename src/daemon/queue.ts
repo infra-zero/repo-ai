@@ -49,6 +49,8 @@ export interface WorkerInfo {
 	task?: string
 	/** The worker has a Claude credential (it reports this; the dashboard never sees the value). */
 	claudeAuth?: boolean
+	/** The agent CLI it runs (#294), as it reports it. */
+	runner?: string
 }
 
 export class Queue {

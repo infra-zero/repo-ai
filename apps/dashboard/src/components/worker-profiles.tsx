@@ -101,6 +101,8 @@ export function WorkerProfiles({ view }: { view: DashboardView }) {
 												id={id}
 												w={w}
 												credentials={view.credentials}
+												runners={view.runners.map((r) => r.name)}
+												models={draft.models}
 												set={(patch) => setWorker(id, patch)}
 											/>
 										</TableCell>
@@ -127,15 +129,25 @@ function Profile({
 	id,
 	w,
 	credentials,
+	runners,
+	models,
 	set,
 }: {
 	id: string
 	w: Worker
 	credentials: string[]
+	runners: string[]
+	models: DaemonConfig['models']
 	set: (patch: Partial<Worker>) => void
 }) {
 	// Named on the profile but missing from the api: shown, so it can be unchecked.
 	const names = [...new Set([...credentials, ...(w.credentials ?? [])])].sort()
+	const m = models?.[w.runner ?? 'claude']
+	// Account labels from the Models section (#306), across runners.
+	const account = (c: string) =>
+		Object.values(models ?? {})
+			.flatMap((x) => x?.accounts ?? [])
+			.find((a) => a.credential === c)?.name
 	return (
 		<div className="flex flex-col gap-2 pb-2 text-xs">
 			<div className="flex flex-wrap items-center gap-2">
@@ -165,17 +177,27 @@ function Profile({
 				<Select
 					aria-label={`${id} runner`}
 					value={w.runner ?? 'claude'}
-					onChange={() => set({ runner: 'claude' })}
+					onChange={(e) => set({ runner: e.target.value as Worker['runner'] })}
 				>
-					<option value="claude">Claude Code</option>
+					{runners.map((r) => (
+						<option key={r} value={r}>
+							{r}
+						</option>
+					))}
 				</Select>
 				<Input
 					aria-label={`${id} model`}
-					placeholder="model (default)"
+					placeholder={m?.defaultModel ?? 'model (default)'}
+					list={`${id}-models`}
 					value={w.model ?? ''}
 					onChange={(e) => set({ model: e.target.value })}
 					className="h-8 w-40 font-mono"
 				/>
+				<datalist id={`${id}-models`}>
+					{m?.models?.map((x) => (
+						<option key={x} value={x} />
+					))}
+				</datalist>
 			</div>
 			<div className="flex flex-wrap items-center gap-x-4 gap-y-1">
 				<span className="text-muted-foreground">Credentials</span>
@@ -193,6 +215,7 @@ function Profile({
 							}
 						/>
 						{c}
+						{account(c) && <span className="font-sans text-muted-foreground">({account(c)})</span>}
 						{!credentials.includes(c) && <span className="text-red-500">(missing)</span>}
 					</label>
 				))}

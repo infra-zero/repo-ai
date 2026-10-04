@@ -15,6 +15,10 @@ export interface DashboardView {
 	workerSecret: boolean
 	/** Names of the model credentials the api holds, for profiles to reference (#295). */
 	credentials: string[]
+	/** Names of the `MCP_*` credentials the api holds (#306). */
+	mcpCredentials: string[]
+	/** What each runner needs and supports, for the Models section (#306). */
+	runners: { name: string; auth: string[]; allowlist: boolean; mcp: boolean }[]
 	repos: (RepoSettings & { state: RepoState | null; nextTick: number })[]
 	workers: (WorkerInfo & { online: boolean })[]
 	tasks: Omit<Task, 'prompt'>[]

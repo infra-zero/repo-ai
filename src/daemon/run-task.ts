@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
+import type { McpServer } from './config.js'
 
 /**
  * One agent task in a Docker worker (#281): a headless agent CLI in the
@@ -22,6 +23,8 @@ export interface TaskRun {
 	model?: string
 	/** From the worker's profile (#295): the only tools the agent may use. Unset: all. */
 	tools?: string[]
+	/** From the Models section (#306): the MCP servers this worker may use. */
+	mcp?: McpServer[]
 	/** One short line per agent step, for the dashboard. */
 	onProgress?: (line: string) => void
 	/** Which agent CLI runs the task. Default: Claude Code. */
@@ -71,6 +74,7 @@ export function describeEvent(ev: unknown): string | null {
 export interface RunOptions {
 	model?: string
 	tools?: string[]
+	mcp?: McpServer[]
 }
 
 type Outcome = Partial<Pick<TaskResult, 'ok' | 'result' | 'costUsd' | 'outputTokens' | 'error'>>
@@ -87,6 +91,8 @@ export interface Runner {
 	args: (prompt: string, o: RunOptions) => string[]
 	/** It can confine the agent to `tools`; a runner that cannot refuses a task that sets them. */
 	allowlist: boolean
+	/** It takes MCP servers on its command line (#306); a runner that cannot refuses a task that sets them. */
+	mcp: boolean
 	/** Any one of these set means the worker can run tasks. */
 	auth: string[]
 	/** Fold one event into `out`; return a progress line, or null. */
@@ -95,6 +101,34 @@ export interface Runner {
 
 // biome-ignore lint/suspicious/noExplicitAny: event payloads are untyped JSON
 type Json = any
+
+/**
+ * Claude's `--mcp-config` JSON. Credential values never go on the command
+ * line: the server inherits them, by name, from the task's env.
+ */
+export function claudeMcp(servers: McpServer[]): string {
+	return JSON.stringify({
+		mcpServers: Object.fromEntries(
+			servers.map((s) => [
+				s.name,
+				s.url ? { type: 'http', url: s.url } : { command: s.command, args: s.args ?? [] },
+			])
+		),
+	})
+}
+
+/** Codex `-c` overrides for one server; JSON strings and arrays are valid TOML values. */
+export function codexMcp(s: McpServer): string[] {
+	const key = `mcp_servers.${s.name}`
+	const set = (k: string, v: unknown) => ['-c', `${key}.${k}=${JSON.stringify(v)}`]
+	return s.url
+		? set('url', s.url)
+		: [
+				...set('command', s.command),
+				...set('args', s.args ?? []),
+				...(s.env?.length ? set('env_vars', s.env) : []),
+			]
+}
 
 export const runners = {
 	/** `claude -p`: one `result` event at the end carries everything. */
@@ -107,12 +141,15 @@ export const runners = {
 			'stream-json',
 			'--verbose',
 			...(o.model ? ['--model', o.model] : []),
+			// Only the configured servers: --strict ignores any .mcp.json the repo ships.
+			...(o.mcp?.length ? ['--mcp-config', claudeMcp(o.mcp), '--strict-mcp-config'] : []),
 			// An allowlist needs `dontAsk`: under `bypassPermissions` every tool is already allowed.
 			...(o.tools?.length
 				? ['--permission-mode', 'dontAsk', '--allowedTools', o.tools.join(',')]
 				: ['--permission-mode', 'bypassPermissions']),
 		],
 		allowlist: true,
+		mcp: true,
 		auth: ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'],
 		event: (ev: Json, out) => {
 			if (ev.type !== 'result') return describeEvent(ev)
@@ -130,12 +167,14 @@ export const runners = {
 			'exec',
 			'--json',
 			...(o.model ? ['--model', o.model] : []),
+			...(o.mcp ?? []).flatMap(codexMcp),
 			'--dangerously-bypass-approvals-and-sandbox',
 			'--skip-git-repo-check',
 			'--',
 			prompt,
 		],
 		allowlist: false,
+		mcp: true,
 		auth: ['CODEX_API_KEY', 'OPENAI_API_KEY'],
 		event: (ev: Json, out) => {
 			const item = ev.item ?? {}
@@ -169,6 +208,8 @@ export const runners = {
 			...(o.model ? ['--model', o.model] : []),
 		],
 		allowlist: false,
+		// ponytail: gemini reads MCP servers only from settings.json; write one per task if it is needed.
+		mcp: false,
 		auth: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
 		event: (ev: Json, out) => {
 			if (ev.type === 'message' && ev.role === 'assistant')
@@ -227,7 +268,7 @@ export function agentIdentity(
 export function runTask(t: TaskRun): Promise<TaskResult> {
 	const runner: Runner = t.runner ?? runners.claude
 	const [bin, ...lead] = t.command ?? [runner.bin]
-	const args = [...lead, ...runner.args(t.prompt, { model: t.model, tools: t.tools })]
+	const args = [...lead, ...runner.args(t.prompt, { model: t.model, tools: t.tools, mcp: t.mcp })]
 	// Fail closed: a profile's tool allowlist that the runner cannot enforce must not run unconfined.
 	if (t.tools?.length && !runner.allowlist)
 		return Promise.resolve({
@@ -237,6 +278,15 @@ export function runTask(t: TaskRun): Promise<TaskResult> {
 			outputTokens: 0,
 			durationMs: 0,
 			error: `${runner.bin} cannot enforce a tool allowlist; clear the profile's tools or use claude`,
+		})
+	if (t.mcp?.length && !runner.mcp)
+		return Promise.resolve({
+			ok: false,
+			result: '',
+			costUsd: 0,
+			outputTokens: 0,
+			durationMs: 0,
+			error: `${runner.bin} cannot take MCP servers; remove this worker's MCP access`,
 		})
 	const started = Date.now()
 	return new Promise((resolve) => {

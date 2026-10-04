@@ -314,4 +314,45 @@ describe('profile options across runners (#294 + #295)', () => {
 		expect(r.ok).toBe(false)
 		expect(r.error).toMatch(/cannot enforce a tool allowlist/)
 	})
+
+	it('passes MCP servers to claude and codex without credential values, and refuses them on gemini (#306)', async () => {
+		const servers = [
+			{
+				name: 'gh',
+				command: 'npx',
+				args: ['-y', 'srv'],
+				env: ['MCP_TOKEN'],
+				enabled: true,
+				agents: [],
+			},
+			{ name: 'docs', url: 'https://mcp.example.com', enabled: true, agents: [] },
+		]
+		const claude = runners.claude.args('P', { mcp: servers })
+		const i = claude.indexOf('--mcp-config')
+		expect(JSON.parse(claude[i + 1] ?? '')).toEqual({
+			mcpServers: {
+				gh: { command: 'npx', args: ['-y', 'srv'] },
+				docs: { type: 'http', url: 'https://mcp.example.com' },
+			},
+		})
+		expect(claude).toContain('--strict-mcp-config')
+		expect(runners.codex.args('P', { mcp: servers })).toEqual(
+			expect.arrayContaining([
+				'mcp_servers.gh.command="npx"',
+				'mcp_servers.gh.args=["-y","srv"]',
+				'mcp_servers.gh.env_vars=["MCP_TOKEN"]',
+				'mcp_servers.docs.url="https://mcp.example.com"',
+			])
+		)
+		expect(runners.claude.args('P', {})).not.toContain('--mcp-config')
+		const r = await runTask({
+			prompt: 'x',
+			cwd: '/nonexistent',
+			timeoutMs: 1000,
+			runner: runners.gemini,
+			mcp: servers,
+			command: ['/nope/never-run'],
+		})
+		expect(r.error).toMatch(/cannot take MCP servers/)
+	})
 })

@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import fs from 'fs-extra'
+import type { McpServer } from '../../daemon/config.js'
 import type { Task } from '../../daemon/queue.js'
 import {
 	agentEnv,
@@ -136,8 +137,8 @@ export async function workerCommand(o: WorkerOptions): Promise<void> {
 	for (let turn = 0; o.turns === undefined || turn < o.turns; turn++) {
 		try {
 			// Idle here: anything the dashboard still thinks this worker holds goes back in the queue.
-			await post(`/api/workers/${id}/heartbeat`, { claudeAuth, busy: false })
-			const res = await post(`/api/workers/${id}/next`)
+			await post(`/api/workers/${id}/heartbeat`, { claudeAuth, busy: false, runner: runnerName })
+			const res = await post(`/api/workers/${id}/next`, { runner: runnerName })
 			if (res.status !== 200) {
 				if (res.status !== 204) console.error(`next: ${res.status}`)
 				await sleep(IDLE_MS)
@@ -150,11 +151,16 @@ export async function workerCommand(o: WorkerOptions): Promise<void> {
 			} = (await res.json()) as {
 				task: Task
 				env: Record<string, string>
-				run?: { model?: string; tools?: string[] }
+				run?: { model?: string; tools?: string[]; mcp?: McpServer[] }
 			}
 			console.error(`→ ${task.repo} #${task.number} ${task.label}`)
 			const beat = setInterval(
-				() => void post(`/api/workers/${id}/heartbeat`, { claudeAuth, busy: true }).catch(() => {}),
+				() =>
+					void post(`/api/workers/${id}/heartbeat`, {
+						claudeAuth,
+						busy: true,
+						runner: runnerName,
+					}).catch(() => {}),
 				BEAT_MS
 			)
 			const taskEnv = { ...env, GH_REPO: task.repo }
@@ -173,6 +179,7 @@ export async function workerCommand(o: WorkerOptions): Promise<void> {
 					env: taskEnv,
 					model: profile?.model,
 					tools: profile?.tools,
+					mcp: profile?.mcp,
 					timeoutMs: TASK_TIMEOUT_MS,
 					onProgress: (line) =>
 						void post(`/api/tasks/${task.id}/progress`, { line }).catch(() => {}),

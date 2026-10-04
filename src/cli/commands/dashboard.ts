@@ -6,6 +6,9 @@ import { appCredentialsFromEnv, appEnv, mintInstallationToken } from '../../base
 import {
 	credentialEnv,
 	type DaemonConfig,
+	MCP_CREDENTIAL,
+	mcpEnv,
+	mcpFor,
 	presentCredentials,
 	readDaemonConfig,
 	validateConfig,
@@ -13,6 +16,7 @@ import {
 	writeDaemonConfig,
 } from '../../daemon/config.js'
 import { Queue, type Task } from '../../daemon/queue.js'
+import { type RunnerName, runners } from '../../daemon/run-task.js'
 import { type LoopEvent, type RepoState, tickRepo } from '../../daemon/scheduler.js'
 import type { DashboardView } from '../../daemon/view.js'
 
@@ -99,6 +103,13 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 			app: !!creds,
 			workerSecret: !!secret,
 			credentials: presentCredentials(),
+			mcpCredentials: presentCredentials(process.env, MCP_CREDENTIAL),
+			runners: Object.entries(runners).map(([name, r]) => ({
+				name,
+				auth: r.auth,
+				allowlist: r.allowlist,
+				mcp: r.mcp,
+			})),
 			repos: config.repos.map((r) => ({
 				...r,
 				state: states.get(r.repo) ?? null,
@@ -141,6 +152,11 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 			const id = parts[2] ?? ''
 			const body = (await readJson(req)) as Record<string, unknown>
 			// Own keys only: a worker id like `constructor` must not read an inherited property.
+			// Own keys only, as below; an unknown runner is claude, the worker's default.
+			const runner: RunnerName =
+				typeof body.runner === 'string' && Object.hasOwn(runners, body.runner)
+					? (body.runner as RunnerName)
+					: 'claude'
 			const assign = (w: string) =>
 				(Object.hasOwn(config.workers, w) && config.workers[w]) || {
 					role: 'any' as const,
@@ -153,6 +169,7 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 					body.claudeAuth === true,
 					typeof body.busy === 'boolean' ? body.busy : undefined
 				)
+				if (body.runner) w.runner = runner
 				return send(res, 200, { role: w.role, repos: w.repos })
 			}
 			if (parts[1] === 'workers' && parts[3] === 'next') {
@@ -161,10 +178,22 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 				if (!t) return send(res, 204)
 				try {
 					// The task gets only the credentials its worker's profile names (#295).
+					// Unset on the profile: the runner's defaults from the Models section (#306).
 					const p = assign(id) as WorkerSettings
-					const env = { ...credentialEnv(p.credentials), ...(await mint(t.repo)) }
+					const m = config.models?.[runner]
+					const mcp = mcpFor(config, runner, id)
+					const env = {
+						...credentialEnv(p.credentials),
+						...mcpEnv(mcp),
+						...(await mint(t.repo)),
+					}
 					event({ repo: t.repo, number: t.number, what: `${t.label} → ${id}` })
-					return send(res, 200, { task: t, env, run: { model: p.model, tools: p.tools } })
+					const run = {
+						model: p.model ?? m?.defaultModel,
+						tools: p.tools ?? m?.tools,
+						...(mcp.length && { mcp }),
+					}
+					return send(res, 200, { task: t, env, run })
 				} catch (err) {
 					queue.done(t.id, {
 						ok: false,
