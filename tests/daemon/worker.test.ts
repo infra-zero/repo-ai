@@ -47,7 +47,7 @@ describe('workerCommand', () => {
 				return new Response(
 					JSON.stringify({
 						task: {
-							id: 't1',
+							id: '0b9d2f3e-1c4a-4e5b-9a6d-7f8e9a0b1c2d',
 							repo: 'o/r',
 							kind: 'implement',
 							number: 5,
@@ -81,20 +81,20 @@ describe('workerCommand', () => {
 				return result({ result: 'PR: #9' })
 			},
 		})
-		expect(prepared).toBe(join(work, 't1'))
+		expect(prepared).toBe(join(work, '0b9d2f3e-1c4a-4e5b-9a6d-7f8e9a0b1c2d'))
 		expect(ran).toMatchObject({
 			prompt: 'P',
-			cwd: join(work, 't1'),
+			cwd: join(work, '0b9d2f3e-1c4a-4e5b-9a6d-7f8e9a0b1c2d'),
 			env: { GH_TOKEN: 'ghs_x', REPO_AI_GH_LOGIN: 'loop[bot]', GH_REPO: 'o/r' },
 		})
 		// The clone is gone once the task is reported.
-		expect(existsSync(join(work, 't1'))).toBe(false)
+		expect(existsSync(join(work, '0b9d2f3e-1c4a-4e5b-9a6d-7f8e9a0b1c2d'))).toBe(false)
 		expect(calls[0]?.body).toEqual({ claudeAuth: false, busy: false })
 		expect(calls.map((c) => c.path)).toEqual([
 			'/api/workers/worker-1/heartbeat',
 			'/api/workers/worker-1/next',
-			'/api/tasks/t1/progress',
-			'/api/tasks/t1/done',
+			'/api/tasks/0b9d2f3e-1c4a-4e5b-9a6d-7f8e9a0b1c2d/progress',
+			'/api/tasks/0b9d2f3e-1c4a-4e5b-9a6d-7f8e9a0b1c2d/done',
 		])
 		expect(calls.every((c) => c.secret === 's')).toBe(true)
 		expect(calls.at(-1)?.body).toEqual({
@@ -121,6 +121,51 @@ describe('workerCommand', () => {
 			turns: 2,
 		})
 		expect(sleeps).toEqual([10_000, 5_000])
+	})
+})
+
+describe('workerCommand with a hostile task id', () => {
+	beforeEach(() => {
+		vi.spyOn(console, 'error').mockImplementation(() => {})
+	})
+	it('refuses a non-UUID id before anything is created or removed', async () => {
+		const work = newTmpDir()
+		const done: unknown[] = []
+		let prepared = false
+		const fake = (async (url: string, init: RequestInit) => {
+			if (url.endsWith('/next'))
+				return new Response(
+					JSON.stringify({
+						task: {
+							id: '../../etc',
+							repo: 'o/r',
+							kind: 'fix',
+							number: 1,
+							label: 'fix',
+							prompt: 'P',
+							checkout: null,
+						},
+						env: {},
+					}),
+					{ status: 200 }
+				)
+			if (url.endsWith('/done')) done.push(JSON.parse(String(init.body)))
+			return new Response('{}', { status: 200 })
+		}) as unknown as typeof fetch
+		await workerCommand({
+			url: 'http://dash',
+			id: 'w',
+			work,
+			fetch: fake,
+			sleep: async () => {},
+			turns: 1,
+			prepare: async (_t, dir) => {
+				prepared = true
+				return dir
+			},
+		})
+		expect(prepared).toBe(false)
+		expect(done[0]).toMatchObject({ ok: false, summary: 'checkout failed: task id is not a UUID' })
 	})
 })
 

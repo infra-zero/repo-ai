@@ -21,6 +21,9 @@ x-repo-ai: &repo-ai
 x-worker: &worker
   <<: *repo-ai
   command: ["worker"]
+  # Root only to run each agent as the unprivileged `agent` uid (#293), so an
+  # agent cannot read the worker secret from /proc/<worker-pid>/environ.
+  user: root
   environment:
     REPO_AI_DASHBOARD_URL: http://api:8080
     REPO_AI_WORKER_SECRET: ${REPO_AI_WORKER_SECRET:?set it in docker/.env}

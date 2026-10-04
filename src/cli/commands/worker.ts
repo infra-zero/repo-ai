@@ -4,7 +4,13 @@ import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import fs from 'fs-extra'
 import type { Task } from '../../daemon/queue.js'
-import { agentEnv, runTask, type TaskResult, trailer } from '../../daemon/run-task.js'
+import {
+	agentEnv,
+	agentIdentity,
+	runTask,
+	type TaskResult,
+	trailer,
+} from '../../daemon/run-task.js'
 
 /**
  * `repo-ai worker` (#283): one agent container's loop — pull a task from
@@ -45,11 +51,18 @@ export function summarize(kind: Task['kind'], r: TaskResult): string {
 	return t ? `${key} ${t}` : (r.result.trim().split('\n').at(-1) ?? '').slice(0, 200)
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const SAFE_REF = /^(?!-)[\w./-]{1,200}$/
 
 function exec(cmd: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<void> {
+	const id = agentIdentity()
 	return new Promise((resolve, reject) => {
-		const child = spawn(cmd, args, { cwd, env, stdio: ['ignore', 'ignore', 'pipe'] })
+		const child = spawn(cmd, args, {
+			cwd,
+			env: { ...env, ...(id && { HOME: id.home }) },
+			...(id && { uid: id.uid, gid: id.gid }),
+			stdio: ['ignore', 'ignore', 'pipe'],
+		})
 		let err = ''
 		child.stderr.on('data', (d) => {
 			err = (err + d).slice(-500)
@@ -69,7 +82,12 @@ export async function prepareCheckout(
 	dir: string,
 	env: NodeJS.ProcessEnv
 ): Promise<string> {
-	await fs.ensureDir(dir)
+	// /work stays root-owned, so the agent cannot plant a symlink at `dir`: drop any stale
+	// leftover, create it fresh (mkdir fails on an existing entry), lchown only that dir (#293).
+	await fs.remove(dir)
+	await fs.mkdir(dir)
+	const id = agentIdentity()
+	if (id) await fs.lchown(dir, id.uid, id.gid)
 	const c = task.checkout
 	if (!c) return dir
 	if (!/^[A-Za-z0-9-]+\/(?!\.\.?$)[\w.-]+$/.test(task.repo))
@@ -124,9 +142,13 @@ export async function workerCommand(o: WorkerOptions): Promise<void> {
 				BEAT_MS
 			)
 			const taskEnv = { ...env, GH_REPO: task.repo }
-			const dir = path.join(work, task.id)
+			// Root removes this directory (#293 review): only a UUID — what the api's
+			// randomUUID makes — may name it, so a hostile id cannot point outside /work.
+			const safeId = UUID.test(task.id)
+			const dir = path.join(work, safeId ? task.id : 'rejected')
 			let r: TaskResult
 			try {
+				if (!safeId) throw new Error('task id is not a UUID')
 				const cwd = await prepare(task, dir, { ...agentEnv(process.env), ...taskEnv })
 				r = await run({
 					prompt: task.prompt,

@@ -63,6 +63,19 @@ export function agentEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 	)
 }
 
+/**
+ * Spawn options that drop a child to the agent uid (#293), set only when the
+ * worker runs as root. The agent then cannot read the worker's
+ * `/proc/<pid>/environ`, which holds the worker secret.
+ */
+export function agentIdentity(
+	env: NodeJS.ProcessEnv = process.env
+): { uid: number; gid: number; home: string } | null {
+	const uid = Number(env.REPO_AI_AGENT_UID)
+	if (!Number.isInteger(uid) || uid <= 0 || process.getuid?.() !== 0) return null
+	return { uid, gid: uid, home: '/home/agent' }
+}
+
 export function runTask(t: TaskRun): Promise<TaskResult> {
 	const [bin, ...lead] = t.command ?? ['claude']
 	const args = [
@@ -77,9 +90,11 @@ export function runTask(t: TaskRun): Promise<TaskResult> {
 	]
 	const started = Date.now()
 	return new Promise((resolve) => {
+		const id = agentIdentity()
 		const child = spawn(bin, args, {
 			cwd: t.cwd,
-			env: { ...agentEnv(process.env), ...t.env },
+			env: { ...agentEnv(process.env), ...(id && { HOME: id.home }), ...t.env },
+			...(id && { uid: id.uid, gid: id.gid }),
 			stdio: ['ignore', 'pipe', 'pipe'],
 		})
 		let final: Partial<TaskResult> | null = null
