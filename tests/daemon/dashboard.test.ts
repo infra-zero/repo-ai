@@ -127,6 +127,11 @@ describe('validateConfig', () => {
 			repos: [{ repo: 'rtorcato/repo-ai', enabled: true, dependabotAutoReview: false }],
 			workers: { 'repo-ai-worker-1': { role: 'reviewer', repos: ['rtorcato/repo-ai'] } },
 		})
+		expect(validateConfig({ repos: [], maxInFlight: 3, tokenBudget: 0 })).toMatchObject({
+			maxInFlight: 3,
+			tokenBudget: 0,
+		})
+		expect(validateConfig({ repos: [], maxInFlight: 0 })).toMatch(/maxInFlight/)
 		expect(validateConfig({ repos: [{ repo: '../etc' }] })).toMatch(/not an owner\/repo/)
 		expect(validateConfig({ repos: [], pollSeconds: 5 })).toMatch(/pollSeconds/)
 		expect(validateConfig({ repos: [], workers: { w: { role: 'root' } } })).toMatch(/role/)

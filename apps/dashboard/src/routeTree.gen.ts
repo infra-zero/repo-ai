@@ -12,6 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as AgentsRouteImport } from './routes/agents'
+import { Route as ModelsRouteImport } from './routes/models'
+import { Route as ReposRouteImport } from './routes/repos'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SetupRouteImport } from './routes/setup'
 
 const IndexRoute = IndexRouteImport.update({
@@ -29,6 +32,21 @@ const AgentsRoute = AgentsRouteImport.update({
   path: '/agents',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ModelsRoute = ModelsRouteImport.update({
+  id: '/models',
+  path: '/models',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReposRoute = ReposRouteImport.update({
+  id: '/repos',
+  path: '/repos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
@@ -39,12 +57,18 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
   '/agents': typeof AgentsRoute
+  '/models': typeof ModelsRoute
+  '/repos': typeof ReposRoute
+  '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
   '/agents': typeof AgentsRoute
+  '/models': typeof ModelsRoute
+  '/repos': typeof ReposRoute
+  '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
 }
 export interface FileRoutesById {
@@ -52,20 +76,48 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
   '/agents': typeof AgentsRoute
+  '/models': typeof ModelsRoute
+  '/repos': typeof ReposRoute
+  '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/activity' | '/agents' | '/setup'
+  fullPaths:
+    | '/'
+    | '/activity'
+    | '/agents'
+    | '/models'
+    | '/repos'
+    | '/settings'
+    | '/setup'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/activity' | '/agents' | '/setup'
-  id: '__root__' | '/' | '/activity' | '/agents' | '/setup'
+  to:
+    | '/'
+    | '/activity'
+    | '/agents'
+    | '/models'
+    | '/repos'
+    | '/settings'
+    | '/setup'
+  id:
+    | '__root__'
+    | '/'
+    | '/activity'
+    | '/agents'
+    | '/models'
+    | '/repos'
+    | '/settings'
+    | '/setup'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ActivityRoute: typeof ActivityRoute
   AgentsRoute: typeof AgentsRoute
+  ModelsRoute: typeof ModelsRoute
+  ReposRoute: typeof ReposRoute
+  SettingsRoute: typeof SettingsRoute
   SetupRoute: typeof SetupRoute
 }
 
@@ -92,6 +144,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/models': {
+      id: '/models'
+      path: '/models'
+      fullPath: '/models'
+      preLoaderRoute: typeof ModelsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/repos': {
+      id: '/repos'
+      path: '/repos'
+      fullPath: '/repos'
+      preLoaderRoute: typeof ReposRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/setup': {
       id: '/setup'
       path: '/setup'
@@ -106,6 +179,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ActivityRoute: ActivityRoute,
   AgentsRoute: AgentsRoute,
+  ModelsRoute: ModelsRoute,
+  ReposRoute: ReposRoute,
+  SettingsRoute: SettingsRoute,
   SetupRoute: SetupRoute,
 }
 export const routeTree = rootRouteImport
