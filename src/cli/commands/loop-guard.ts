@@ -87,8 +87,13 @@ export function classifyRoot(insideWorkTree: string | null, gitEntry: GitEntry):
  */
 export type IdentityVerdict = 'not-configured' | 'match' | 'mismatch'
 
-/** `.repo-ai.json`'s `agentUser`. */
+/**
+ * `.repo-ai.json`'s `agentUser` — none when running as a GitHub App (#282):
+ * the App is the agent, it cannot be assigned, and its `<slug>[bot]` login
+ * would never match a configured user account.
+ */
 export async function configuredAgentUser(root: string): Promise<string | undefined> {
+	if (process.env.REPO_AI_GH_LOGIN?.trim()) return undefined
 	return (await readConfig(root)).agentUser
 }
 
