@@ -12,11 +12,14 @@ export function Activity({ view }: { view: DashboardView }) {
 				)}
 				<ul className="divide-y font-mono text-xs">
 					{events.map((e) => (
-						<li key={`${e.t}-${e.repo}-${e.number}-${e.what}`} className="flex gap-3 px-4 py-1.5">
+						<li
+							key={`${e.t}-${e.repo}-${e.number}-${e.what}`}
+							className="flex flex-wrap gap-x-3 px-4 py-1.5"
+						>
 							<span className="shrink-0 text-muted-foreground">{clock(e.t)}</span>
 							<span className="w-32 shrink-0 truncate">{short(e.repo)}</span>
 							<span className="w-12 shrink-0 text-primary">{e.number ? `#${e.number}` : ''}</span>
-							<span className="break-words">{e.what}</span>
+							<span className="min-w-0 basis-full break-words sm:basis-0 sm:flex-1">{e.what}</span>
 						</li>
 					))}
 				</ul>
