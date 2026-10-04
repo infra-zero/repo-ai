@@ -10,9 +10,12 @@
 #              hostname, because the dashboard keys a worker's role by it.
 #              Add one by copying a block and bumping the number. A worker
 #              runs Claude Code unless its block sets
-#              `command: ["worker", "--runner", "codex"]` (or gemini).
+#              `command: ["worker", "--runner", "codex"]` (or gemini) and swaps
+#              its credential (see the commented worker-3 below).
 #
-# Each service gets only the secrets it uses (values come from docker/.env).
+# Each service gets only the secrets it uses (values come from docker/.env):
+# a worker holds only its own runner's model credential (#308), so an agent in
+# a codex worker cannot read the Claude token, and the reverse.
 name: repo-ai
 
 x-repo-ai: &repo-ai
@@ -27,12 +30,11 @@ x-worker: &worker
   # agent cannot read the worker secret from /proc/<worker-pid>/environ.
   user: root
   environment:
-    REPO_AI_DASHBOARD_URL: http://api:8080
-    REPO_AI_WORKER_SECRET: ${REPO_AI_WORKER_SECRET:?set it in docker/.env}
+    <<: &worker-env
+      REPO_AI_DASHBOARD_URL: http://api:8080
+      REPO_AI_WORKER_SECRET: ${REPO_AI_WORKER_SECRET:?set it in docker/.env}
     CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
     ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-    CODEX_API_KEY: ${CODEX_API_KEY:-}
-    GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   # Workers never see the App key (the api hands each task a one-hour token)
   # and never mount the api's clones: each task clones fresh into the worker's
   # own /work, so an agent cannot plant git config or hooks that the api's git
@@ -79,6 +81,14 @@ services:
   worker-2:
     <<: *worker
     hostname: worker-2
+  # A codex (or gemini) worker replaces the Claude credential with its own:
+  # worker-3:
+  #   <<: *worker
+  #   hostname: worker-3
+  #   command: ["worker", "--runner", "codex"]
+  #   environment:
+  #     <<: *worker-env
+  #     CODEX_API_KEY: ${CODEX_API_KEY:?set it in docker/.env}
 
 secrets:
   github_app_key:

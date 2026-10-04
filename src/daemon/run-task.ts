@@ -195,18 +195,23 @@ const MODEL_KEYS: string[] = Object.values(runners).flatMap((r) => r.auth)
 
 /**
  * The worker's environment minus what the agent must never read: the
- * worker secret (it gets tokens from the dashboard) and any App credential.
- * The worker's model credential stays — the agent cannot run without it —
- * unless the task brings its own (#295), and then none of the worker's do.
+ * worker secret (it gets tokens from the dashboard), any App credential, and
+ * every model credential except `keep` — the running runner's own (#308), so
+ * a codex agent never sees the Claude token. Those go too when the task
+ * brings its profile's credential (#295).
  */
-export function agentEnv(env: NodeJS.ProcessEnv, task?: Record<string, string>): NodeJS.ProcessEnv {
+export function agentEnv(
+	env: NodeJS.ProcessEnv,
+	task?: Record<string, string>,
+	keep: string[] = []
+): NodeJS.ProcessEnv {
 	const own = MODEL_KEYS.some((k) => task?.[k])
 	return Object.fromEntries(
 		Object.entries(env).filter(
 			([k]) =>
 				k !== 'REPO_AI_WORKER_SECRET' &&
 				!k.startsWith('GITHUB_APP_') &&
-				!(own && MODEL_KEYS.includes(k))
+				!(MODEL_KEYS.includes(k) && (own || !keep.includes(k)))
 		)
 	)
 }
@@ -243,7 +248,7 @@ export function runTask(t: TaskRun): Promise<TaskResult> {
 		const id = agentIdentity()
 		const child = spawn(bin, args, {
 			cwd: t.cwd,
-			env: { ...agentEnv(process.env, t.env), ...(id && { HOME: id.home }), ...t.env },
+			env: { ...agentEnv(process.env, t.env, runner.auth), ...(id && { HOME: id.home }), ...t.env },
 			...(id && { uid: id.uid, gid: id.gid }),
 			stdio: ['ignore', 'pipe', 'pipe'],
 		})
