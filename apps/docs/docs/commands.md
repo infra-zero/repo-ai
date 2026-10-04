@@ -14,14 +14,16 @@ missing; `fix config` creates it.
 
 | Command | What it does |
 |---|---|
-| `setup [--yes] [--json]` | Onboard a repo: runs `fix config`, `fix claude-skills`, creates or repairs the loop labels, `fix ai-loop-identity` (with an agent user), and `fix statusline` — asking before each — then `doctor`. |
+| `setup [--yes] [--json]` | Onboard a repo: runs `fix config`, `fix claude-skills`, creates or repairs the loop labels, `fix ai-loop-identity` (with an agent user), `fix statusline` and `fix claude-plugin` — asking before each — then `doctor`. |
 | `doctor [--json]` | Audit the loop setup: the loop labels against their spec; `.repo-ai.json` present and valid against its schema; `agentUser` matches the `gh` identity; `humanUser` set on an organisation-owned repo; `autoMerge` only with a release gate; **CI runs** — default-branch push runs cancelled or pending with no jobs, or a `ciWorkflow` that does not exist; **Release approval** — a `release` run waiting on approval for over a day; **Release run** — the newest completed default-branch run whose `release` job failed. Both read `release.yml`'s runs (any event) when the repo has one, else the CI workflow's push runs; **Security alerts** — open Dependabot alerts, high/critical named and moderate/low folded into the count, silent on 403/404; installed skills, plugin skills and workflows, and whether they are current; `requiredSkills` installed; the Claude Code `permissions.allow` rules a tick needs; with Claude Code's sandbox on, `gh *` and `npx @rtorcato/repo-ai *` in `sandbox.excludedCommands`; and whether your statusline shows the loop status. `requiredSkills`, permissions and the sandbox are checked only when `agentUser` is set. All read-only. Exits 1 only on `drift` / `missing`. |
+| `auth app-token --repo <owner/repo> [--json]` | Print an installation token for the loop's GitHub App, scoped to one repo, from `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY_FILE` (or `GITHUB_APP_PRIVATE_KEY`). `GH_TOKEN=$(npx @rtorcato/repo-ai auth app-token --repo o/r)` puts `gh` and `git` on the App's identity for an hour. An installation token cannot call `GET /user`, so set `REPO_AI_GH_LOGIN=<slug>[bot]` (the `--json` `login`) alongside it. |
 | `fix config` | Write `$schema`, and every unset key that has a default, into `.repo-ai.json`. With no file, create one, migrating any old `.repo-tooling.json` settings once. |
 | `fix labels` | Repair loop label colours and descriptions with `gh label edit`. |
 | `fix claude-skills` | Install or update the skills into `~/.claude/skills` (or `--skills-dir <path>`), and the Workflow scripts they run by name into the sibling `workflows/` directory. `--force-skills` overwrites a modified or newer copy. |
 | `fix ai-loop-identity` | Point this checkout's Claude sessions at a `gh` profile signed in as `agentUser`. |
 | `fix sandbox` | With Claude Code's sandbox on, add `gh *` and `npx @rtorcato/repo-ai *` to `sandbox.excludedCommands` in the settings file that turns it on. An allow rule only skips the prompt; a sandboxed `gh` fails TLS on macOS (no keychain) and `npx` can't write its cache, so a tick halts or needs an unsandboxed retry the auto-mode classifier may refuse. Excluding `gh *` gives `gh` your keychain and network, which the loop needs anyway to label PRs. Never sets `enabled`, never creates a `sandbox` block, and writes nothing while the sandbox is off. Chained calls (`cd x && gh …`) still run sandboxed. |
 | `fix statusline` | Install the loop's status segment (`🤖 2 agents·1 to merge · next 9m`) to `~/.claude/ai-loop-statusline.sh`, replacing that file on every run (it is ours; don't edit it). Never touches an existing statusline: sets `statusLine` in `~/.claude/settings.json` only when you have none, otherwise prints the one line to add to your own script. Never prompts. |
+| `fix claude-plugin` | Install the `/ai-loop-dash` pane plugin to `~/.claude/repo-ai-plugin`, replacing changed files on every run (it is ours; don't edit it), and add that path to `env.CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`, keeping any folders already listed. New sessions load it. Never prompts. |
 
 **Moving over from repo-tooling?** Skills installed by `@rtorcato/repo-tooling`
 carry that package's version stamp, so `fix claude-skills` treats them as local
@@ -57,12 +59,12 @@ The skills call these; you rarely need them directly.
 
 ## Live pane in Claude Code
 
-`loop dash` also comes as a Claude Code pane. The package ships a plugin in `claude-plugin/`. Load it for a session with `--plugin-dir`:
+`loop dash` also comes as a Claude Code pane. `setup` installs it, or install it on its own:
 
 ```sh
-claude --plugin-dir node_modules/@rtorcato/repo-ai/claude-plugin
+npx @rtorcato/repo-ai fix claude-plugin
 ```
 
-Then type `/ai-loop-dash` to open the `ai-loop` pane. It never opens unless you ask. Once open, it runs `repo-ai loop dash --json` (via `npx --no`, so the repo's own install) every `pollSeconds` from `.repo-ai.json` (180 by default, 60 at least) and draws the same sections as `loop dash`. The JSON carries no issue bodies, so the pane cannot show one. Polling continues until the session ends.
+This copies the plugin to `~/.claude/repo-ai-plugin` and adds that path to `CLAUDE_CODE_PLUGIN_DIRS` in the `env` block of `~/.claude/settings.json`, so every new session loads it, however you launch `claude`. Claude Code reads that variable from user settings only, not from a project's settings. To load it for one session without installing it, pass `claude --plugin-dir node_modules/@rtorcato/repo-ai/claude-plugin`.
 
-To load it in every session, add the absolute path to `CLAUDE_CODE_PLUGIN_DIRS` in the `env` block of `~/.claude/settings.json`.
+Then type `/ai-loop-dash` to open the `ai-loop` pane. It never opens unless you ask. Once open, it runs `repo-ai loop dash --json` (via `npx --no`, so the repo's own install) every `pollSeconds` from `.repo-ai.json` (180 by default, 60 at least) and draws the same sections as `loop dash`. The JSON carries no issue bodies, so the pane cannot show one. Polling continues until the session ends.
