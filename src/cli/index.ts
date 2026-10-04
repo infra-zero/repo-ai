@@ -31,7 +31,7 @@ program
 program
 	.command('setup')
 	.description(
-		'🚀 Onboard a repo: claude-skills, labels, ai-loop-identity, statusline — asking before each — then doctor'
+		'🚀 Onboard a repo: claude-skills, labels, ai-loop-identity, statusline, claude-plugin — asking before each — then doctor'
 	)
 	.option('-d, --dir <path>', 'Repository to set up', process.cwd())
 	.option('-y, --yes', 'Run every step without prompting')
