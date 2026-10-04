@@ -6,6 +6,7 @@ import { doctorCommand } from './commands/doctor.js'
 import { appTokenCommand } from './commands/auth.js'
 import { dashboardCommand } from './commands/dashboard.js'
 import { FIXERS, fixCommand } from './commands/fix.js'
+import { workerCommand } from './commands/worker.js'
 import { loopApplyCommand } from './commands/loop-apply.js'
 import { loopCleanupCommand } from './commands/loop-cleanup.js'
 import { loopEnvCommand } from './commands/loop-env.js'
@@ -80,6 +81,19 @@ program
 	.option('--data <dir>', 'Config, events', '/data')
 	.option('--repos <dir>', 'Clones and worktrees', '/repos')
 	.action(async (o) => void (await dashboardCommand(o)))
+
+program
+	.command('worker')
+	.description(
+		'🤖 A Docker agent worker: pull tasks from the dashboard and run them with Claude Code'
+	)
+	.option(
+		'--url <url>',
+		'The dashboard',
+		process.env.REPO_AI_DASHBOARD_URL ?? 'http://dashboard:8080'
+	)
+	.option('--id <id>', 'Worker id (default: the hostname)')
+	.action(workerCommand)
 
 const loop = program.command('loop').description('🔁 ai-loop mechanics as tested commands')
 
