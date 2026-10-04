@@ -34,6 +34,12 @@ describe('workerCommand', () => {
 		process.env.REPO_AI_WORKER_SECRET = 's'
 	})
 
+	it('refuses a runner it does not know', async () => {
+		await expect(
+			workerCommand({ url: 'http://dash', runner: 'toString', turns: 0 })
+		).rejects.toThrow(/unknown runner toString/)
+	})
+
 	it('pulls a task, runs it with the minted env, and reports the result', async () => {
 		const calls: { path: string; body: unknown; secret: string }[] = []
 		const fake = (async (url: string, init: RequestInit) => {
