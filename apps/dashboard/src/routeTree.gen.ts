@@ -13,9 +13,10 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as ModelsRouteImport } from './routes/models'
-import { Route as ReposRouteImport } from './routes/repos'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SetupRouteImport } from './routes/setup'
+import { Route as ReposIndexRouteImport } from './routes/repos.index'
+import { Route as ReposOwnerNameRouteImport } from './routes/repos.$owner.$name'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -37,11 +38,6 @@ const ModelsRoute = ModelsRouteImport.update({
   path: '/models',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ReposRoute = ReposRouteImport.update({
-  id: '/repos',
-  path: '/repos',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -52,24 +48,36 @@ const SetupRoute = SetupRouteImport.update({
   path: '/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReposIndexRoute = ReposIndexRouteImport.update({
+  id: '/repos/',
+  path: '/repos/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReposOwnerNameRoute = ReposOwnerNameRouteImport.update({
+  id: '/repos/$owner/$name',
+  path: '/repos/$owner/$name',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
   '/agents': typeof AgentsRoute
   '/models': typeof ModelsRoute
-  '/repos': typeof ReposRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
+  '/repos/': typeof ReposIndexRoute
+  '/repos/$owner/$name': typeof ReposOwnerNameRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
   '/agents': typeof AgentsRoute
   '/models': typeof ModelsRoute
-  '/repos': typeof ReposRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
+  '/repos': typeof ReposIndexRoute
+  '/repos/$owner/$name': typeof ReposOwnerNameRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -77,9 +85,10 @@ export interface FileRoutesById {
   '/activity': typeof ActivityRoute
   '/agents': typeof AgentsRoute
   '/models': typeof ModelsRoute
-  '/repos': typeof ReposRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
+  '/repos/': typeof ReposIndexRoute
+  '/repos/$owner/$name': typeof ReposOwnerNameRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -88,27 +97,30 @@ export interface FileRouteTypes {
     | '/activity'
     | '/agents'
     | '/models'
-    | '/repos'
     | '/settings'
     | '/setup'
+    | '/repos/'
+    | '/repos/$owner/$name'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/activity'
     | '/agents'
     | '/models'
-    | '/repos'
     | '/settings'
     | '/setup'
+    | '/repos'
+    | '/repos/$owner/$name'
   id:
     | '__root__'
     | '/'
     | '/activity'
     | '/agents'
     | '/models'
-    | '/repos'
     | '/settings'
     | '/setup'
+    | '/repos/'
+    | '/repos/$owner/$name'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -116,9 +128,10 @@ export interface RootRouteChildren {
   ActivityRoute: typeof ActivityRoute
   AgentsRoute: typeof AgentsRoute
   ModelsRoute: typeof ModelsRoute
-  ReposRoute: typeof ReposRoute
   SettingsRoute: typeof SettingsRoute
   SetupRoute: typeof SetupRoute
+  ReposIndexRoute: typeof ReposIndexRoute
+  ReposOwnerNameRoute: typeof ReposOwnerNameRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -151,13 +164,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ModelsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/repos': {
-      id: '/repos'
-      path: '/repos'
-      fullPath: '/repos'
-      preLoaderRoute: typeof ReposRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -172,6 +178,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/repos/': {
+      id: '/repos/'
+      path: '/repos'
+      fullPath: '/repos/'
+      preLoaderRoute: typeof ReposIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/repos/$owner/$name': {
+      id: '/repos/$owner/$name'
+      path: '/repos/$owner/$name'
+      fullPath: '/repos/$owner/$name'
+      preLoaderRoute: typeof ReposOwnerNameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -180,9 +200,10 @@ const rootRouteChildren: RootRouteChildren = {
   ActivityRoute: ActivityRoute,
   AgentsRoute: AgentsRoute,
   ModelsRoute: ModelsRoute,
-  ReposRoute: ReposRoute,
   SettingsRoute: SettingsRoute,
   SetupRoute: SetupRoute,
+  ReposIndexRoute: ReposIndexRoute,
+  ReposOwnerNameRoute: ReposOwnerNameRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

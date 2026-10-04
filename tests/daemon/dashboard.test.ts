@@ -10,6 +10,9 @@ import {
 	credentialEnv,
 	mcpEnv,
 	mcpFor,
+	type DaemonConfig,
+	limitsFor,
+	pollSecondsFor,
 	presentCredentials,
 	validateConfig,
 } from '../../src/daemon/config.js'
@@ -151,6 +154,29 @@ describe('validateConfig', () => {
 				workers: { w: { role: 'any', repos: ['x/y', 'o/r'] } },
 			})
 		).toMatchObject({ workers: { w: { role: 'any', repos: ['o/r'] } } })
+	})
+
+	it('takes per-repo poll and limit overrides, else the global default (#305)', () => {
+		const c = validateConfig({
+			pollSeconds: 300,
+			maxInFlight: 4,
+			tokenBudget: 1000,
+			repos: [
+				{ repo: 'o/a', pollSeconds: 90, limits: { maxInFlight: 2, maxFixRounds: 0 } },
+				{ repo: 'o/b', pollSeconds: null, limits: {} },
+			],
+		}) as DaemonConfig
+		const [a, b] = c.repos
+		expect(b).toEqual({ repo: 'o/b', enabled: true, dependabotAutoReview: false })
+		expect(pollSecondsFor(c, a)).toBe(90)
+		expect(pollSecondsFor(c, b)).toBe(300)
+		expect(limitsFor(c, a)).toEqual({ maxInFlight: 2, maxFixRounds: 0, tokenBudget: 1000 })
+		expect(limitsFor(c, b)).toEqual({ maxInFlight: 4, maxFixRounds: undefined, tokenBudget: 1000 })
+		const one = (r: Record<string, unknown>) => validateConfig({ repos: [{ repo: 'o/r', ...r }] })
+		expect(one({ pollSeconds: 30 })).toMatch(/o\/r: pollSeconds/)
+		expect(one({ limits: { maxInFlight: 0 } })).toMatch(/o\/r: maxInFlight/)
+		expect(one({ limits: { tokenBudget: 1.5 } })).toMatch(/tokenBudget/)
+		expect(one({ limits: 'x' })).toMatch(/limits must be an object/)
 	})
 
 	it('validates a worker profile as untrusted input (#295)', () => {

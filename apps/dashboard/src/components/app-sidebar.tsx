@@ -102,7 +102,11 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 								<SidebarMenuButton
 									asChild
 									tooltip={n.title}
-									isActive={n.to === '/' ? pathname === '/' && !activeRepo : pathname === n.to}
+									isActive={
+										n.to === '/'
+											? pathname === '/' && !activeRepo
+											: pathname === n.to || pathname.startsWith(`${n.to}/`)
+									}
 								>
 									<Link to={n.to} search={n.to === '/' ? {} : undefined} onClick={closeSheet}>
 										<n.icon />

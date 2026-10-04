@@ -196,6 +196,8 @@ export const stalledMarker = (head: string) => `<!-- ai-loop:stalled:${head} -->
 export interface LoopTickOptions {
 	root?: string
 	json?: boolean
+	/** The dashboard's limits (#305): each set one overrides the repo's `.repo-ai.json`. */
+	limits?: Partial<Pick<LoopEnv, 'maxInFlight' | 'maxFixRounds'>>
 	/** Test seams. */
 	git?: GitExec
 	gh?: GhExec
@@ -343,6 +345,8 @@ export function emptyTick(env: LoopEnv): LoopTickResult {
 export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTickResult> {
 	const dir = path.resolve(options.root ?? process.cwd())
 	const env = await resolveLoopEnv({ dir, git: options.git, gh: options.gh, env: options.env })
+	if (options.limits?.maxInFlight !== undefined) env.maxInFlight = options.limits.maxInFlight
+	if (options.limits?.maxFixRounds !== undefined) env.maxFixRounds = options.limits.maxFixRounds
 	const result = emptyTick(env)
 	if (!env.root || !env.ownerRepo) {
 		result.halt = env.warnings.join('; ') || 'could not resolve the checkout'
