@@ -25,7 +25,12 @@ export interface Task {
 	/** Shown on the dashboard, e.g. `review:code`. */
 	label: string
 	prompt: string
-	cwd: string
+	/**
+	 * What the worker checks out in its own fresh clone — never a path in the
+	 * dashboard's clones, whose git runs beside the App key and must not be
+	 * writable by an agent (#290 review). `null`: no checkout (a review reads via gh).
+	 */
+	checkout: { branch: string; from: string } | { pr: number } | null
 	state: 'queued' | 'running' | 'done' | 'failed'
 	createdAt: number
 	worker?: string
@@ -75,12 +80,15 @@ export class Queue {
 	heartbeat(
 		id: string,
 		assign: (id: string) => Pick<WorkerInfo, 'role' | 'repos'>,
-		claudeAuth?: boolean
+		claudeAuth?: boolean,
+		/** `false` from a worker between tasks: whatever it held is gone (a failed `done`, a restart). */
+		busy?: boolean
 	): WorkerInfo {
 		// Re-read every beat, so a role changed on the dashboard applies from the worker's next task.
 		const w: WorkerInfo = Object.assign(this.workers.get(id) ?? { id, lastSeen: 0 }, assign(id))
 		w.lastSeen = this.now()
 		if (claudeAuth !== undefined) w.claudeAuth = claudeAuth
+		if (busy === false && w.task) this.release(w)
 		this.workers.set(id, w)
 		return w
 	}
@@ -122,13 +130,15 @@ export class Queue {
 
 	requeueStale(): void {
 		const cutoff = this.now() - this.heartbeatMs
-		for (const w of this.workers.values()) {
-			if (w.lastSeen >= cutoff || !w.task) continue
-			const t = this.tasks.get(w.task)
-			if (t?.state === 'running')
-				Object.assign(t, { state: 'queued', worker: undefined, startedAt: undefined })
-			w.task = undefined
-		}
+		for (const w of this.workers.values()) if (w.lastSeen < cutoff && w.task) this.release(w)
+	}
+
+	/** The worker's task goes back in the queue. */
+	private release(w: WorkerInfo): void {
+		const t = w.task ? this.tasks.get(w.task) : undefined
+		if (t?.state === 'running')
+			Object.assign(t, { state: 'queued', worker: undefined, startedAt: undefined })
+		w.task = undefined
 	}
 
 	/** Keeps the last 100 finished tasks for the dashboard. */
