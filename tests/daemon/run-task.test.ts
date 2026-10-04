@@ -266,6 +266,15 @@ describe('agentEnv', () => {
 			)
 		).toEqual({ PATH: '/bin' })
 	})
+
+	it("drops every worker model credential when the task brings its profile's (#295)", () => {
+		expect(
+			agentEnv(
+				{ PATH: '/bin', CLAUDE_CODE_OAUTH_TOKEN: 'c', ANTHROPIC_API_KEY: 'a' },
+				{ ANTHROPIC_API_KEY: 'team' }
+			)
+		).toEqual({ PATH: '/bin' })
+	})
 })
 
 describe('implementPrompt title', () => {

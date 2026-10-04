@@ -37,10 +37,24 @@ export interface WorkerSettings {
 	 * (see `MODEL_CREDENTIAL`). Empty: the worker's own env, as before #295.
 	 */
 	credentials?: string[]
-	/** Daily spend target in USD, shown on the agent's card; not enforced. */
-	budgetUsd?: number
 	/** Claude Code `--allowedTools` rules; set, everything else is denied. Empty: all tools. */
 	tools?: string[]
+}
+
+/**
+ * An agent (#307): a profile with its own id, bound to one worker slot. Compose
+ * runs N generic worker containers; a slot with no agent bound takes no tasks.
+ */
+export interface AgentSettings extends WorkerSettings {
+	id: string
+	/** The worker id (container hostname) it runs on. One agent per slot. */
+	slot: string
+	/** How long its worker waits between asks when idle, in seconds; unset: 5. */
+	pollSeconds?: number
+	/** Output tokens per day; unset: no budget. Over it, the agent takes no new task until tomorrow. */
+	tokenBudget?: number
+	/** USD per day; unset: no budget. */
+	costBudgetUsd?: number
 }
 
 /** Global loop limits (#302); unset means the repo's own `.repo-ai.json` / built-in default. */
@@ -54,11 +68,11 @@ export interface GlobalLimits {
 export interface DaemonConfig extends GlobalLimits {
 	pollSeconds: number
 	repos: RepoSettings[]
-	/** Keyed by worker id (its container hostname). Unknown workers get `any`. */
-	workers: Record<string, WorkerSettings>
+	agents: AgentSettings[]
 }
 
-export const DEFAULT_CONFIG: DaemonConfig = { pollSeconds: 180, repos: [], workers: {} }
+export const DEFAULT_CONFIG: DaemonConfig = { pollSeconds: 180, repos: [], agents: [] }
+const ID = /^[\w.-]{1,64}$/
 
 /** A repo's own value, else the global default (#305). */
 export const pollSecondsFor = (c: DaemonConfig, r: RepoSettings) => r.pollSeconds ?? c.pollSeconds
@@ -110,11 +124,6 @@ function validateProfile(id: string, w: Record<string, unknown>): Partial<Worker
 	if (w.model !== undefined && w.model !== '') {
 		if (typeof w.model !== 'string' || !MODEL.test(w.model)) return `${id}: not a model name`
 		p.model = w.model
-	}
-	if (w.budgetUsd !== undefined && w.budgetUsd !== '' && w.budgetUsd !== null) {
-		if (typeof w.budgetUsd !== 'number' || !(w.budgetUsd > 0) || w.budgetUsd > 100000)
-			return `${id}: budgetUsd must be a positive number`
-		p.budgetUsd = w.budgetUsd
 	}
 	for (const [key, re, what] of [
 		['credentials', MODEL_CREDENTIAL, 'a model credential name'],
@@ -183,21 +192,50 @@ export function validateConfig(input: unknown): DaemonConfig | string {
 			...own,
 		})
 	}
-	const workers: Record<string, WorkerSettings> = {}
-	for (const [id, w] of Object.entries(c.workers ?? {})) {
-		if (!/^[\w.-]{1,64}$/.test(id) || /^(__proto__|constructor|prototype)$/.test(id))
-			return `not a worker id: ${id}`
-		if (!ROLES.includes(w?.role)) return `${id}: role must be one of ${ROLES.join(', ')}`
-		// A repo that is no longer configured drops out of the worker's list rather than refusing the
-		// save — removing a repo would otherwise be impossible while any worker is scoped to it (#288 review).
-		const wr = Array.isArray(w.repos)
-			? w.repos.filter((x) => typeof x === 'string' && repos.some((r) => r.repo === x))
+	// Before #307 profiles were keyed by worker id: each becomes an agent bound to that worker,
+	// its #309 `budgetUsd` becoming `costBudgetUsd`.
+	const raw =
+		c.agents ??
+		Object.entries((c as { workers?: Record<string, unknown> }).workers ?? {}).map(([id, w]) => {
+			const { budgetUsd, ...rest } = (w ?? {}) as Record<string, unknown>
+			return { costBudgetUsd: budgetUsd ?? undefined, ...rest, id, slot: id }
+		})
+	if (!Array.isArray(raw) || raw.length > 100) return 'agents must be a list'
+	const agents: AgentSettings[] = []
+	for (const a of raw as AgentSettings[]) {
+		if (!a || typeof a !== 'object') return 'each agent must be an object'
+		const id = String(a?.id)
+		if (!ID.test(id)) return `not an agent id: ${id}`
+		if (typeof a.slot !== 'string' || !ID.test(a.slot)) return `${id}: not a worker slot`
+		if (agents.some((x) => x.id === id)) return `agent ${id} is listed twice`
+		const twin = agents.find((x) => x.slot === a.slot)
+		if (twin) return `${id}: slot ${a.slot} is already ${twin.id}'s`
+		if (!ROLES.includes(a.role)) return `${id}: role must be one of ${ROLES.join(', ')}`
+		// A repo that is no longer configured drops out of the agent's list rather than refusing the
+		// save — removing a repo would otherwise be impossible while any agent is scoped to it (#288 review).
+		const ar = Array.isArray(a.repos)
+			? a.repos.filter((x) => typeof x === 'string' && repos.some((r) => r.repo === x))
 			: []
-		const profile = validateProfile(id, w as unknown as Record<string, unknown>)
+		const profile = validateProfile(id, a as unknown as Record<string, unknown>)
 		if (typeof profile === 'string') return profile
-		workers[id] = { role: w.role, repos: wr, ...profile }
+		const over: Partial<AgentSettings> = {}
+		for (const [key, ok, what] of [
+			[
+				'pollSeconds',
+				(v: number) => Number.isInteger(v) && v >= 1 && v <= 600,
+				'whole seconds, 1–600',
+			],
+			['tokenBudget', (v: number) => Number.isInteger(v) && v >= 0, 'an integer ≥ 0'],
+			['costBudgetUsd', (v: number) => Number.isFinite(v) && v >= 0, 'a number ≥ 0'],
+		] as const) {
+			const v = a[key]
+			if (v === undefined || v === null) continue
+			if (typeof v !== 'number' || !ok(v)) return `${id}: ${key} must be ${what}`
+			over[key] = v
+		}
+		agents.push({ id, slot: a.slot, role: a.role, repos: ar, ...profile, ...over })
 	}
-	return { pollSeconds, ...limits, repos, workers }
+	return { pollSeconds, ...limits, repos, agents }
 }
 
 /**

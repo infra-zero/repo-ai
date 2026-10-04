@@ -136,11 +136,18 @@ export async function workerCommand(o: WorkerOptions): Promise<void> {
 	for (let turn = 0; o.turns === undefined || turn < o.turns; turn++) {
 		try {
 			// Idle here: anything the dashboard still thinks this worker holds goes back in the queue.
-			await post(`/api/workers/${id}/heartbeat`, { claudeAuth, busy: false })
+			const hb = await post(`/api/workers/${id}/heartbeat`, { claudeAuth, busy: false })
+			// The bound agent's poll override (#307); anything unreadable keeps the default.
+			const poll = await Promise.resolve()
+				.then(() => hb.json() as Promise<{ pollSeconds?: unknown }>)
+				.then(
+					(b) => Number(b?.pollSeconds) * 1000 || IDLE_MS,
+					() => IDLE_MS
+				)
 			const res = await post(`/api/workers/${id}/next`)
 			if (res.status !== 200) {
 				if (res.status !== 204) console.error(`next: ${res.status}`)
-				await sleep(IDLE_MS)
+				await sleep(poll)
 				continue
 			}
 			const {

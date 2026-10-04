@@ -131,6 +131,22 @@ describe('workerCommand', () => {
 		})
 		expect(sleeps).toEqual([10_000, 5_000])
 	})
+
+	it("idles for the bound agent's poll override", async () => {
+		const sleeps: number[] = []
+		const fake = (async (url: string) =>
+			url.endsWith('/heartbeat')
+				? new Response('{"pollSeconds":20}', { status: 200 })
+				: new Response(null, { status: 204 })) as unknown as typeof fetch
+		await workerCommand({
+			url: 'http://dash',
+			id: 'w',
+			fetch: fake,
+			sleep: async (ms) => void sleeps.push(ms),
+			turns: 1,
+		})
+		expect(sleeps).toEqual([20_000])
+	})
 })
 
 describe('workerCommand with a hostile task id', () => {

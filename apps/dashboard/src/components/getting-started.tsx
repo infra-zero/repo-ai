@@ -9,7 +9,7 @@ export function progress(view: DashboardView) {
 	return {
 		app: view.app,
 		repo: view.repos.length > 0,
-		agent: view.workers.length > 0 || Object.keys(view.config.workers).length > 0,
+		agent: view.config.agents.length > 0,
 		issue: view.repos.some((r) => (r.state?.board.length ?? 0) > 0),
 		model: view.credentials.length > 0,
 	}
@@ -35,7 +35,7 @@ const CARDS = [
 		to: '/agents',
 		icon: Bot,
 		title: 'Add an agent',
-		text: 'A worker picks up the implement and review tasks.',
+		text: 'Bind a profile to a free worker slot; it picks up the tasks.',
 	},
 	{
 		k: 'issue',
