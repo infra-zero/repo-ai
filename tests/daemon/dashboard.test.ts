@@ -187,16 +187,19 @@ describe('dashboard HTTP', () => {
 		process.env = { ...env }
 	})
 
-	it('serves the page and state to loopback only', async () => {
-		expect((await fetch(`${base}/`)).status).toBe(200)
+	it('serves state to loopback, or to a non-loopback caller with the secret', async () => {
+		expect((await fetch(`${base}/`)).status).toBe(404)
 		// fetch drops a custom Host (a forbidden header), so ask with node:http.
-		const status = await new Promise<number>((resolve) =>
-			request(`${base}/api/state`, { headers: { host: 'evil.example' } }, (res) => {
-				res.resume()
-				resolve(res.statusCode ?? 0)
-			}).end()
-		)
-		expect(status).toBe(403)
+		const ask = (headers: Record<string, string>) =>
+			new Promise<number>((resolve) =>
+				request(`${base}/api/state`, { headers }, (res) => {
+					res.resume()
+					resolve(res.statusCode ?? 0)
+				}).end()
+			)
+		expect(await ask({ host: 'api:8080' })).toBe(403)
+		expect(await ask({ host: 'api:8080', 'x-repo-ai-worker': 'nope!!' })).toBe(403)
+		expect(await ask({ host: 'api:8080', 'x-repo-ai-worker': 's3cret' })).toBe(200)
 		expect(loopbackHost('localhost:8080')).toBe(true)
 		expect(loopbackHost('dashboard:8080')).toBe(false)
 	})

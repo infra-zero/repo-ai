@@ -74,7 +74,9 @@ program
 
 program
 	.command('dashboard')
-	.description('🖥️  The Docker dashboard: setup, the scheduler, the worker queue and the view')
+	.description(
+		'🖥️  The Docker API: the scheduler, the worker queue, and the state the dashboard app draws'
+	)
 	.option('--port <n>', 'Port', (v) => Number(v), 8080)
 	.option('--host <addr>', 'Address to bind (compose maps it to 127.0.0.1 on the host)', '0.0.0.0')
 	.option('--data <dir>', 'Config, events', '/data')
@@ -86,11 +88,7 @@ program
 	.description(
 		'🤖 A Docker agent worker: pull tasks from the dashboard and run them with Claude Code'
 	)
-	.option(
-		'--url <url>',
-		'The dashboard',
-		process.env.REPO_AI_DASHBOARD_URL ?? 'http://dashboard:8080'
-	)
+	.option('--url <url>', 'The dashboard', process.env.REPO_AI_DASHBOARD_URL ?? 'http://api:8080')
 	.option('--id <id>', 'Worker id (default: the hostname)')
 	.option('--work <dir>', 'Where each task gets its own fresh clone', '/work')
 	.action(workerCommand)

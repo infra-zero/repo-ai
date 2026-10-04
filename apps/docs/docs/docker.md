@@ -7,8 +7,9 @@ description: Run the loop around the clock in Docker on your Mac — a dashboard
 
 `docker compose up` starts the loop with no terminal and no Claude Code session to keep open. You get:
 
-- **dashboard** at `http://localhost:8080`. It's where you add repos and assign agents. It's also the only process that ticks: it reads the labels, applies `loop apply`, and queues the work.
-- **worker-1, worker-2, …**, one container per agent. Each one takes a task from the dashboard, runs it with headless Claude Code, and reports back.
+- **dashboard** at `http://localhost:8080`, a TanStack Start app. It's where you add repos, assign agents, and watch the boards.
+- **api**, the only process that ticks. It reads the labels, applies `loop apply`, and queues the work. It isn't published to your Mac; the dashboard talks to it over the compose network.
+- **worker-1, worker-2, …**, one container per agent. Each one takes a task from the api, runs it with headless Claude Code, and reports back.
 
 The loop works the way it does in a terminal: GitHub labels hold all the state, two agents review every PR, and you merge by hand. It authenticates as a **GitHub App**, so there's no second account and no switching gh profiles.
 
@@ -16,7 +17,7 @@ The loop works the way it does in a terminal: GitHub labels hold all the state, 
 
 On GitHub, go to **Settings → Developer settings → GitHub Apps → New GitHub App**.
 
-- **Webhook:** turn it off. The dashboard polls.
+- **Webhook:** turn it off. The api polls.
 - **Repository permissions:**
   - Contents: read and write
   - Issues: read and write
@@ -40,7 +41,13 @@ openssl rand -hex 32   # paste as REPO_AI_WORKER_SECRET
 claude setup-token     # paste as CLAUDE_CODE_OAUTH_TOKEN (or set ANTHROPIC_API_KEY)
 ```
 
-Fill in `docker/.env`. Both files are gitignored. On a Linux host, make the key readable by the containers' `node` user (uid 1000), for example with `chmod 644 docker/github-app.pem`. Docker Desktop on a Mac needs nothing. The App key goes only to the dashboard, as a compose secret. Workers never see it: each task arrives with a one-hour token scoped to its repo.
+Fill in `docker/.env`. Both files are gitignored. On a Linux host, make the key readable by the containers' `node` user (uid 1000), for example with `chmod 644 docker/github-app.pem`. Docker Desktop on a Mac needs nothing. Each container gets only what it uses:
+
+- **api:** the App id and key (as a compose secret).
+- **workers:** the Claude credential. Workers never see the App key: each task arrives with a one-hour token scoped to its repo.
+- **dashboard:** neither.
+
+All three share `REPO_AI_WORKER_SECRET`.
 
 ## 3. Start it
 
@@ -73,9 +80,9 @@ Copy a `worker-N` block in `docker/compose.yml`, bump the number, and run `docke
 - **Agents run with `bypassPermissions`, but only inside their container.** The container has no host mounts besides its volumes, runs as a non-root user, and holds a token for one repo that expires after an hour.
   - A prompt-injected agent could push to branches and comment.
   - It cannot merge past your required checks or publish anything.
-- **The dashboard listens on `127.0.0.1` only.**
-  - Its config endpoint takes JSON only and answers only loopback hosts.
-  - Its worker endpoints need `REPO_AI_WORKER_SECRET`.
+- **The dashboard listens on `127.0.0.1` only, and answers only loopback `Host` headers.**
+  - It reaches the api through server functions, so the shared secret never reaches the browser.
+- **Every api endpoint needs `REPO_AI_WORKER_SECRET`.**
 - **Titles are shown inert; issue and PR bodies are never shown.**
-- **Agents never touch the dashboard's clones.** Each task runs in a fresh clone inside its worker, deleted when it ends.
+- **Agents never touch the api's clones.** Each task runs in a fresh clone inside its worker, deleted when it ends.
 - **Restarting is safe:** the labels are the state. A task that was running when its worker died is re-queued after 90 seconds. A claim left behind is released by stall reaping.

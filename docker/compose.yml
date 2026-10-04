@@ -1,45 +1,63 @@
-# repo-ai in Docker (#284). From the repo root:
+# repo-ai in Docker (#284, #291). From the repo root:
 #   cp docker/.env.example docker/.env   # fill it in
 #   cp ~/Downloads/<app>.private-key.pem docker/github-app.pem
 #   docker compose -f docker/compose.yml up --build
 # then open http://localhost:8080.
 #
-# One container per agent. Each worker is its own service with a fixed
-# hostname: the dashboard keys a worker's role by it. Add a worker by copying
-# a block and bumping the number.
+#   dashboard  the app you open (TanStack Start); talks only to api
+#   api        the scheduler and work queue (repo-ai dashboard); not published
+#   worker-N   one container per agent; each is its own service with a fixed
+#              hostname, because the dashboard keys a worker's role by it.
+#              Add one by copying a block and bumping the number.
+#
+# Each service gets only the secrets it uses (values come from docker/.env).
 name: repo-ai
 
-x-worker: &worker
+x-repo-ai: &repo-ai
   image: repo-ai:local
   build: { context: .., dockerfile: docker/Dockerfile }
-  command: ["worker"]
-  env_file: .env
-  environment:
-    REPO_AI_DASHBOARD_URL: http://dashboard:8080
-  # Workers never see the App key (the dashboard hands each task a one-hour
-  # token) and never mount the dashboard's clones: each task clones fresh into
-  # the worker's own /work, so an agent cannot plant git config or hooks that
-  # the dashboard's git would run beside the key.
-  depends_on:
-    dashboard: { condition: service_healthy }
   restart: unless-stopped
 
+x-worker: &worker
+  <<: *repo-ai
+  command: ["worker"]
+  environment:
+    REPO_AI_DASHBOARD_URL: http://api:8080
+    REPO_AI_WORKER_SECRET: ${REPO_AI_WORKER_SECRET:?set it in docker/.env}
+    CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  # Workers never see the App key (the api hands each task a one-hour token)
+  # and never mount the api's clones: each task clones fresh into the worker's
+  # own /work, so an agent cannot plant git config or hooks that the api's git
+  # would run beside the key.
+  depends_on:
+    api: { condition: service_healthy }
+
 services:
-  dashboard:
-    image: repo-ai:local
-    build: { context: .., dockerfile: docker/Dockerfile }
+  api:
+    <<: *repo-ai
     command: ["dashboard"]
-    env_file: .env
     environment:
+      GITHUB_APP_ID: ${GITHUB_APP_ID:?set it in docker/.env}
       GITHUB_APP_PRIVATE_KEY_FILE: /run/secrets/github_app_key
+      REPO_AI_WORKER_SECRET: ${REPO_AI_WORKER_SECRET:?set it in docker/.env}
     secrets: [github_app_key]
-    # Loopback only: the page and its config endpoint are for this Mac.
-    ports: ["127.0.0.1:8080:8080"]
     volumes: [repos:/repos, data:/data]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
       interval: 10s
       start_period: 10s
+
+  dashboard:
+    image: repo-ai-dashboard:local
+    build: { context: .., dockerfile: docker/dashboard.Dockerfile }
+    environment:
+      REPO_AI_API_URL: http://api:8080
+      REPO_AI_WORKER_SECRET: ${REPO_AI_WORKER_SECRET:?set it in docker/.env}
+    # Loopback only: the dashboard can change the config.
+    ports: ["127.0.0.1:8080:3000"]
+    depends_on:
+      api: { condition: service_healthy }
     restart: unless-stopped
 
   worker-1:

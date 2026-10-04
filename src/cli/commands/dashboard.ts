@@ -9,19 +9,19 @@ import {
 	validateConfig,
 	writeDaemonConfig,
 } from '../../daemon/config.js'
-import { PAGE } from '../../daemon/page.js'
 import { Queue, type Task } from '../../daemon/queue.js'
 import { type LoopEvent, type RepoState, tickRepo } from '../../daemon/scheduler.js'
+import type { DashboardView } from '../../daemon/view.js'
 
 /**
- * `repo-ai dashboard` (#282): the setup screen, the only scheduler, the work
- * queue the worker containers pull from, and the view of all of it.
+ * `repo-ai dashboard` (#282, headless since #291): the only scheduler, the
+ * work queue the worker containers pull from, and the JSON the dashboard app
+ * (`apps/dashboard`) draws. Not published to the host in compose.
  *
- * Two audiences, two locks. The browser endpoints answer only a loopback
- * `Host` (no DNS rebinding) and take JSON only (a cross-site form cannot send
- * it without a preflight, which is never answered). The worker endpoints hand
- * out GitHub tokens, so they need `REPO_AI_WORKER_SECRET` — and are off
- * without one.
+ * Every endpoint needs `REPO_AI_WORKER_SECRET` — workers because they are
+ * handed GitHub tokens, the dashboard app's server because it can change the
+ * config. A loopback caller may read and configure without it (local dev);
+ * config changes take JSON only, so a cross-site form cannot send one.
  */
 
 export interface DashboardOptions {
@@ -85,7 +85,7 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 	const timer = setInterval(scan, SCAN_MS)
 	void scan()
 
-	const view = () => {
+	const view = (): DashboardView => {
 		const today = new Date().toDateString()
 		const spent = [...queue.tasks.values()].filter(
 			(t) => t.endedAt && new Date(t.endedAt).toDateString() === today
@@ -189,17 +189,11 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 			return send(res, 404, {})
 		}
 
-		// Browser endpoints.
-		if (!loopbackHost(req.headers.host)) return send(res, 403, { error: 'loopback only' })
-		if (url.pathname === '/' && req.method === 'GET') {
-			res.writeHead(200, {
-				'content-type': 'text/html; charset=utf-8',
-				'content-security-policy':
-					"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
-				'x-frame-options': 'DENY',
-			})
-			return res.end(PAGE)
-		}
+		// The dashboard app's endpoints: its server sends the secret; a loopback caller (local dev) may omit it.
+		const trusted =
+			(!!secret && sameSecret(req.headers['x-repo-ai-worker'], secret)) ||
+			loopbackHost(req.headers.host)
+		if (!trusted) return send(res, 403, { error: 'secret or loopback only' })
 		if (url.pathname === '/api/state' && req.method === 'GET') return send(res, 200, view())
 		if (url.pathname === '/api/config' && req.method === 'POST') {
 			if (!String(req.headers['content-type']).startsWith('application/json'))
