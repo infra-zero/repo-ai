@@ -13,7 +13,11 @@
 		"schemas/*.json",
 		"README.md",
 		"AGENTS.md",
-		"statusline/*.sh"
+		"statusline/*.sh",
+		"claude-plugin/.claude-plugin/plugin.json",
+		"claude-plugin/hooks/hooks.json",
+		"claude-plugin/hooks/register.tsx",
+		"claude-plugin/types/index.d.ts"
 	],
 	"engines": {
 		"node": ">=22"
