@@ -18,6 +18,9 @@ const TITLES: Record<string, string> = {
 	'/': 'Board',
 	'/agents': 'Agents',
 	'/activity': 'Activity',
+	'/repos': 'Repos',
+	'/models': 'Models',
+	'/settings': 'Settings',
 	'/setup': 'Setup',
 }
 

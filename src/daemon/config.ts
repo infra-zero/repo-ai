@@ -39,7 +39,15 @@ export interface WorkerSettings {
 	tools?: string[]
 }
 
-export interface DaemonConfig {
+/** Global loop limits (#302); unset means the repo's own `.repo-ai.json` / built-in default. */
+export interface GlobalLimits {
+	maxInFlight?: number
+	maxFixRounds?: number
+	/** Output tokens per day; 0 or unset: no budget. */
+	tokenBudget?: number
+}
+
+export interface DaemonConfig extends GlobalLimits {
 	pollSeconds: number
 	repos: RepoSettings[]
 	/** Keyed by worker id (its container hostname). Unknown workers get `any`. */
@@ -117,6 +125,17 @@ export function validateConfig(input: unknown): DaemonConfig | string {
 	const pollSeconds = Number(c.pollSeconds ?? DEFAULT_CONFIG.pollSeconds)
 	if (!Number.isInteger(pollSeconds) || pollSeconds < 60)
 		return 'pollSeconds must be an integer ≥ 60'
+	const limits: GlobalLimits = {}
+	for (const [key, min] of [
+		['maxInFlight', 1],
+		['maxFixRounds', 0],
+		['tokenBudget', 0],
+	] as const) {
+		const v = c[key]
+		if (v === undefined || v === null) continue
+		if (!Number.isInteger(v) || v < min) return `${key} must be an integer ≥ ${min}`
+		limits[key] = v
+	}
 	if (!Array.isArray(c.repos)) return 'repos must be a list'
 	const repos: RepoSettings[] = []
 	for (const r of c.repos) {
@@ -143,7 +162,7 @@ export function validateConfig(input: unknown): DaemonConfig | string {
 		if (typeof profile === 'string') return profile
 		workers[id] = { role: w.role, repos: wr, ...profile }
 	}
-	return { pollSeconds, repos, workers }
+	return { pollSeconds, ...limits, repos, workers }
 }
 
 /**
