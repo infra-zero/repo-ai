@@ -7,6 +7,8 @@ import {
 	credentialEnv,
 	type AgentSettings,
 	type DaemonConfig,
+	limitsFor,
+	pollSecondsFor,
 	presentCredentials,
 	readDaemonConfig,
 	validateConfig,
@@ -69,10 +71,11 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 		try {
 			for (const r of config.repos.filter((x) => x.enabled)) {
 				const last = states.get(r.repo)?.lastTick ?? 0
-				if (!due.has(r.repo) && Date.now() - last < config.pollSeconds * 1000) continue
+				if (!due.has(r.repo) && Date.now() - last < pollSecondsFor(config, r) * 1000) continue
 				due.delete(r.repo)
 				try {
-					states.set(r.repo, await tickRepo(r, { reposDir: o.repos, queue, mint, event }))
+					const limits = limitsFor(config, r)
+					states.set(r.repo, await tickRepo(r, { reposDir: o.repos, queue, mint, event, limits }))
 				} catch (err) {
 					states.set(r.repo, {
 						...(states.get(r.repo) ?? { board: [], warnings: [], releaseGated: false }),
@@ -119,7 +122,7 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 			repos: config.repos.map((r) => ({
 				...r,
 				state: states.get(r.repo) ?? null,
-				nextTick: (states.get(r.repo)?.lastTick ?? 0) + config.pollSeconds * 1000,
+				nextTick: (states.get(r.repo)?.lastTick ?? 0) + pollSecondsFor(config, r) * 1000,
 			})),
 			workers: [...queue.workers.values()].map((w) => ({
 				...w,
@@ -245,6 +248,15 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 						error: `${a.name || a.id} is running a task on ${w.id}; change it once that ends`,
 					})
 			}
+			// A newly added repo must have the App installed; it is cloned on its first tick.
+			if (creds)
+				for (const r of next.repos.filter((x) => !config.repos.some((y) => y.repo === x.repo))) {
+					const ok = await mint(r.repo).then(
+						() => true,
+						() => false
+					)
+					if (!ok) return send(res, 400, { error: `the GitHub App is not installed on ${r.repo}` })
+				}
 			config = next
 			await writeDaemonConfig(configFile, config)
 			for (const r of config.repos) due.add(r.repo)
