@@ -4,6 +4,7 @@ import { Command } from 'commander'
 import { mainCheckout } from '../base/git.js'
 import { doctorCommand } from './commands/doctor.js'
 import { appTokenCommand } from './commands/auth.js'
+import { dashboardCommand } from './commands/dashboard.js'
 import { FIXERS, fixCommand } from './commands/fix.js'
 import { loopApplyCommand } from './commands/loop-apply.js'
 import { loopCleanupCommand } from './commands/loop-cleanup.js'
@@ -70,6 +71,15 @@ program
 	.requiredOption('--repo <owner/repo>', 'The repo to scope the token to')
 	.option('--json', 'Print {token, expiresAt, login}')
 	.action(appTokenCommand)
+
+program
+	.command('dashboard')
+	.description('🖥️  The Docker dashboard: setup, the scheduler, the worker queue and the view')
+	.option('--port <n>', 'Port', (v) => Number(v), 8080)
+	.option('--host <addr>', 'Address to bind (compose maps it to 127.0.0.1 on the host)', '0.0.0.0')
+	.option('--data <dir>', 'Config, events', '/data')
+	.option('--repos <dir>', 'Clones and worktrees', '/repos')
+	.action(async (o) => void (await dashboardCommand(o)))
 
 const loop = program.command('loop').description('🔁 ai-loop mechanics as tested commands')
 
