@@ -23,7 +23,7 @@ describe('ai loop skills never assign @me (#606)', () => {
 		const skill = fs.readFileSync(skills[0], 'utf8')
 		// No allow rule can match an eval, so it sent every first step to the classifier.
 		expect(skill).not.toMatch(/\beval\b/)
-		expect(skill).toContain('npx @rtorcato/repo-ai loop tick --json\n')
+		expect(skill).toContain('npx @infrazero/repo-ai loop tick --json\n')
 		// The values come from the tick's `.env`, written in as `<name>` placeholders.
 		expect(skill).not.toMatch(
 			/\$\{?(ROOT|WT_ROOT|OWNER_REPO|AGENT_USER|HUMAN_USER|ME|BUDGET_TOKENS|QUIET_STOP_MINUTES)\b/

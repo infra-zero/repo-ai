@@ -125,7 +125,7 @@ export async function checkAgentIdentity(
 		verdict: 'mismatch',
 		message: `⚠ agentUser is ${configured} but gh authenticates as ${
 			effective || '(gh could not say — unauthenticated or missing)'
-		} — the tick would commit, push and review as the wrong account. Run \`npx @rtorcato/repo-ai fix ai-loop-identity\` in this checkout, then relaunch the Claude session; or run just one session as the agent: \`GH_TOKEN=$(gh auth token --user ${configured}) claude\``,
+		} — the tick would commit, push and review as the wrong account. Run \`npx @infrazero/repo-ai fix ai-loop-identity\` in this checkout, then relaunch the Claude session; or run just one session as the agent: \`GH_TOKEN=$(gh auth token --user ${configured}) claude\``,
 	}
 }
 

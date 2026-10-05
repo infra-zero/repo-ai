@@ -6,7 +6,7 @@
     "url": "https://github.com/rtorcato"
   },
   "homepage": "https://docs.torcato.dev/repo-ai/",
-  "repository": "https://github.com/rtorcato/repo-ai",
+  "repository": "https://github.com/infra-zero/repo-ai",
   "license": "MIT",
   "keywords": ["ai-agents", "claude-code", "github-automation", "ai-loop"]
 }

@@ -8,10 +8,10 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/dashboard/package.json apps/dashboard/package.json
 # Only the dashboard's dependency closure; the docs workspace is not installed.
-RUN pnpm install --frozen-lockfile --ignore-scripts --filter @rtorcato/repo-ai-dashboard...
+RUN pnpm install --frozen-lockfile --ignore-scripts --filter @infrazero/repo-ai-dashboard...
 # The CLI's src/ is type-only for the app and erased at build time, so it is not copied.
 COPY apps/dashboard apps/dashboard
-RUN pnpm --filter @rtorcato/repo-ai-dashboard build
+RUN pnpm --filter @infrazero/repo-ai-dashboard build
 
 # ── runtime: Nitro's self-contained server output ────────────────────────────
 FROM node:24-slim

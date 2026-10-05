@@ -42,7 +42,7 @@ describe('mintInstallationToken', () => {
 						: { token: 'ghs_x', expires_at: '2026-10-04T12:00:00Z' }
 			return new Response(JSON.stringify(json), { status: 200 })
 		}) as typeof fetch
-		expect(await mintInstallationToken(creds, 'rtorcato/repo-ai', fake)).toEqual({
+		expect(await mintInstallationToken(creds, 'infra-zero/repo-ai', fake)).toEqual({
 			token: 'ghs_x',
 			expiresAt: '2026-10-04T12:00:00Z',
 			login: 'repo-ai-loop[bot]',

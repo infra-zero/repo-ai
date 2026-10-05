@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please **do not** open a public issue for a security problem. Report it privately through
-[GitHub private vulnerability reporting](https://github.com/rtorcato/repo-ai/security/advisories/new).
+[GitHub private vulnerability reporting](https://github.com/infra-zero/repo-ai/security/advisories/new).
 You should get a reply within a few days. Only the latest published version is supported.
 
 ## Threat model

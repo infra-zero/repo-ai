@@ -127,7 +127,7 @@ export async function checkLoopLabels(dir: string, exec?: GhExec): Promise<Check
 			check: CHECK,
 			status: 'drift',
 			detail: deltas.join('; '),
-			hint: 'Run `npx @rtorcato/repo-ai fix labels` to repair them with `gh label edit` — `gh label create` cannot change an existing label, which is how this drifted',
+			hint: 'Run `npx @infrazero/repo-ai fix labels` to repair them with `gh label edit` — `gh label create` cannot change an existing label, which is how this drifted',
 		}
 	return {
 		check: CHECK,

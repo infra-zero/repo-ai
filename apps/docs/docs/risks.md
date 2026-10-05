@@ -22,7 +22,7 @@ Actions minutes.
 [limits](./ai-loop.md#limits) (issues in flight, fix rounds, agents per
 tick) are instructions an agent follows, not caps enforced outside the agent;
 enforcing them in the Workflow scripts is tracked in
-[#41](https://github.com/rtorcato/repo-ai/issues/41). A misbehaving agent, a
+[#41](https://github.com/infra-zero/repo-ai/issues/41). A misbehaving agent, a
 bug, or a loop left running can still spend more than you expect.
 
 So:

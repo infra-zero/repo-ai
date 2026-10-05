@@ -48,7 +48,7 @@ const config: Config = {
 				docs: {
 					sidebarPath: './sidebars.ts',
 					routeBasePath: '/docs',
-					editUrl: 'https://github.com/rtorcato/repo-ai/edit/main/apps/docs/',
+					editUrl: 'https://github.com/infra-zero/repo-ai/edit/main/apps/docs/',
 				},
 				blog: false,
 				theme: {
@@ -93,9 +93,9 @@ const config: Config = {
 					position: 'left',
 					items: [{ label: 'All on GitHub →', href: GITHUB_PROFILE }, ...PROJECT_FAMILY],
 				},
-				{ href: 'https://github.com/rtorcato/repo-ai', label: 'GitHub', position: 'right' },
+				{ href: 'https://github.com/infra-zero/repo-ai', label: 'GitHub', position: 'right' },
 				{
-					href: 'https://www.npmjs.com/package/@rtorcato/repo-ai',
+					href: 'https://www.npmjs.com/package/@infrazero/repo-ai',
 					label: 'npm',
 					position: 'right',
 				},
@@ -116,9 +116,9 @@ const config: Config = {
 				{
 					title: 'Resources',
 					items: [
-						{ label: 'GitHub', href: 'https://github.com/rtorcato/repo-ai' },
-						{ label: 'npm', href: 'https://www.npmjs.com/package/@rtorcato/repo-ai' },
-						{ label: 'Issues', href: 'https://github.com/rtorcato/repo-ai/issues' },
+						{ label: 'GitHub', href: 'https://github.com/infra-zero/repo-ai' },
+						{ label: 'npm', href: 'https://www.npmjs.com/package/@infrazero/repo-ai' },
+						{ label: 'Issues', href: 'https://github.com/infra-zero/repo-ai/issues' },
 						{ label: 'repo-tooling', href: 'https://docs.torcato.dev/repo-tooling/' },
 					],
 				},
@@ -128,7 +128,7 @@ const config: Config = {
 					items: [
 						{
 							label: 'License (MIT)',
-							href: 'https://github.com/rtorcato/repo-ai/blob/main/LICENSE',
+							href: 'https://github.com/infra-zero/repo-ai/blob/main/LICENSE',
 						},
 						{ label: '@rtorcato', href: GITHUB_PROFILE },
 					],
