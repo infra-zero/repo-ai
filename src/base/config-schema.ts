@@ -94,7 +94,7 @@ export async function checkConfigSchema(dir: string): Promise<CheckResult | null
 			check: 'Loop config schema',
 			status: 'optional-missing',
 			detail: `${CONFIG_FILE} is valid; unset, so on the default: ${unset.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')}`,
-			hint: 'Run `npx @rtorcato/repo-ai fix config` to write them into the file',
+			hint: 'Run `npx @infrazero/repo-ai fix config` to write them into the file',
 		}
 	}
 	return {

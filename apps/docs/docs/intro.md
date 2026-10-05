@@ -7,7 +7,7 @@ description: What repo-ai is, what it ships, and where to start.
 
 # repo-ai
 
-`@rtorcato/repo-ai` is the **ai-loop** pipeline: a label-driven loop that
+`@infrazero/repo-ai` is the **ai-loop** pipeline: a label-driven loop that
 takes an `ai-ready` GitHub issue, implements it in its own git worktree, opens a
 PR, has two agents review it, and hands it to a human to merge.
 
@@ -56,7 +56,7 @@ Workflow runs show in `/workflows`. If you edit the scripts in `workflows/`, loa
 Follow [Getting started](./getting-started.md) for the full walkthrough, or the
 short version:
 
-1. Run `npx @rtorcato/repo-ai setup` — skills, labels, agent identity and statusline, asking before each.
+1. Run `npx @infrazero/repo-ai setup` — skills, labels, agent identity and statusline, asking before each.
 2. Check the repo meets the [prerequisites](./ai-loop.md#repo-prerequisites).
 3. File an issue with `/ai-issue`, then run `/ai-loop` in Claude Code.
 
@@ -64,10 +64,10 @@ short version:
 
 Two ways, pick one:
 
-- **Claude Code plugin.** In Claude Code, run `/plugin marketplace add rtorcato/repo-ai`, then `/plugin install repo-ai@repo-ai`. The plugin ships the three skills. It is **unversioned**: it has no `version` field and follows `main`, so every update to `main` reaches plugin users with no release step.
-- **`npx @rtorcato/repo-ai fix claude-skills`** (also run by `setup`). Copies the skills into `~/.claude/skills`, stamped with the npm version you ran, and installs the Workflow scripts (`workflows/*.js`) into `~/.claude/workflows`.
+- **Claude Code plugin.** In Claude Code, run `/plugin marketplace add infra-zero/repo-ai`, then `/plugin install repo-ai@repo-ai`. The plugin ships the three skills. It is **unversioned**: it has no `version` field and follows `main`, so every update to `main` reaches plugin users with no release step.
+- **`npx @infrazero/repo-ai fix claude-skills`** (also run by `setup`). Copies the skills into `~/.claude/skills`, stamped with the npm version you ran, and installs the Workflow scripts (`workflows/*.js`) into `~/.claude/workflows`.
 
-The plugin carries the skills only. Pass 3 and Pass 4 run their Workflow scripts by name, so plugin users still need those scripts from `fix claude-skills`; without them `ai-loop` falls back to background Agent calls. Either way the skills call the CLI through `npx @rtorcato/repo-ai`.
+The plugin carries the skills only. Pass 3 and Pass 4 run their Workflow scripts by name, so plugin users still need those scripts from `fix claude-skills`; without them `ai-loop` falls back to background Agent calls. Either way the skills call the CLI through `npx @infrazero/repo-ai`.
 
 Read [The AI Loop](./ai-loop.md) for how the pipeline works, and
 [Commands](./commands.md) for every command.

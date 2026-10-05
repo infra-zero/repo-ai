@@ -45,7 +45,7 @@ every other terminal stays you. For a checkout dedicated to the loop, wire it
 permanently instead:
 
 ```bash
-npx @rtorcato/repo-ai fix ai-loop-identity
+npx @infrazero/repo-ai fix ai-loop-identity
 ```
 
 Either way, invite the bot as a collaborator with **push** access first — read
@@ -65,14 +65,14 @@ At the repo root:
 ```
 
 `agentUser` makes `loop guard` halt any tick not running as that account —
-the safety net for step 1. `npx @rtorcato/repo-ai fix config` creates or
+the safety net for step 1. `npx @infrazero/repo-ai fix config` creates or
 updates the file for you. See the [full key table](./ai-loop.md#configuration)
 for `requiredSkills`, `pollSeconds`, `budgetTokens`, `quietStopMinutes` and
 `autoMerge`; the defaults are fine to start.
 
 ## 3. Let Claude run unattended
 
-The loop makes many `gh`/`git`/`npx @rtorcato/repo-ai` calls per tick. Without
+The loop makes many `gh`/`git`/`npx @infrazero/repo-ai` calls per tick. Without
 an allow rule, Claude Code prompts you to approve each one — which defeats an
 unattended loop. Add a project-level `.claude/settings.json` (not
 `settings.local.json`, which is per-checkout and gitignored) with the commands
@@ -84,7 +84,7 @@ the loop needs:
     "allow": [
       "Bash(gh:*)",
       "Bash(git:*)",
-      "Bash(npx @rtorcato/repo-ai:*)"
+      "Bash(npx @infrazero/repo-ai:*)"
     ]
   }
 }
@@ -98,12 +98,12 @@ to `sandbox.excludedCommands` in whichever settings file sets
 ```json
 {
   "sandbox": {
-    "excludedCommands": ["gh *", "npx @rtorcato/repo-ai *"]
+    "excludedCommands": ["gh *", "npx @infrazero/repo-ai *"]
   }
 }
 ```
 
-`npx @rtorcato/repo-ai fix sandbox` writes this for you, and `doctor` flags it
+`npx @infrazero/repo-ai fix sandbox` writes this for you, and `doctor` flags it
 when it is missing. See [Claude Code permissions](./ai-loop.md#claude-code-permissions)
 for why.
 
@@ -142,7 +142,7 @@ matters.
 ## 5. Install the skills and labels
 
 ```bash
-npx @rtorcato/repo-ai setup
+npx @infrazero/repo-ai setup
 ```
 
 One guided run: writes `.repo-ai.json` (step 2), installs the `ai-loop`,

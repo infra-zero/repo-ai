@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Orientation for coding agents working on `@rtorcato/repo-ai`.
+Orientation for coding agents working on `@infrazero/repo-ai`.
 
 ## What this is
 

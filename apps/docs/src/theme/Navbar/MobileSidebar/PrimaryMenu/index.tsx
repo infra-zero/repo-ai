@@ -33,8 +33,8 @@ const ITEMS: Item[] = [
 	{ label: 'Guide', to: '/docs/ai-loop' },
 	{ label: 'Commands', to: '/docs/commands' },
 	{ label: 'Changelog', to: '/docs/changelog' },
-	{ label: 'GitHub', href: 'https://github.com/rtorcato/repo-ai' },
-	{ label: 'npm', href: 'https://www.npmjs.com/package/@rtorcato/repo-ai' },
+	{ label: 'GitHub', href: 'https://github.com/infra-zero/repo-ai' },
+	{ label: 'npm', href: 'https://www.npmjs.com/package/@infrazero/repo-ai' },
 ]
 
 function closeDrawer(): void {

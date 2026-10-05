@@ -128,19 +128,19 @@ describe('validateConfig', () => {
 	it('accepts a good config and refuses bad repos, roles and poll rates', () => {
 		const ok = validateConfig({
 			pollSeconds: 120,
-			repos: [{ repo: 'rtorcato/repo-ai' }],
-			workers: { 'repo-ai-worker-1': { role: 'reviewer', repos: ['rtorcato/repo-ai'] } },
+			repos: [{ repo: 'infra-zero/repo-ai' }],
+			workers: { 'repo-ai-worker-1': { role: 'reviewer', repos: ['infra-zero/repo-ai'] } },
 		})
 		// A pre-#307 config's worker profiles become agents bound to those workers.
 		expect(ok).toEqual({
 			pollSeconds: 120,
-			repos: [{ repo: 'rtorcato/repo-ai', enabled: true, dependabotAutoReview: false }],
+			repos: [{ repo: 'infra-zero/repo-ai', enabled: true, dependabotAutoReview: false }],
 			agents: [
 				{
 					id: 'repo-ai-worker-1',
 					slot: 'repo-ai-worker-1',
 					role: 'reviewer',
-					repos: ['rtorcato/repo-ai'],
+					repos: ['infra-zero/repo-ai'],
 				},
 			],
 		})

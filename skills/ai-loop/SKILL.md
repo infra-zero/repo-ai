@@ -57,7 +57,7 @@ Also once per repo: `grep -qxF '.claude/ai-loop-status' '<root>/.gitignore' || e
 ## Pass 0 — orient
 
 ```bash
-npx @rtorcato/repo-ai loop tick --json
+npx @infrazero/repo-ai loop tick --json
 ```
 
 Read `{halt, idle, summary, errors, warnings}` first. Commands start with a plain executable and export nothing (#150): the tick's `.env` holds `root`, `worktreeRoot`, `ownerRepo`, `defaultBranch`, `agentUser`, `humanUser`, `me`, the limits and cadences — **a `<name>` below is `.env.<name>`, written in literally.**
@@ -75,7 +75,7 @@ Read `{halt, idle, summary, errors, warnings}` first. Commands start with a plai
 Triage the pickups first (Pass 4), then run `loop apply` **once** — never repeat its edits by hand. It disarms early auto-merges, hands passed `CLEAN` PRs to `<humanUser>` as `merge-ready` (keeping `ai-notes`), updates `BEHIND` branches, gives a `ci-red` PR whose failing runs are all on their first attempt one free `gh run rerun --failed` instead of sending it back (`.rerunFailed`, #202), pushes an empty commit to a branch whose PR head has lagged it for 5+ minutes (`.resync`, #219 — until then the tick reads nothing else of that PR), sends back `ci-red`/`BLOCKED` as `ai-changes` (a rerun that fails too counts as `ci-red`) and `DIRTY` as `ai-conflicts`, retargets a stacked PR whose parent merged onto the default branch and merges it in (`.retarget`, #253 — a conflict is an `ai-conflicts` send-back; a stacked PR is never handed off), merges only an opted-in `.autoMerge` handoff, does Pass 2's cleanup, and takes Pass 3's and Pass 4's claims. A non-zero exit halts the tick; a failed edit lands in `.errors` for the next tick.
 
 ```bash
-APPLY=$(npx @rtorcato/repo-ai loop apply --root <root> --json)
+APPLY=$(npx @infrazero/repo-ai loop apply --root <root> --json)
 printf '%s' "$APPLY" | jq '{applied: [.applied[] | "\(.transition) #\(.number) \(.ok)"], comments: [.comments[] | {kind, pr, issue}], claimed: {reviews: [.claimed.reviews[] | "\(.arm):#\(.pr)"], fixes: [.claimed.fixes[].pr], pickups: [.claimed.pickups[] | {number, slug, worktree, needsInstall, base, stackedOn}]}, removed: [.removed[].issue], rebuild, halt, errors}'
 ```
 
@@ -88,7 +88,7 @@ printf '%s' "$APPLY" | jq '{applied: [.applied[] | "\(.transition) #\(.number) \
 Write each body to a file — **never interpolate a log into a command**, it is untrusted bytes — and upsert the one decision comment:
 
 ```bash
-npx @rtorcato/repo-ai loop comment <N> --body-file "$BODY_FILE"
+npx @infrazero/repo-ai loop comment <N> --body-file "$BODY_FILE"
 ```
 
 `.dependabotRecreate` (red or `DIRTY` Dependabot PRs in the loop) gets `@dependabot recreate` from `loop apply`, never a fixer. `.dependabotStalled` (a recreate with no new head after `dependabotStallMinutes`) is handed to `<humanUser>` with a decision comment, its passes dropped, and shows as `⚠dependabot-stalled`. `.dependabotCiRed` counts as `ci-red` in the summary, nothing more. `.rerunFailed` and `.resync` count under `on CI`, not `ci-red` — it's still waiting on a check, just a second try at it.
@@ -104,7 +104,7 @@ npx @rtorcato/repo-ai loop comment <N> --body-file "$BODY_FILE"
 | `reviewer` or `fixer` / `drop-label` | nothing; leave a fixer's worktree, it holds its commits |
 | `orphan` / `remove-worktree` | `git -C <root> worktree remove --force <worktree>` and `git -C <root> branch -D <slug>` |
 
-Each `blocked` comment opens `` 🤖 *Automated — `ai-loop` Pass 2 (stall reaping).* `` then the rule that fired, how long the label sat, and whether a worktree went. Reaping never restores `ai-ready` — **unless the cause is known and benign** (a run cancelled on purpose): `gh issue edit <N> --add-label ai-ready --remove-label ai-blocked`, and say so. After removing a worktree yourself, run `npx @rtorcato/repo-ai loop guard --removed --json` (non-zero halts); a `deferred` or `rebuild-failed` `.rebuild` becomes `⚠rebuild` in Pass 5. **Decay** `.decay[]`:
+Each `blocked` comment opens `` 🤖 *Automated — `ai-loop` Pass 2 (stall reaping).* `` then the rule that fired, how long the label sat, and whether a worktree went. Reaping never restores `ai-ready` — **unless the cause is known and benign** (a run cancelled on purpose): `gh issue edit <N> --add-label ai-ready --remove-label ai-blocked`, and say so. After removing a worktree yourself, run `npx @infrazero/repo-ai loop guard --removed --json` (non-zero halts); a `deferred` or `rebuild-failed` `.rebuild` becomes `⚠rebuild` in Pass 5. **Decay** `.decay[]`:
 
 ```bash
 gh issue close <N> --comment '🤖 *Automated — `ai-loop` Pass 2.* Unclaimed `ai-suggested` for 30d — closed to keep the triage queue honest. Reopen to revive.'
@@ -161,7 +161,7 @@ Combined prompt (`arm: both`) — the same, except: the checklist is both lenses
 Workflow({name: 'ai-loop-recover', args: {reviews: [{label, agentType, prompt, pr, arm: code|sec|both}, …], fixes: [{label, prompt}, …], budgetTokens: <budgetTokens>, maxTasksPerTick: <maxTasksPerTick>}})
 ```
 
-"No workflow by that name" → `npx @rtorcato/repo-ai fix claude-skills`, then retry. **No `Workflow` tool?** Spawn the same tasks as background `Agent` calls in one message (fixers `general-purpose`) and report `Workflow tool missing: Pass 3 ran as N background agents, no token cap`. The agents write the labels; the result `{tasks: [{label, result}], outputTokensSpent}` is a report — print one line per task (`code:#58 PASS`), act on nothing, fold the tokens into Pass 5.
+"No workflow by that name" → `npx @infrazero/repo-ai fix claude-skills`, then retry. **No `Workflow` tool?** Spawn the same tasks as background `Agent` calls in one message (fixers `general-purpose`) and report `Workflow tool missing: Pass 3 ran as N background agents, no token cap`. The agents write the labels; the result `{tasks: [{label, result}], outputTokensSpent}` is a report — print one line per task (`code:#58 PASS`), act on nothing, fold the tokens into Pass 5.
 
 ## Pass 4 — pick up
 
@@ -205,7 +205,7 @@ SUGGESTED=$(printf '%s\n' "$DIGEST" | grep -o '^#[0-9]*' | tr -d '#' | paste -sd
 **Schedule** — unless a halt or quiet stop. **Never `ScheduleWakeup`.** Start a watcher if none runs (`ToolSearch` `select:Monitor` if deferred), and re-arm it on expiry while an `/ai-loop` job exists:
 
 ```
-Monitor({command: "npx @rtorcato/repo-ai loop watch --root <root>", description: "ai-loop: work list changed", timeout_ms: 1800000})
+Monitor({command: "npx @infrazero/repo-ai loop watch --root <root>", description: "ai-loop: work list changed", timeout_ms: 1800000})
 ```
 
 Keep exactly **one** recurring `CronCreate({cron, prompt: "/ai-loop --root <root>", recurring: true})` job — `CronList` first; this root's jobs are those prompted `/ai-loop --root <root>` or a bare `/ai-loop` (older versions). Reuse one tagged at the right cadence, replace a bare one or one at the wrong cadence, delete extras; never touch another root's job. Cadence: `<idleMinutes>` with a watcher or when `idle`, else `<busyMinutes>`; no Monitor tool → report `Monitor tool missing: ticking on the cron cadence, not on change`. On a halt, leave any job alone.

@@ -14,6 +14,6 @@ labels: bug
 
 ## Environment
 
-- `@rtorcato/repo-ai` version:
+- `@infrazero/repo-ai` version:
 - Node / pnpm / gh versions:
 - OS:

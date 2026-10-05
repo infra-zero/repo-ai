@@ -15,7 +15,7 @@ Stop the `ai-loop` running for **this repo** in this session. Every step is idem
 **Current repo only.** `<root>` is the tick's `.env.root`, resolved from the working directory — never from `$ARGUMENTS`. Never touch another root's job or watcher.
 
 ```bash
-npx @rtorcato/repo-ai loop tick --json
+npx @infrazero/repo-ai loop tick --json
 ```
 
 Read-only. Keep `.env.root` as `<root>` and `.liveAgents` for Step 4. A halt or non-zero exit without `.env.root`: fall back to `git rev-parse --show-toplevel`.
@@ -26,7 +26,7 @@ Read-only. Keep `.env.root` as `<root>` and `.liveAgents` for Step 4. A halt or 
 
 ## Step 2 — stop this repo's watcher
 
-`TaskStop` every running Monitor whose command is exactly `npx @rtorcato/repo-ai loop watch --root <root>`. Leave watchers for other roots running.
+`TaskStop` every running Monitor whose command is exactly `npx @infrazero/repo-ai loop watch --root <root>`. Leave watchers for other roots running.
 
 ## Step 3 — mark the status file
 

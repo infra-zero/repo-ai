@@ -26,7 +26,7 @@ jobs:
       contents: read
     uses: rtorcato/repo-tooling/.github/workflows/docs-deploy-cloudflare.yml@75b34fe7d8898772cd748d1b48c698bd89cfd956 # main as of 2026-09-30
     with:
-      build-filter: '@rtorcato/repo-ai-docs'
+      build-filter: '@infrazero/repo-ai-docs'
       worker-name: repo-ai-docs
       base-path: /repo-ai/
       route: docs.torcato.dev/repo-ai/*
