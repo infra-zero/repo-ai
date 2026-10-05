@@ -1258,6 +1258,22 @@ describe('stacked loop PRs (#253)', () => {
 		expect(r.pickups).toEqual([{ number: 6, title: 'issue 6', body: 'Depends on #5' }])
 	})
 
+	it('stacks on an open parent PR named directly (#301)', async () => {
+		const r = await tickWith({
+			prs: [pr(50, 'ai-5-parent', ['ai-review'])],
+			queue: [issue(6, 'Depends on #50')],
+		})
+		expect(r.pickups).toMatchObject([{ number: 6, base: 'ai-5-parent', stackedOn: 50 }])
+	})
+
+	it('branches from the default branch once a parent PR merged (#301)', async () => {
+		const r = await tickWith({
+			queue: [issue(6, 'Depends on #50')],
+			issueStates: { 50: 'MERGED' },
+		})
+		expect(r.pickups).toEqual([{ number: 6, title: 'issue 6', body: 'Depends on #50' }])
+	})
+
 	it('waits on a parent with no PR, or one that is itself stacked', async () => {
 		const r = await tickWith({
 			prs: [pr(50, 'ai-5-parent', ['ai-review'], { base: 'ai-4-grand' })],
