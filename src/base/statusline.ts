@@ -99,7 +99,7 @@ export async function installStatusline(home: string): Promise<string[]> {
  */
 export async function checkStatusline(home: string): Promise<CheckResult> {
 	const check = 'Statusline'
-	const hint = 'Run `npx @rtorcato/repo-ai fix statusline` (writes to ~/.claude, outside the repo)'
+	const hint = 'Run `npx @infrazero/repo-ai fix statusline` (writes to ~/.claude, outside the repo)'
 	const settings = await readSettings(home)
 	const command = settings ? statusLineCommand(settings) : null
 	if (!command || !(await showsLoopStatus(command, home))) {

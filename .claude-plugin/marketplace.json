@@ -9,7 +9,7 @@
     {
       "name": "repo-ai",
       "source": "./",
-      "description": "Four skills: ai-loop (the entry point and engine), ai-issue (the on-ramp), ai-loop-status (a read-only view) and ai-loop-stop (stop this repo's loop). They call the @rtorcato/repo-ai CLI via npx. Unversioned: tracks main."
+      "description": "Four skills: ai-loop (the entry point and engine), ai-issue (the on-ramp), ai-loop-status (a read-only view) and ai-loop-stop (stop this repo's loop). They call the @infrazero/repo-ai CLI via npx. Unversioned: tracks main."
     }
   ]
 }

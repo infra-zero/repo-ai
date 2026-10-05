@@ -11,7 +11,7 @@ export const LOOP_ALLOW_RULES = [
 	'Bash(gh:*)',
 	'Bash(git *)',
 	'Bash(pnpm:*)',
-	'Bash(npx @rtorcato/repo-ai *)',
+	'Bash(npx @infrazero/repo-ai *)',
 ]
 
 /** `Bash(gh:*)` and `Bash(gh *)` are the same prefix rule. */
@@ -59,7 +59,7 @@ export async function checkAllowRules(dir: string, home: string): Promise<CheckR
  * still runs sandboxed, where `gh` fails TLS (no keychain on macOS) and `npx`
  * can't write its cache (#257). These run the loop's own calls outside it.
  */
-export const LOOP_SANDBOX_EXCLUDES = ['gh *', 'npx @rtorcato/repo-ai *']
+export const LOOP_SANDBOX_EXCLUDES = ['gh *', 'npx @infrazero/repo-ai *']
 
 /** `excludedCommands` takes `Bash(...)` rule syntax, so `gh:*` is `gh *`. */
 const normaliseExclude = (cmd: string): string => cmd.trim().replace(/:\*$/, ' *')
@@ -91,7 +91,7 @@ export async function checkSandboxExcludes(dir: string, home: string): Promise<C
 		check,
 		status: 'drift',
 		detail: `sandbox is on and "${cmd}" is not in sandbox.excludedCommands — the loop's calls run sandboxed and fail`,
-		hint: 'Run `npx @rtorcato/repo-ai fix sandbox`',
+		hint: 'Run `npx @infrazero/repo-ai fix sandbox`',
 	}))
 }
 

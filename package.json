@@ -1,5 +1,5 @@
 {
-	"name": "@rtorcato/repo-ai",
+	"name": "@infrazero/repo-ai",
 	"version": "0.1.0",
 	"description": "The ai-loop pipeline — loop mechanics, Claude Code skills, and their audit — split out of @rtorcato/repo-tooling",
 	"type": "module",
@@ -29,7 +29,7 @@
 		"prepare": "is-ci || husky"
 	},
 	"dependencies": {
-		"chalk": "^6.0.0",
+		"chalk": "^6.0.1",
 		"commander": "^15.0.0",
 		"fs-extra": "^11.4.0",
 		"inquirer": "^14.1.0"
@@ -38,7 +38,7 @@
 		"@biomejs/biome": "^2.5.10",
 		"@commitlint/cli": "^21.2.2",
 		"@commitlint/config-conventional": "^21.2.2",
-		"@rtorcato/repo-ai": "link:",
+		"@infrazero/repo-ai": "link:",
 		"@rtorcato/repo-tooling": "^5.4.1",
 		"@semantic-release/commit-analyzer": "^13.0.1",
 		"@semantic-release/github": "^12.0.9",
@@ -59,11 +59,11 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/rtorcato/repo-ai.git"
+		"url": "https://github.com/infra-zero/repo-ai.git"
 	},
 	"homepage": "https://docs.torcato.dev/repo-ai/",
 	"bugs": {
-		"url": "https://github.com/rtorcato/repo-ai/issues"
+		"url": "https://github.com/infra-zero/repo-ai/issues"
 	},
 	"keywords": [
 		"ai-agents",

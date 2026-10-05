@@ -23,7 +23,7 @@ worktree config — come from [`@rtorcato/repo-tooling`](https://github.com/rtor
 ## Install it
 
 ```bash
-npx @rtorcato/repo-ai fix claude-skills
+npx @infrazero/repo-ai fix claude-skills
 ```
 
 That writes `~/.claude/skills/ai-loop/SKILL.md`. Unlike every other fixer
@@ -61,7 +61,7 @@ Any agent that reads the [`skills`](https://www.npmjs.com/package/skills) CLI
 format can also take it straight from GitHub:
 
 ```bash
-npx skills add https://github.com/rtorcato/repo-ai --skill ai-loop
+npx skills add https://github.com/infra-zero/repo-ai --skill ai-loop
 ```
 
 ## Configuration
@@ -103,7 +103,7 @@ rather than silently ignoring it. It also reports a wrong type, and a file that
 is not valid JSON. A valid file that leaves defaulted keys unset is reported
 too, without failing: `doctor` names each one and the default in effect.
 
-`npx @rtorcato/repo-ai fix config` adds `$schema` to an existing file and writes
+`npx @infrazero/repo-ai fix config` adds `$schema` to an existing file and writes
 every unset key that has a default, so the file shows each setting the loop
 runs on. It never changes a key you set, and it leaves out keys with no default
 (`humanUser`, `maxAgents`). A written default stays pinned: if repo-ai later
@@ -151,7 +151,7 @@ Complete the device flow in a private window logged in as the bot — your defau
 browser will authorise *you* instead, leaving two profiles holding one identity.
 
 When `.repo-ai.json` declares `agentUser`, `loop guard` halts any tick not running as that
-account. `npx @rtorcato/repo-ai fix ai-loop-identity`
+account. `npx @infrazero/repo-ai fix ai-loop-identity`
 wires a checkout to it: it checks that `~/.config/gh-<agentUser>` (or
 `--gh-config-dir <path>`) is signed in as the agent, then merges
 `"env": {"GH_CONFIG_DIR": "<dir>"}` into the gitignored
@@ -191,7 +191,7 @@ Either way, first:
 Once `agentUser` is set, a session running as anyone else halts every tick:
 
 ```
-⚠ agentUser is <agentUser> but gh authenticates as <you> — the tick would commit, push and review as the wrong account. Run `npx @rtorcato/repo-ai fix ai-loop-identity` in this checkout, then relaunch the Claude session; or run just one session as the agent: `GH_TOKEN=$(gh auth token --user <agentUser>) claude`
+⚠ agentUser is <agentUser> but gh authenticates as <you> — the tick would commit, push and review as the wrong account. Run `npx @infrazero/repo-ai fix ai-loop-identity` in this checkout, then relaunch the Claude session; or run just one session as the agent: `GH_TOKEN=$(gh auth token --user <agentUser>) claude`
 ```
 
 That is the guard working. Restart the session as the bot, either for the whole
@@ -404,7 +404,7 @@ instead, which costs a duplicate `node_modules` per issue.
 
 ### Claude Code permissions
 
-Every tick shells out to `gh`, `git`, `pnpm` and `npx @rtorcato/repo-ai`.
+Every tick shells out to `gh`, `git`, `pnpm` and `npx @infrazero/repo-ai`.
 Without allow rules for them, each call prompts, or goes to the auto-mode
 classifier, which can block the tick. Add these to `permissions.allow` in
 `.claude/settings.json` (or `~/.claude/settings.json`, or
@@ -417,7 +417,7 @@ classifier, which can block the tick. Add these to `permissions.allow` in
       "Bash(gh:*)",
       "Bash(git *)",
       "Bash(pnpm:*)",
-      "Bash(npx @rtorcato/repo-ai *)"
+      "Bash(npx @infrazero/repo-ai *)"
     ]
   }
 }
@@ -428,12 +428,12 @@ call still runs sandboxed. There `gh` fails TLS verification on macOS (Seatbelt
 blocks the keychain) and `npx` can't write `~/.npm/_cacache`. The tick then
 needs an unsandboxed retry, which the auto-mode classifier can refuse. Exclude
 the loop's own calls in whichever file sets `sandbox.enabled`, or run
-`npx @rtorcato/repo-ai fix sandbox`:
+`npx @infrazero/repo-ai fix sandbox`:
 
 ```json
 {
   "sandbox": {
-    "excludedCommands": ["gh *", "npx @rtorcato/repo-ai *"]
+    "excludedCommands": ["gh *", "npx @infrazero/repo-ai *"]
   }
 }
 ```
@@ -609,7 +609,7 @@ case the halt clears. Its last line names the fix, e.g. `Next tick: none —
 relaunch as <agentUser>, then /ai-loop`.
 
 **Is a tick coming?** Every tick ends with a `Next tick:` line, and the
-statusline segment (`npx @rtorcato/repo-ai fix statusline`) shows it:
+statusline segment (`npx @infrazero/repo-ai fix statusline`) shows it:
 `🤖 1 agent · next 9m` while the loop runs, and nothing once the last tick is over
 35 minutes old. `/ai-loop-status`
 reports the same.
@@ -645,7 +645,7 @@ cadence and the tick report says `Monitor tool missing`. To run the watcher by
 hand:
 
 ```bash
-npx @rtorcato/repo-ai loop watch
+npx @infrazero/repo-ai loop watch
 ```
 
 A poll costs what a tick's reads cost: a handful of GitHub API calls, plus a

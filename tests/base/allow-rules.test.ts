@@ -30,7 +30,7 @@ describe('checkAllowRules (#152)', () => {
 		const home = newTmpDir()
 		settings(join(home, '.claude', 'settings.json'), ['Bash(gh:*)'])
 		settings(join(dir, '.claude', 'settings.json'), ['Bash(git *)', 'Bash(pnpm *)'])
-		settings(join(dir, '.claude', 'settings.local.json'), ['Bash(npx @rtorcato/repo-ai:*)'])
+		settings(join(dir, '.claude', 'settings.local.json'), ['Bash(npx @infrazero/repo-ai:*)'])
 		expect(await checkAllowRules(dir, home)).toEqual([expect.objectContaining({ status: 'ok' })])
 	})
 
@@ -40,7 +40,7 @@ describe('checkAllowRules (#152)', () => {
 		const results = await checkAllowRules(dir, newTmpDir())
 		expect(results.map((r) => r.status)).toEqual(['drift', 'drift'])
 		expect(results[0].detail).toContain('Bash(pnpm:*)')
-		expect(results[1].detail).toContain('Bash(npx @rtorcato/repo-ai *)')
+		expect(results[1].detail).toContain('Bash(npx @infrazero/repo-ai *)')
 	})
 
 	it('treats a bare Bash rule as allowing everything', async () => {
@@ -101,7 +101,7 @@ describe('checkSandboxExcludes (#257)', () => {
 		const home = newTmpDir()
 		sandbox(join(dir, '.claude', 'settings.json'), { enabled: true, excludedCommands: ['gh:*'] })
 		sandbox(join(home, '.claude', 'settings.json'), {
-			excludedCommands: ['npx @rtorcato/repo-ai *'],
+			excludedCommands: ['npx @infrazero/repo-ai *'],
 		})
 		expect((await checkSandboxExcludes(dir, home))[0].status).toBe('ok')
 	})

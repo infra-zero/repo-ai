@@ -1,4 +1,4 @@
-# Rebuild dist/ when a pull changed src/, so `npx @rtorcato/repo-ai` runs current code.
+# Rebuild dist/ when a pull changed src/, so `npx @infrazero/repo-ai` runs current code.
 # Never fails the pull: post-merge can't undo the merge anyway.
 if git diff --quiet ORIG_HEAD HEAD -- src/ 2>/dev/null; then
   echo "dist/ unchanged"
