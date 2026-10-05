@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://docs.torcato.dev/repo-ai/repo-ai.json",
   "title": ".repo-ai.json",
-  "description": "Config for the @rtorcato/repo-ai loop, read by readConfig() in src/base/config.ts.",
+  "description": "Config for the @infrazero/repo-ai loop, read by readConfig() in src/base/config.ts.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

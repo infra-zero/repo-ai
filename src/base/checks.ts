@@ -27,7 +27,7 @@ import type { CheckResult } from './types.js'
  */
 export async function checkClaudeSkills(skillsDir?: string): Promise<CheckResult> {
 	const check = 'Claude skills'
-	const hint = `Run \`npx @rtorcato/repo-ai fix claude-skills\` to install the ${SHIPPED_SKILLS.join(', ')} skills (writes outside the repo; opt-in, so \`fix\` alone skips it)`
+	const hint = `Run \`npx @infrazero/repo-ai fix claude-skills\` to install the ${SHIPPED_SKILLS.join(', ')} skills (writes outside the repo; opt-in, so \`fix\` alone skips it)`
 	const statuses: [string, SkillStatus][] = []
 	for (const name of SHIPPED_SKILLS) statuses.push([name, await claudeSkillStatus(name, skillsDir)])
 
@@ -83,7 +83,7 @@ export async function checkClaudeSkills(skillsDir?: string): Promise<CheckResult
 			check,
 			status: 'ok',
 			detail,
-			hint: `Diff against the shipped copy — ${diffs} — then run \`npx @rtorcato/repo-ai fix claude-skills --force-skills\` to take the shipped version`,
+			hint: `Diff against the shipped copy — ${diffs} — then run \`npx @infrazero/repo-ai fix claude-skills --force-skills\` to take the shipped version`,
 		}
 	}
 	const versions = new Set(statuses.map(([, s]) => s.installedVersion))
@@ -124,7 +124,7 @@ export async function checkRequiredSkills(
 	// #87, #89 — none current; see RETIRED_SKILLS) still resolves to it here.
 	names = [...new Set(names.map((name) => (RETIRED_SKILLS.includes(name) ? 'ai-loop' : name)))]
 	const hint =
-		'Run `npx @rtorcato/repo-ai fix claude-skills` yourself to install or refresh them — add `--force-skills` to overwrite a locally modified copy. It writes to `~/.claude`, outside this repo, so nothing runs it for you.'
+		'Run `npx @infrazero/repo-ai fix claude-skills` yourself to install or refresh them — add `--force-skills` to overwrite a locally modified copy. It writes to `~/.claude`, outside this repo, so nothing runs it for you.'
 	// A name outside SHIPPED_SKILLS has no shipped asset to hash against, and
 	// reading one would throw rather than report. The published schema rejects it
 	// in an editor; this is the runtime half of the same validation.
@@ -215,7 +215,7 @@ export async function checkPluginSkills(home?: string): Promise<CheckResult> {
  */
 export async function checkWorkflows(skillsDir?: string): Promise<CheckResult> {
 	const check = 'Claude workflows'
-	const hint = `Run \`npx @rtorcato/repo-ai fix claude-skills\` to install the ${SHIPPED_WORKFLOWS.join(', ')} workflows`
+	const hint = `Run \`npx @infrazero/repo-ai fix claude-skills\` to install the ${SHIPPED_WORKFLOWS.join(', ')} workflows`
 	const { dir } = await resolveSkillsDir(skillsDir)
 	if (!dir) {
 		return {

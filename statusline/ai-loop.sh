@@ -1,5 +1,5 @@
 #!/bin/sh
-# ai-loop statusline segment — shipped by @rtorcato/repo-ai.
+# ai-loop statusline segment — shipped by @infrazero/repo-ai.
 # Installed to ~/.claude/ai-loop-statusline.sh by `repo-ai fix statusline`;
 # edits there are overwritten on the next run of that fixer.
 #

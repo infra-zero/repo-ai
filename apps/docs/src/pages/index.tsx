@@ -101,7 +101,7 @@ const EXAMPLES: { label: string; file: string; code: string }[] = [
 	{
 		label: 'install',
 		file: 'Skills, labels, agent identity and statusline — asking before each',
-		code: `npx @rtorcato/repo-ai setup`,
+		code: `npx @infrazero/repo-ai setup`,
 	},
 	{
 		label: 'run',
@@ -114,8 +114,8 @@ const EXAMPLES: { label: string; file: string; code: string }[] = [
 	{
 		label: 'audit',
 		file: 'Check labels, agent user, and installed skills',
-		code: `npx @rtorcato/repo-ai doctor
-npx @rtorcato/repo-ai loop tick --json   # one tick's work list; writes no GitHub state`,
+		code: `npx @infrazero/repo-ai doctor
+npx @infrazero/repo-ai loop tick --json   # one tick's work list; writes no GitHub state`,
 	},
 ]
 
@@ -273,6 +273,7 @@ export default function Home(): ReactElement {
 				<Hero />
 				<Pillars />
 				<Parts />
+				{/* ponytail: keyed to shared-docs family.ts; rename both together */}
 				<Siblings self="@rtorcato/repo-ai" />
 			</main>
 		</Layout>
