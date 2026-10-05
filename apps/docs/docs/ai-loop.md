@@ -71,7 +71,7 @@ optional:
 
 ```json
 {
-  "$schema": "https://docs.torcato.dev/repo-ai/repo-ai.json",
+  "$schema": "https://docs.infrazero.dev/repo-ai/repo-ai.json",
   "agentUser": "my-bot",
   "requiredSkills": ["ai-loop"]
 }
@@ -96,7 +96,7 @@ optional:
 | `autoMerge` | boolean | `false` | `loop tick`. Lets Pass 1 merge a fully-passed issue PR unattended — only on a repo whose publishing job also runs behind an environment with `required_reviewers`. `doctor` warns when it is on without that gate. |
 | `ciWorkflow` | string | `ci.yml` | `loop tick` and `doctor`, which watch that workflow's runs on the default branch for the no-jobs, stuck-release and failed-release warnings. `doctor` warns when the file does not exist in `.github/workflows`. PR checks need no setting — they cover every workflow. |
 
-The schema is [`schemas/repo-ai.json`](https://docs.torcato.dev/repo-ai/repo-ai.json)
+The schema is [`schemas/repo-ai.json`](https://docs.infrazero.dev/repo-ai/repo-ai.json)
 (JSON Schema draft 2020-12), which ships in the npm package too. It sets
 `additionalProperties: false`, so `doctor` reports a mistyped key as drift
 rather than silently ignoring it. It also reports a wrong type, and a file that

@@ -59,7 +59,7 @@ At the repo root:
 
 ```json
 {
-  "$schema": "https://docs.torcato.dev/repo-ai/repo-ai.json",
+  "$schema": "https://docs.infrazero.dev/repo-ai/repo-ai.json",
   "agentUser": "<bot-login>"
 }
 ```
