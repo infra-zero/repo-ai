@@ -82,7 +82,12 @@ export async function dashboardCommand(o: DashboardOptions): Promise<Server> {
 					states.set(r.repo, await tickRepo(r, { reposDir: o.repos, queue, mint, event, limits }))
 				} catch (err) {
 					states.set(r.repo, {
-						...(states.get(r.repo) ?? { board: [], warnings: [], releaseGated: false }),
+						...(states.get(r.repo) ?? {
+							board: [],
+							warnings: [],
+							releaseGated: false,
+							mergedToday: 0,
+						}),
 						repo: r.repo,
 						summary: '⚠error',
 						halt: (err as Error).message,

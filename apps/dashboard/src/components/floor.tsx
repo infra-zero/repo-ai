@@ -49,7 +49,7 @@ export function Kpis({ view }: { view: DashboardView }) {
 		(n, r) => n + (r.state?.board.filter((i) => i.stage === 'review').length ?? 0),
 		0
 	)
-	const merged = view.events.filter((e) => e.t >= since && /\bmerged\b/i.test(e.what)).length
+	const merged = view.repos.reduce((n, r) => n + (r.state?.mergedToday ?? 0), 0)
 	const budget = view.config.agents.reduce((n, a) => n + (a.costBudgetUsd ?? 0), 0)
 	const tiles: [string, string][] = [
 		['PRs merged today', String(merged)],

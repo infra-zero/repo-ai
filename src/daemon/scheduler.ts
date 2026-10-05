@@ -27,6 +27,8 @@ export interface RepoState {
 	errors: string[]
 	lastTick: number
 	releaseGated: boolean
+	/** PRs merged since 00:00 UTC today, from GitHub (#316). */
+	mergedToday: number
 }
 
 export interface LoopEvent {
@@ -67,6 +69,7 @@ export async function tickRepo(r: RepoSettings, deps: SchedulerDeps): Promise<Re
 		errors: [],
 		lastTick: now(),
 		releaseGated: false,
+		mergedToday: 0,
 	}
 	// ponytail: process-wide env, so repos tick one at a time; pass env through the gh/git seams to tick them in parallel.
 	Object.assign(process.env, await deps.mint(r.repo))
@@ -91,6 +94,21 @@ export async function tickRepo(r: RepoSettings, deps: SchedulerDeps): Promise<Re
 	} catch (err) {
 		state.errors.push((err as Error).message)
 	}
+
+	// ponytail: UTC day, as GitHub's `merged:` qualifier is; the dashboard's "today" is local.
+	const merged = await gh([
+		'pr',
+		'list',
+		'--state',
+		'merged',
+		'--search',
+		`merged:>=${new Date(now()).toISOString().slice(0, 10)}`,
+		'--limit',
+		'200',
+		'--json',
+		'number',
+	])
+	if (merged.ok) state.mergedToday = (JSON.parse(merged.stdout || '[]') as unknown[]).length
 
 	const limits = { maxInFlight: deps.limits?.maxInFlight, maxFixRounds: deps.limits?.maxFixRounds }
 	const tick = await (deps.tick ?? ((root) => runLoopTick({ root, limits })))(root)

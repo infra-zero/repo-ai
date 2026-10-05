@@ -104,6 +104,18 @@ describe('tickRepo', () => {
 		expect(events).toContain('12 queued implement')
 	})
 
+	it('counts the PRs GitHub says merged today', async () => {
+		const { d } = deps({
+			gh: async (args) => ({
+				ok: true,
+				stdout: args.includes('merged') ? '[{"number":1},{"number":2}]' : '[]',
+				stderr: '',
+				code: 0,
+			}),
+		})
+		expect((await tickRepo(repo, d)).mergedToday).toBe(2)
+	})
+
 	it('stops at a halt without applying anything', async () => {
 		let appliedCalled = false
 		const { d } = deps({
