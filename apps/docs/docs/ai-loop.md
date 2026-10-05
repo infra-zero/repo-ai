@@ -726,7 +726,9 @@ Stacked PRs are in public preview, and merge queue support is still rolling out.
 ### Dependent issues in the loop
 
 The loop stacks one level deep on its own (#253). Put `Depends on #N` in an
-`ai-ready` issue's body, where #N is an issue in the same repo:
+`ai-ready` issue's body, where #N is an issue or pull request in the same repo.
+A pull request stands in for its own issue: open, it is the parent PR; merged,
+the dependency is met (#301).
 
 - **#N has an open loop PR that targets the default branch:** Pass 4 branches
   the worktree from that PR's branch. The new PR targets that branch and says

@@ -792,7 +792,8 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	): Promise<string | { base?: string; stackedOn?: number }> => {
 		let stack: { base: string; stackedOn: number } | undefined
 		for (const n of dependsOn(body)) {
-			const parent = (allPrs ?? []).find((p) => issueOf(p.headRefName) === n)
+			// N may be the parent issue, or the parent PR itself (#301).
+			const parent = (allPrs ?? []).find((p) => p.number === n || issueOf(p.headRefName) === n)
 			if (parent) {
 				if (parent.baseRefName !== env.defaultBranch)
 					return `depends on #${n}, whose PR #${parent.number} is itself stacked — waits for it to merge`
@@ -802,7 +803,9 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 			}
 			const r = await gh(['issue', 'view', String(n), '--json', 'state', '-q', '.state'])
 			if (!r.ok) return `could not read #${n}: ${r.stderr.trim()}`
-			if (r.stdout.trim() !== 'CLOSED') return `depends on #${n}, which has no open PR yet`
+			// `gh issue view` also reads a PR, whose merged state is MERGED (#301).
+			if (!['CLOSED', 'MERGED'].includes(r.stdout.trim()))
+				return `depends on #${n}, which has no open PR yet`
 		}
 		return stack ?? {}
 	}
