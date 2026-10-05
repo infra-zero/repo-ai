@@ -13,7 +13,7 @@ const config: Config = {
 		'Turns ai-ready GitHub issues into reviewed PRs — one worktree per issue, two agent reviewers.',
 	favicon: 'img/favicon.svg',
 
-	url: 'https://docs.torcato.dev',
+	url: 'https://docs.infrazero.dev',
 	baseUrl: '/repo-ai/',
 
 	organizationName: 'rtorcato',

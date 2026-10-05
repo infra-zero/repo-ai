@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 jobs:
-  # https://docs.torcato.dev/repo-ai/
+  # https://docs.infrazero.dev/repo-ai/
   cloudflare:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     permissions:
@@ -29,7 +29,7 @@ jobs:
       build-filter: '@infrazero/repo-ai-docs'
       worker-name: repo-ai-docs
       base-path: /repo-ai/
-      route: docs.torcato.dev/repo-ai/*
+      route: docs.infrazero.dev/repo-ai/*
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
