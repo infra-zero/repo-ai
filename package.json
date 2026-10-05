@@ -29,7 +29,7 @@
 		"prepare": "is-ci || husky"
 	},
 	"dependencies": {
-		"chalk": "^6.0.0",
+		"chalk": "^6.0.1",
 		"commander": "^15.0.0",
 		"fs-extra": "^11.4.0",
 		"inquirer": "^14.1.0"
