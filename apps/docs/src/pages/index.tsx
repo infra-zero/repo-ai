@@ -273,8 +273,7 @@ export default function Home(): ReactElement {
 				<Hero />
 				<Pillars />
 				<Parts />
-				{/* ponytail: keyed to shared-docs family.ts; rename both together */}
-				<Siblings self="@rtorcato/repo-ai" />
+				<Siblings self="@infrazero/repo-ai" />
 			</main>
 		</Layout>
 	)
