@@ -5,6 +5,7 @@ description: The end-to-end label-driven pipeline that turns an ai-ready GitHub 
 
 import Link from '@docusaurus/Link'
 import LabelChips, { Labels } from '@site/src/components/LabelChips'
+import LoopWalkthrough from '@site/src/components/LoopWalkthrough'
 
 `ai-loop` is a **label-driven pipeline** that takes a GitHub issue marked
 `ai-ready`, implements it in a per-issue git worktree, opens a PR, has two agents
@@ -322,6 +323,15 @@ flowchart TD
   classDef blocked fill:#b60205,stroke:#b60205,color:#fff
   classDef sugg fill:#c2e0c6,stroke:#c2e0c6,color:#1f2328
 ```
+
+### Step through it
+
+The diagram shows the states; this shows them changing. Follow one issue and
+its PR through a clean run and four ways it can go sideways, and see at each
+step which labels moved, who moved them, and in which pass of the tick. The
+numbers are the defaults from the [limits](#limits).
+
+<LoopWalkthrough />
 
 A red or `DIRTY` Dependabot PR never gets a fixer: the loop comments `@dependabot recreate` and drops its verdicts.
 
