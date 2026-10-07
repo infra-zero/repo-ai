@@ -26,6 +26,14 @@ test('blocks release commands', () => {
 		'gh workflow run -R infra-zero/repo-ai release.yml',
 		'pnpm dlx semantic-release --dry-run',
 		'bun pm version patch',
+		'gh workflow run --ref main release.yml',
+		'gh workflow run Release',
+		'if test -n "$X"; then pnpm publish; fi',
+		'if true\nthen\n  npm publish\nfi',
+		'for p in a b; do git tag "$p"; done',
+		'env CI=1 pnpm publish',
+		'git push --follow-tags',
+		'gh workflow run -R o/r --ref=main -f a=b release.yml',
 		'gh workflow run --repo=infra-zero/repo-ai release.yml',
 	])
 		expect(blockedBash(cmd)).toBeDefined()
@@ -47,6 +55,10 @@ test('allows everyday commands', () => {
 		'gh workflow run ci.yml --ref feat/327-release-guard',
 		'git tag --sort=-v:refname | head -3',
 		'git tag --merged main',
+		'git tag | sort',
+		`gh workflow run ${Array.from({ length: 40 }, (_, i) => `--f${i}=v`).join(' ')} ci.yml`,
+		'pnpm run publish-docs',
+		'gh issue create --title "then npm publish breaks"',
 		"cat > notes.md <<'X'\n- Bash: npm|pnpm … publish, git tag <name>, git push --force\nX",
 		'gh issue create --title "blocks npm publish and git push --force"',
 	])

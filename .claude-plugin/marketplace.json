@@ -14,7 +14,7 @@
     {
       "name": "release-guard",
       "source": "./mods/release-guard",
-      "description": "Opt-in mod: denies agent tool calls that would release outside CI — npm publish, version bumps, local semantic-release, git tags, force/tag pushes, release workflow dispatches, and package.json version edits. Early-access mod API (Claude Code 2.1.292+). Unversioned: tracks main."
+      "description": "Opt-in mod: denies agent tool calls that would release outside CI — npm publish, version bumps, local semantic-release, git tags, force pushes, git push --tags/--follow-tags, release workflow dispatches, and package.json version edits. Early-access mod API (Claude Code 2.1.292+). Unversioned: tracks main."
     }
   ]
 }
