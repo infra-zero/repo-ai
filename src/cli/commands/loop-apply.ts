@@ -2,8 +2,10 @@ import path from 'node:path'
 import chalk from 'chalk'
 import type { GitExec } from '../../base/git.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
+import { safeText } from '../../base/sanitize.js'
 import { type CleanupEntry, runLoopCleanup } from './loop-cleanup.js'
 import { type InstallExec, type RebuildOutcome, runLoopGuard } from './loop-guard.js'
+import { type Target, upsertMarked } from './loop-marker.js'
 import type { ReapEntry } from './loop-reap.js'
 import {
 	type FixRound,
@@ -42,8 +44,10 @@ import { runLoopWorktreeAdd } from './loop-worktree.js'
  * for a handoff `loop tick` marked `autoMerge` (the repo's `.repo-ai.json`
  * opt-in *and* a `release` environment with required reviewers, #142).
  *
- * Comments need judgement, so they stay with the model: `comments` lists each
- * one owed. Removing a stalled agent's worktree stays with the model too.
+ * Every label edit is preceded by a transition comment naming the agent and the
+ * next owner (#332). Comments that need judgement stay with the model:
+ * `comments` lists each one owed. Removing a stalled agent's worktree stays
+ * with the model too.
  *
  * Exit non-zero only to halt the tick, with `loop tick`'s or `loop guard`'s own
  * code. A failed edit is not a halt: it lands in `errors` and the next apply
@@ -142,6 +146,87 @@ export interface LoopApplyOptions {
 	now?: Date
 }
 
+/**
+ * The first visible line of a transition comment (#332). `REPO_AI_AGENT` names
+ * the agent making the change; `REPO_AI_AGENT_TAG` (e.g. `🐝 (Buzz agent)`)
+ * follows the name. Both are one bounded line, backticks dropped.
+ */
+export function agentHeader(env: NodeJS.ProcessEnv): string {
+	const name = safeText(env.REPO_AI_AGENT, 60).replaceAll('`', '')
+	if (!name) return '🤖 *Automated — `ai-loop` label change.*'
+	const tag = safeText(env.REPO_AI_AGENT_TAG, 60).replaceAll('`', '')
+	return `🤖 *Automated — \`@${name}\`${tag ? ` ${tag}` : ''} via ai-loop.*`
+}
+
+/** `+\`a\`, −\`b\`` from an edit's label flags; empty when it changes none. */
+export function labelDiff(args: string[]): string {
+	return args
+		.flatMap((a, i) =>
+			a === '--add-label'
+				? `+\`${args[i + 1]}\``
+				: a === '--remove-label'
+					? `−\`${args[i + 1]}\``
+					: []
+		)
+		.join(', ')
+}
+
+/**
+ * Upsert the transition comment that must precede a label edit on `n` (#332):
+ * one marker per transition type, so a long-lived PR collects one comment per
+ * kind of change, not one per tick. Returns the error, or null.
+ */
+export async function announce(
+	target: Target,
+	header: string,
+	n: number,
+	transition: string,
+	handoff: string,
+	args: string[]
+): Promise<string | null> {
+	const r = await upsertMarked(
+		target,
+		n,
+		`<!-- ai-issue-loop:transition:${transition} -->`,
+		`${header}\n${handoff} Labels: ${labelDiff(args)}.`
+	)
+	return 'error' in r ? r.error : null
+}
+
+/** What a transition means and who owns the issue or PR next. */
+function handoffLine(t: Applied['transition'], args: string[], human: string): string {
+	switch (t) {
+		case 'handoff':
+			return `Ready to merge, handing off to ${human}.`
+		case 'strip-merge-ready':
+			return 'No longer ready to merge; back with the loop.'
+		case 'send-back':
+			return 'Sent back to a fixer: the why is in the loop decision comment.'
+		case 'dependabot-recreate':
+			return 'Asked Dependabot to recreate; the reviews run again on its new head.'
+		case 'dependabot-stalled':
+			return `Dependabot never recreated, handing off to ${human}.`
+		case 'relabel':
+			return 'The PR is closed and its worktree removed; the loop is done here.'
+		case 'stall':
+			return args.includes('ai-blocked')
+				? `Blocked, needs ${human}: the agent stalled.`
+				: 'A stalled claim was dropped; the next tick spawns a fresh agent.'
+		case 'round-cap':
+			return `Blocked, needs ${human}: out of fix rounds, or nowhere to fix.`
+		case 'claim-fix':
+			return 'Claimed the fix round.'
+		case 'claim-review':
+			return 'Claimed the review.'
+		case 'claim-pickup':
+			return 'Claimed, working in a worktree.'
+		case 'return-pickup':
+			return 'Could not create the worktree; back in the `ai-ready` queue.'
+		default:
+			return `Label change (${t}).`
+	}
+}
+
 /** A passed PR's in-flight labels; `merge-ready` supersedes them, a send-back drops them. */
 const PASS_LABELS = ['ai-review', 'ai-ok-code', 'ai-ok-sec'].flatMap((l) => ['--remove-label', l])
 const flag = (name: string, value: string) => (value ? [name, value] : [])
@@ -173,6 +258,9 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 	const root = tick.env.root || path.resolve(options.root ?? process.cwd())
 	const gh: GhExec = options.gh ?? ((args, stdin) => realGhExec(args, stdin, root))
 	const { agentUser, humanUser } = tick.env
+	const target: Target = { ownerRepo: tick.env.ownerRepo, me: tick.env.me, gh }
+	const header = agentHeader(options.env ?? process.env)
+	const human = humanUser ? `\`@${humanUser}\`` : 'a human'
 	const run = async (
 		pass: Applied['pass'],
 		transition: Applied['transition'],
@@ -180,6 +268,16 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 		args: string[],
 		quiet = false
 	) => {
+		// No label moves without its comment first (#332): a failed comment skips the edit, and the next apply retries both.
+		if (labelDiff(args)) {
+			const line = handoffLine(transition, args, human)
+			const err = await announce(target, header, n, transition, line, args)
+			if (err) {
+				result.applied.push({ pass, transition, number: n, args, ok: false })
+				result.errors.push(`comment before ${transition} on #${n} failed: ${err}`)
+				return false
+			}
+		}
 		const r = await gh(args)
 		result.applied.push({ pass, transition, number: n, args, ok: r.ok })
 		if (!r.ok && !quiet)
