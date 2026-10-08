@@ -1,0 +1,13 @@
+{
+  "name": "loop-watch",
+  "description": "Experimental Claude Code mod (early-access mod API): a live ai-loop view. A status line segment, a /loop-watch pane of ai-* PRs and issues, a merge-ready toast and an agent dock above the prompt. Unversioned: follows the default branch.",
+  "author": {
+    "name": "Richard Torcato",
+    "url": "https://github.com/rtorcato"
+  },
+  "homepage": "https://docs.infrazero.dev/repo-ai/",
+  "repository": "https://github.com/infra-zero/repo-ai",
+  "license": "MIT",
+  "keywords": ["ai-loop", "claude-code", "mod", "experimental"],
+  "types": "./types/index.d.ts"
+}

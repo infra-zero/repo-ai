@@ -10,6 +10,7 @@ The ai-loop pipeline, split out of `@rtorcato/repo-tooling`:
 - `src/cli/commands/loop-*.ts` — the `loop` commands the skills call, with the mechanics turned into testable code.
 - `src/cli/commands/{doctor,fix}.ts` — the loop's own audit and fixers.
 - `src/base/{gh,git}.ts` — `gh`/`git` runners, copied from repo-tooling (not shared).
+- `mods/loop-watch/` — an experimental Claude Code mod, the marketplace's second plugin. Not in the npm package (`files` leaves it out); `tests/mods/` keeps its `STALE_AFTER` equal to `statusline/ai-loop.sh`'s.
 
 Config is read from the consuming repo's `.repo-ai.json`: `agentUser` and `requiredSkills` (`src/base/config.ts`).
 
