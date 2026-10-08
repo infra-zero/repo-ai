@@ -26,7 +26,7 @@ export const DECISION_MARKER = '<!-- ai-issue-loop:decision -->'
 
 export type Verdict = 'PASS' | 'PASS-NOTES' | 'CHANGES'
 
-interface Target {
+export interface Target {
 	ownerRepo: string
 	me: string
 	gh: GhExec
@@ -95,27 +95,37 @@ export async function runLoopComment(
 	if (!text) return fail('empty comment body')
 	const target = await resolveTarget(options.dir, options.gh)
 	if (typeof target === 'string') return fail(target)
-	const { ownerRepo, me, gh } = target
+	const r = await upsertMarked(target, n, DECISION_MARKER, text)
+	return 'error' in r ? fail(r.error) : { pr: n, ...r }
+}
 
+/**
+ * Upsert the loop's one `marker` comment on issue or PR `n`: patch its own,
+ * else create. Only `me`'s comments count — a stranger's marker never owns the slot.
+ */
+export async function upsertMarked(
+	{ ownerRepo, me, gh }: Target,
+	n: number,
+	marker: string,
+	text: string
+): Promise<{ action: 'created' | 'updated'; commentId: number | null } | { error: string }> {
 	const comments = await ghPaginated<GhItem>(gh, `repos/${ownerRepo}/issues/${n}/comments`)
 	// A failed read must not fall through to "create" — that is the duplicate.
-	if (comments === null) return fail('could not list PR comments')
-	const existing = comments.find(
-		(c) => c.user?.login === me && (c.body ?? '').startsWith(DECISION_MARKER)
-	)
-	const input = JSON.stringify({ body: `${DECISION_MARKER}\n${text}` })
+	if (comments === null) return { error: 'could not list PR comments' }
+	const existing = comments.find((c) => c.user?.login === me && (c.body ?? '').startsWith(marker))
+	const input = JSON.stringify({ body: `${marker}\n${text}` })
 	const r = existing
 		? await gh(
 				['api', '-X', 'PATCH', `repos/${ownerRepo}/issues/comments/${existing.id}`, '--input', '-'],
 				input
 			)
 		: await gh(['api', `repos/${ownerRepo}/issues/${n}/comments`, '--input', '-'], input)
-	if (!r.ok) return fail(r.stderr.trim() || 'gh api failed')
+	if (!r.ok) return { error: r.stderr.trim() || 'gh api failed' }
 	let id: number | null = existing?.id ?? null
 	try {
 		id = (JSON.parse(r.stdout) as { id: number }).id ?? id
 	} catch {}
-	return { pr: n, action: existing ? 'updated' : 'created', commentId: id }
+	return { action: existing ? 'updated' : 'created', commentId: id }
 }
 
 export interface LoopVerdictResult {

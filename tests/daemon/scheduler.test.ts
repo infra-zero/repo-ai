@@ -158,6 +158,11 @@ describe('tickRepo', () => {
 			'--add-label',
 			'ai-notes',
 		])
+		// Each label edit follows its transition comment (#332).
+		const at = (pred: (a: string[]) => boolean) => ghCalls.findIndex(pred)
+		const comment4 = at((a) => a[0] === 'api' && a[1]?.endsWith('/issues/4/comments') === true)
+		expect(comment4).toBeGreaterThanOrEqual(0)
+		expect(comment4).toBeLessThan(at((a) => a[1] === 'edit' && a[2] === '4'))
 		expect(comments[0]?.[0]).toBe(8)
 		expect(comments[0]?.[1]).toContain('Merge `main` into this branch')
 	})

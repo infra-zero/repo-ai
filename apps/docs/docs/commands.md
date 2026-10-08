@@ -42,7 +42,7 @@ The skills call these; you rarely need them directly.
 | `loop env` | Print a tick's values (root, worktree root, owner/repo, agent and human users) for a human; the skill reads them from `loop tick --json`. |
 | `loop worktree add <slug>` | Create an `ai-*` worktree off `origin/main` and link its dependencies. |
 | `loop cleanup` | Remove `ai-*` worktrees whose PR has landed or closed. |
-| `loop apply` | Apply a tick's deterministic writes: Pass 1's disarm, handoff, send-back, `merge-ready` strip and branch update; Pass 2's worktree removal (then the `node_modules` rebuild gate), `ai-wip` relabel and the label side of each stall. Its only merge is an `autoMerge` handoff. Reports every edit, and in `comments` each comment the caller still owes. |
+| `loop apply` | Apply a tick's deterministic writes: Pass 1's disarm, handoff, send-back, `merge-ready` strip and branch update; Pass 2's worktree removal (then the `node_modules` rebuild gate), `ai-wip` relabel and the label side of each stall. Its only merge is an `autoMerge` handoff. Each label edit is preceded by an upserted transition comment naming the agent (`REPO_AI_AGENT`) and the next owner (#332). Reports every edit, and in `comments` each comment the caller still owes. |
 | `loop reap` | Report agents stalled past 45 minutes and what to do about each. |
 | `loop comment <pr>` | Upsert the loop's one decision-marker comment on a PR. |
 | `loop verdict <pr>` | Read a reviewer's verdict marker for the PR's current head. |
