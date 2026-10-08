@@ -190,8 +190,8 @@ importers:
         specifier: ^5.4.1
         version: 5.4.1(@biomejs/biome@2.5.14)(@commitlint/cli@21.2.3(@types/node@26.6.4)(conventional-commits-parser@7.1.2)(typescript@7.0.2))(@commitlint/config-conventional@21.2.3)(@commitlint/types@21.2.3)(@semantic-release/commit-analyzer@13.0.1(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/github@12.0.10(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/npm@13.2.0(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/release-notes-generator@14.1.1(semantic-release@25.0.9(typescript@7.0.2)))(@types/node@26.6.4)(conventional-changelog-conventionalcommits@10.4.0)(prettier@3.9.9)(semantic-release@25.0.9(typescript@7.0.2))(tslib@2.8.1)(typescript@7.0.2)(vitest@5.0.2(@types/node@26.6.4)(vite@8.3.2(@types/node@26.6.4)(jiti@2.7.0)(terser@5.51.2)))
       '@rtorcato/shared-docs':
-        specifier: ^1.12.0
-        version: 1.12.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: ^1.14.0
+        version: 1.14.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@types/react':
         specifier: ^19.2.18
         version: 19.3.0
@@ -3068,8 +3068,8 @@ packages:
       vitest:
         optional: true
 
-  '@rtorcato/shared-docs@1.12.0':
-    resolution: {integrity: sha512-B7ZAVOdui99mpVHFcbFNTNf65i3Cc1KeDKD/TBjEf6p4as3uyW2GP9LTgsEU8tmqCaLPOS6ARF1dbUSh21XKxw==}
+  '@rtorcato/shared-docs@1.14.0':
+    resolution: {integrity: sha512-NRRPo1nyQgat3YeajNhz+Mqx9r48bcRFNnUcOADMGAT2rdu6lEMlZLVHnow4mGfyfr3blTYjV9TEhsA60zQE2g==}
     engines: {node: '>=22'}
     hasBin: true
     peerDependencies:
@@ -12987,7 +12987,7 @@ snapshots:
     transitivePeerDependencies:
       - '@types/node'
 
-  '@rtorcato/shared-docs@1.12.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@rtorcato/shared-docs@1.14.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     optionalDependencies:
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
