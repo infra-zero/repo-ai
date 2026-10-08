@@ -9,8 +9,8 @@ allowBuilds:
   sharp: true
 
 minimumReleaseAgeExclude:
-  - '@rtorcato/shared-docs@1.12.0'
   - '@rtorcato/repo-tooling@5.4.1'
+  - '@rtorcato/shared-docs@1.14.0'
 
 # Dependabot alerts #1-3: transitive via Docusaurus (copy-webpack-plugin, sockjs).
 overrides:
