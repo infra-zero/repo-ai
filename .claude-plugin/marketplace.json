@@ -12,6 +12,11 @@
       "description": "Four skills: ai-loop (the entry point and engine), ai-issue (the on-ramp), ai-loop-status (a read-only view) and ai-loop-stop (stop this repo's loop). They call the @infrazero/repo-ai CLI via npx. Unversioned: tracks main."
     },
     {
+      "name": "loop-watch",
+      "source": "./mods/loop-watch",
+      "description": "Experimental, optional: a live ai-loop view for Claude Code (status line, /loop-watch pane, merge-ready toast, agent dock). Built on the early-access mod API, so it may break between Claude Code releases. Not installed by repo-ai setup or fix. Unversioned: tracks main."
+    },
+    {
       "name": "repo-ai-rainbow",
       "source": "./plugins/repo-ai-rainbow",
       "description": "A colorful band above the prompt with open ai-* label counts and the ai-loop status; /repo-ai refreshes it. Needs gh."

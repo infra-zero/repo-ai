@@ -53,6 +53,12 @@ The plugin carries the skills only. Pass 3 and Pass 4 run their Workflow scripts
 
 **Moving over from repo-tooling?** Skills installed by `@rtorcato/repo-tooling` carry that package's version stamp, so this installer treats them as local edits and won't overwrite them. Run it once with `--force-skills`.
 
+### loop-watch (experimental)
+
+> **Experimental.** `loop-watch` is a Claude Code mod built on the early-access mod API (Claude Code 2.1.292), which may change between Claude Code releases. It is optional: neither `setup` nor `fix` installs it.
+
+A live ai-loop view inside Claude Code: a status line segment (`🤖 <summary> · next 9m · 2 agents · 1 ready to merge`), a `/loop-watch` pane of the open PRs and issues with `ai-*` labels, a toast and chime when a PR passes both reviews, and a dock above the prompt with one tile per running subagent. Install it from the same marketplace with `/plugin install loop-watch@repo-ai`. It reads the same `.claude/ai-loop-status` as the statusline segment and polls `gh` every 2 minutes. It sees only this session's agents; agents in other sessions show up through their labels and the status file.
+
 ## Commands
 
 | Command | What it does |
