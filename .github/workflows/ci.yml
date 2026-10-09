@@ -71,6 +71,12 @@ jobs:
       - run: pnpm run check
       - run: pnpm run typecheck
       - run: pnpm test --run
+      # Mod tests import 'claude-code/testing', which only Claude Code's own runner
+      # provides. Pinned because the mod API is early access. Needs no login.
+      - name: Test the repo-ai-rainbow mod
+        env:
+          CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: "1"
+        run: npx --yes @anthropic-ai/claude-code@2.1.285 plugin test plugins/repo-ai-rainbow
       - run: pnpm run build
       # Run the package as npm would ship it, not as it sits in the repo: pack,
       # check the non-code files made it in, install the tarball somewhere
