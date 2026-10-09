@@ -1,7 +1,9 @@
+<!-- brand-kit:banner:start -->
 <picture>
   <source media="(max-width: 640px)" srcset="./brand/banner-mobile.png">
   <img src="./brand/banner.png" alt="repo-ai banner" width="1600">
 </picture>
+<!-- brand-kit:banner:end -->
 
 # @infrazero/repo-ai
 
