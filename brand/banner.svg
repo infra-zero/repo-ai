@@ -1,12 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-label="repo-ai — The ai-loop pipeline — loop mechanics, Claude Code skills, and their audit — split out of @rtorcato/repo-tooling">
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-label="repo-ai — Turns ai-ready GitHub issues into reviewed PRs — one worktree per issue, two agent reviewers.">
 	<defs>
 		<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
 			<stop offset="0" stop-color="#0d1117"/>
 			<stop offset="1" stop-color="#090c13"/>
 		</linearGradient>
 		<radialGradient id="glow" cx="0.16" cy="0" r="0.55">
-			<stop offset="0" stop-color="#f472b6" stop-opacity="0.15"/>
-			<stop offset="1" stop-color="#f472b6" stop-opacity="0"/>
+			<stop offset="0" stop-color="#8b95a7" stop-opacity="0.15"/>
+			<stop offset="1" stop-color="#8b95a7" stop-opacity="0"/>
 		</radialGradient>
 		<radialGradient id="glow2" cx="0.92" cy="1" r="0.5">
 			<stop offset="0" stop-color="#6e7bff" stop-opacity="0.12"/>
@@ -21,7 +21,7 @@
 	<!-- Logo mark: brand/favicon.svg — edit that file to change it on every canvas. -->
 	<image href="favicon.svg" x="60" y="88" width="72" height="72"/>
 
-	<text x="156" y="150" font-family="'Avenir Next', Inter, 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="62" letter-spacing="-1.5"><tspan fill="#e6edf3">repo-</tspan><tspan fill="#f472b6">ai</tspan></text>
+	<text x="156" y="150" font-family="'Avenir Next', Inter, 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="62" letter-spacing="-1.5"><tspan fill="#e6edf3">repo-</tspan><tspan fill="#8b95a7">ai</tspan></text>
 
 	<text font-family="'Avenir Next', Inter, 'Helvetica Neue', Arial, sans-serif" font-weight="500" font-size="20" fill="#9ba6b8">
 		<tspan x="62" y="198">The ai-loop pipeline — loop mechanics,</tspan>
@@ -30,5 +30,5 @@
 	</text>
 
 	<rect x="845" y="118" width="378" height="84" rx="14" fill="#11151d" stroke="#232936" stroke-width="1"/>
-	<text xml:space="preserve" x="1034" y="166.66666666666666" text-anchor="middle" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="20"><tspan fill="#f472b6">npm i </tspan><tspan fill="#e6edf3">@infrazero/repo-ai</tspan></text>
+	<text xml:space="preserve" x="1034" y="166.66666666666666" text-anchor="middle" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="20"><tspan fill="#8b95a7">npm i </tspan><tspan fill="#e6edf3">@infrazero/repo-ai</tspan></text>
 </svg>
