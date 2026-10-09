@@ -69,6 +69,8 @@ Two ways, pick one:
 
 The plugin carries the skills only. Pass 3 and Pass 4 run their Workflow scripts by name, so plugin users still need those scripts from `fix claude-skills`; without them `ai-loop` falls back to background Agent calls. Either way the skills call the CLI through `npx @infrazero/repo-ai`.
 
+**Optional: `release-guard`.** `/plugin install release-guard@repo-ai` adds a mod that denies an agent's npm publish, version bump, local semantic-release run, git tag, force push, `git push --tags` or `--follow-tags`, release workflow dispatch, GitHub release, or `package.json` `"version"` edit, and tells it to have you run the command yourself with `! <command>`. It matches command text rather than parsing the shell, so it catches an agent's slip, not an adversary. It deliberately allows `gh pr merge`. Mods are an early-access Claude Code API (2.1.292+), so this stays opt-in. Required checks and the `release` environment remain the real gates.
+
 ### loop-watch (experimental)
 
 > **Experimental.** `loop-watch` is a Claude Code mod built on the early-access mod API (Claude Code 2.1.292), which may change between Claude Code releases. It is optional: neither `setup` nor `fix` installs it.

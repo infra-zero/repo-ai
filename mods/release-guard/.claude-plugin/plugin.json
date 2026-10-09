@@ -1,0 +1,4 @@
+{
+  "name": "release-guard",
+  "description": "Opt-in mod: denies agent-run releases (npm publish, version bumps, local semantic-release, git tags, force pushes, git push --tags/--follow-tags, release dispatches, package.json version edits). Early-access mod API (Claude Code 2.1.292+). Unversioned: tracks main."
+}
