@@ -26,3 +26,6 @@ overrides:
   # Dependabot alerts #12-14 (#343): transitive via conventional-changelog-writer
   # (semantic-release), locked at 4.7.9.
   handlebars: '^4.7.10'
+  # GHSA-ch52-4w7c-c8xp (#343): transitive via Docusaurus's got/cacheable-request
+  # (wants ^4.1.1), locked at 4.2.0.
+  http-cache-semantics: '^4.3.0'
