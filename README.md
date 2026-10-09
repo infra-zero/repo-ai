@@ -5,11 +5,6 @@
 </picture>
 <!-- brand-kit:banner:end -->
 
-<picture>
-  <source media="(max-width: 640px)" srcset="./brand/banner-mobile.png">
-  <img src="./brand/banner.png" alt="repo-ai banner" width="1600">
-</picture>
-
 # @infrazero/repo-ai
 
 The **ai-loop** pipeline: a label-driven loop that takes an `ai-ready` GitHub issue, implements it in its own git worktree, opens a PR, has two agents review it, and hands it to a human to merge.
