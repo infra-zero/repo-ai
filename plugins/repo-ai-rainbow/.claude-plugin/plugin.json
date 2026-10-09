@@ -1,0 +1,11 @@
+{
+  "name": "repo-ai-rainbow",
+  "version": "0.1.0",
+  "description": "Colorful band above the prompt showing the repo-ai label pipeline and ai-loop status; /repo-ai refreshes it.",
+  "author": {
+    "name": "Richard Torcato",
+    "url": "https://github.com/rtorcato"
+  },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}
