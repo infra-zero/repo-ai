@@ -25,6 +25,11 @@ const LOOP_COLORS: Record<string, string> = {
 // ponytail: polls every 5 min; a gh webhook would be instant but needs a server.
 const POLL_MS = 5 * 60 * 1000
 
+// statusline/ai-loop.sh hides a status 35 min (STALE_AFTER) after the write, and the idle
+// cadence defaults to 30 min, so 5 min past the due tick is the same point for an idle loop.
+// ponytail: a fixed slack; a slower idleMinutes hides a little sooner than the statusline.
+const STALE_SLACK_S = 5 * 60
+
 export function age(seconds: number): string {
 	if (seconds < 60) return `${seconds}s`
 	if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
@@ -34,7 +39,7 @@ export function age(seconds: number): string {
 
 export function summary(s: Snapshot): string {
 	const parts = LABELS.map(({ label }) => `${label} ${s.counts[label] ?? 0}`)
-	if (s.loop) parts.push(`loop ${s.loop}${s.loopAge === null ? '' : ` (${age(s.loopAge)} ago)`}`)
+	if (s.loop) parts.push(`loop ${s.loop}${s.loopAge === null ? '' : ` (for ${age(s.loopAge)})`}`)
 	return parts.join(' · ')
 }
 
@@ -48,13 +53,20 @@ async function gh($: EngineInterface, kind: 'issue' | 'pr'): Promise<string[][]>
 	return items.map((item) => item.labels.map((l) => l.name))
 }
 
-// .claude/ai-loop-status: line 1 is the state, line 4 the epoch seconds it was written.
+// .claude/ai-loop-status (ai-loop Pass 5), epoch seconds: line 1 is the summary, line 3 when
+// the next tick is due (empty after a halt or stop), line 4 when the summary last changed.
 async function loopStatus($: EngineInterface): Promise<Pick<Snapshot, 'loop' | 'loopAge'>> {
 	try {
 		const lines = (await $.fs.read('.claude/ai-loop-status')).split('\n')
-		const stamp = Number(lines[3])
+		const next = Number(lines[2])
+		const changed = Number(lines[3])
 		const now = Math.floor((await $.clock.now()) / 1000)
-		return { loop: lines[0]?.trim() || null, loopAge: stamp > 0 ? Math.max(0, now - stamp) : null }
+		// A crashed loop never rewrites the file, so its last `working·…` would stay up forever.
+		if (next > 0 && now > next + STALE_SLACK_S) return { loop: null, loopAge: null }
+		return {
+			loop: lines[0]?.trim() || null,
+			loopAge: changed > 0 ? Math.max(0, now - changed) : null,
+		}
 	} catch {
 		return { loop: null, loopAge: null }
 	}
@@ -108,7 +120,7 @@ export const register: Register = (on) => {
 				{LABELS.map(({ label, icon, color }) => {
 					const n = s.counts[label] ?? 0
 					return (
-						<Text color={color} dimColor={n === 0} bold={n > 0}>
+						<Text key={label} color={color} dimColor={n === 0} bold={n > 0}>
 							{icon} {label.slice(3)} {n}
 							{'  '}
 						</Text>
@@ -117,7 +129,7 @@ export const register: Register = (on) => {
 				{s.loop && (
 					<Text color={LOOP_COLORS[loopKind] ?? '#f472b6'}>
 						⟳ {s.loop}
-						{s.loopAge === null ? '' : ` ${age(s.loopAge)}`}
+						{s.loopAge === null ? '' : ` for ${age(s.loopAge)}`}
 					</Text>
 				)}
 			</Box>
