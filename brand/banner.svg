@@ -24,9 +24,8 @@
 	<text x="156" y="150" font-family="'Avenir Next', Inter, 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="62" letter-spacing="-1.5"><tspan fill="#e6edf3">repo-</tspan><tspan fill="#8b95a7">ai</tspan></text>
 
 	<text font-family="'Avenir Next', Inter, 'Helvetica Neue', Arial, sans-serif" font-weight="500" font-size="20" fill="#9ba6b8">
-		<tspan x="62" y="198">The ai-loop pipeline — loop mechanics,</tspan>
-		<tspan x="62" y="226">Claude Code skills, and their audit — split</tspan>
-		<tspan x="62" y="254">out of @rtorcato/repo-tooling</tspan>
+		<tspan x="62" y="212">Turns ai-ready GitHub issues into reviewed PRs —</tspan>
+		<tspan x="62" y="240">one worktree per issue, two agent reviewers.</tspan>
 	</text>
 
 	<rect x="845" y="118" width="378" height="84" rx="14" fill="#11151d" stroke="#232936" stroke-width="1"/>
