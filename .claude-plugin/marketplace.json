@@ -15,6 +15,16 @@
       "name": "release-guard",
       "source": "./mods/release-guard",
       "description": "Opt-in mod: denies agent tool calls that would release outside CI — npm publish, version bumps, local semantic-release, git tags, force pushes, git push --tags/--follow-tags, release workflow dispatches, and package.json version edits. Early-access mod API (Claude Code 2.1.292+). Unversioned: tracks main."
+    },
+    {
+      "name": "loop-watch",
+      "source": "./mods/loop-watch",
+      "description": "Experimental, optional: a live ai-loop view for Claude Code (status line, /loop-watch pane, merge-ready toast, agent dock). Built on the early-access mod API, so it may break between Claude Code releases. Not installed by repo-ai setup or fix. Unversioned: tracks main."
+    },
+    {
+      "name": "repo-ai-rainbow",
+      "source": "./plugins/repo-ai-rainbow",
+      "description": "A colorful band above the prompt with open ai-* label counts and the ai-loop status; /repo-ai refreshes it. Needs gh."
     }
   ]
 }

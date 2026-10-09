@@ -16,3 +16,13 @@ minimumReleaseAgeExclude:
 overrides:
   serialize-javascript: '^7.0.5'
   uuid: '^11.1.1'
+  # Dependabot alerts #6-11 (#339): transitive via Docusaurus, mermaid and
+  # @tailwindcss/node, whose ranges stop short of the patched releases.
+  katex: '^0.19.0'
+  postcss-selector-parser: '^7.1.6'
+  shell-quote: '^1.11.0'
+  source-map-js: '^1.2.2'
+  tinypool: '^2.1.2'
+  # Dependabot alerts #12-14 (#343): transitive via conventional-changelog-writer
+  # (semantic-release), locked at 4.7.9.
+  handlebars: '^4.7.10'

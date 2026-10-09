@@ -46,15 +46,29 @@ function tick(root: string, work: Partial<LoopTickResult>, users = true): LoopTi
 /**
  * Records every write; `fail` names the gh subcommands (`pr update-branch`) that exit non-zero.
  * `labels` is each PR's current labels, as the pre-claim re-read sees them (#243).
+ * Transition comments (#332) land in `notes`, not `calls`; `order` interleaves both.
  */
 function fakeGh(
 	fail: string[] = [],
 	prs: Record<string, { number: number; state: string }> = {},
-	labels: Record<number, string[]> = {}
+	labels: Record<number, string[]> = {},
+	existing: { id: number; user: { login: string }; body: string }[] = []
 ) {
 	const calls: string[][] = []
-	const gh: GhExec = async (args) => {
+	const notes: { args: string[]; body: string }[] = []
+	const order: string[] = []
+	const gh: GhExec = async (args, stdin) => {
 		const ok = (stdout: string) => ({ ok: true, stdout, stderr: '', code: 0 })
+		if (args[0] === 'api' && args.includes('--slurp')) {
+			if (fail.includes('comment list')) return { ok: false, stdout: '', stderr: '502', code: 1 }
+			return ok(JSON.stringify([existing]))
+		}
+		if (args[0] === 'api' && args.some((a) => a.includes('/comments'))) {
+			notes.push({ args, body: JSON.parse(stdin ?? '{}').body })
+			order.push('comment')
+			return ok('{"id": 1}')
+		}
+		if (args[1] === 'edit') order.push('edit')
 		if (args[0] === 'pr' && args[1] === 'list') {
 			const pr = prs[args[args.indexOf('--head') + 1] as string]
 			return ok(JSON.stringify(pr ? [pr] : []))
@@ -67,7 +81,7 @@ function fakeGh(
 			return { ok: false, stdout: '', stderr: 'boom', code: 1 }
 		return ok(args[1]?.endsWith('/git/commits') ? 'new\n' : '')
 	}
-	return { gh, calls }
+	return { gh, calls, notes, order }
 }
 
 const handoff = { pr: 10, issue: 1, title: 't', notes: false, autoMerge: false }
@@ -571,5 +585,73 @@ describe('runLoopApply stacking (#253)', () => {
 		expect(r.claimed.pickups).toMatchObject([
 			{ number: 6, slug: 'ai-6-child', base: 'ai-5-parent', stackedOn: 50 },
 		])
+	})
+})
+
+describe('runLoopApply transition comments (#332)', () => {
+	const T = '<!-- ai-issue-loop:transition:handoff -->'
+
+	it('comments before the label edit, naming the change and the next owner', async () => {
+		const fake = fakeGh()
+		await runLoopApply({
+			tick: tick(checkout(newTmpDir()), { handoffs: [handoff] }),
+			gh: fake.gh,
+			env: {},
+		})
+		expect(fake.order).toEqual(['comment', 'edit'])
+		expect(fake.notes[0]?.args).toEqual([
+			'api',
+			'repos/acme/widget/issues/10/comments',
+			'--input',
+			'-',
+		])
+		expect(fake.notes[0]?.body).toBe(
+			`${T}\n🤖 *Automated — \`ai-loop\` label change.*\nReady to merge, handing off to \`@human\`. Labels: +\`merge-ready\`, −\`ai-review\`, −\`ai-ok-code\`, −\`ai-ok-sec\`.`
+		)
+	})
+
+	it('names the agent from REPO_AI_AGENT and REPO_AI_AGENT_TAG, backticks dropped', async () => {
+		const fake = fakeGh()
+		const env = { REPO_AI_AGENT: 'Nec`tar', REPO_AI_AGENT_TAG: '🐝 (Buzz agent)' }
+		await runLoopApply({
+			tick: tick(checkout(newTmpDir()), { stripMergeReady: [11] }),
+			gh: fake.gh,
+			env,
+		})
+		expect(fake.notes[0]?.body.split('\n')[1]).toBe(
+			'🤖 *Automated — `@Nectar` 🐝 (Buzz agent) via ai-loop.*'
+		)
+	})
+
+	it("patches the loop's own comment for that transition, never a stranger's", async () => {
+		const fake = fakeGh([], {}, {}, [
+			{ id: 4, user: { login: 'stranger' }, body: `${T}\nmine` },
+			{ id: 5, user: { login: 'agent-bot' }, body: `${T}\nold` },
+		])
+		await runLoopApply({ tick: tick(checkout(newTmpDir()), { handoffs: [handoff] }), gh: fake.gh })
+		expect(fake.notes.map((n) => n.args)).toEqual([
+			['api', '-X', 'PATCH', 'repos/acme/widget/issues/comments/5', '--input', '-'],
+		])
+	})
+
+	it('skips the edit when the comment fails, so no label moves silently', async () => {
+		const fake = fakeGh(['comment list'])
+		const r = await runLoopApply({
+			tick: tick(checkout(newTmpDir()), { handoffs: [{ ...handoff, autoMerge: true }] }),
+			gh: fake.gh,
+		})
+		expect(fake.calls).toEqual([])
+		expect(r.applied).toMatchObject([{ transition: 'handoff', ok: false }])
+		expect(r.errors).toEqual([expect.stringContaining('comment before handoff on #10')])
+	})
+
+	it('posts nothing for an edit that moves no label', async () => {
+		const retarget = { pr: 60, issue: 6, parent: 50, passed: false, body: 'Stacked on #50' }
+		const fake = fakeGh()
+		await runLoopApply({
+			tick: tick(checkout(newTmpDir()), { disarm: [13], retarget: [retarget] }),
+			gh: fake.gh,
+		})
+		expect(fake.notes).toEqual([])
 	})
 })

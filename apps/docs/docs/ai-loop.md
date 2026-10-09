@@ -543,6 +543,24 @@ reports each in `.applied[]`, and returns the comments still owed in `.comments[
   backticked paths overlap another pickup's (#594) — shared docs like `SKILL.md`
   and `ai-loop.md` don't count (#185).
 
+**No label moves silently (#332).** Every edit above that adds or removes a
+label is preceded by a transition comment: a hidden
+`<!-- ai-issue-loop:transition:<transition> -->` marker, a header line naming
+the agent, then what the change means and who owns the issue or PR next
+(`Ready to merge, handing off to @human.`), and the labels it moves. There is
+one comment per transition type per issue or PR, upserted like the decision
+comment, so a long-lived PR keeps one claim comment, one send-back comment and so
+on, not one per tick. If the comment fails, the edit is skipped and lands in
+`.errors`; the next apply retries both. The container's own edits (adopting a
+PR, adopting a posted verdict) follow the same rule.
+
+The header defaults to `` 🤖 *Automated — `ai-loop` label change.* ``. Set
+`REPO_AI_AGENT` to name the agent running the loop, and optionally
+`REPO_AI_AGENT_TAG` for text after the name. For example, `REPO_AI_AGENT=Woz` with
+`REPO_AI_AGENT_TAG='🐝 (Buzz agent)'` gives
+`` 🤖 *Automated — `@Woz` 🐝 (Buzz agent) via ai-loop.* ``. The name stays in
+backticks, so it never pings a GitHub user who has that handle.
+
 ### The Workflows
 
 Both `ai-loop-pickup` and `ai-loop-recover` are installed to `~/.claude/workflows/`

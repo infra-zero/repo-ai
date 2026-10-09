@@ -3,7 +3,12 @@ import fs from 'fs-extra'
 import { type GhExec, realGhExec } from '../base/gh.js'
 import { safeText } from '../base/sanitize.js'
 import { realGitExec } from '../base/git.js'
-import { type LoopApplyResult, runLoopApply } from '../cli/commands/loop-apply.js'
+import {
+	agentHeader,
+	announce,
+	type LoopApplyResult,
+	runLoopApply,
+} from '../cli/commands/loop-apply.js'
 import { runLoopComment } from '../cli/commands/loop-marker.js'
 import { type LoopTickResult, runLoopTick } from '../cli/commands/loop-tick.js'
 import { type BoardItem, fetchBoard } from './board.js'
@@ -119,16 +124,31 @@ export async function tickRepo(r: RepoSettings, deps: SchedulerDeps): Promise<Re
 		state.summary = '⚠halt'
 		return state
 	}
-	const edit = async (n: number, args: string[], what: string) => {
+	const target = { ownerRepo: tick.env.ownerRepo, me: tick.env.me, gh }
+	const edit = async (n: number, args: string[], what: string, handoff: string) => {
+		// The comment first, or no edit (#332); `what` doubles as the transition marker.
+		const err = await announce(
+			target,
+			agentHeader(process.env),
+			n,
+			what.replace(/\W+/g, '-'),
+			handoff,
+			args
+		)
+		if (err) {
+			state.errors.push(`#${n} ${what}: comment failed: ${err}`)
+			return
+		}
 		const res = await gh(['pr', 'edit', String(n), ...args])
 		if (res.ok) deps.event({ repo: r.repo, number: n, what })
 		else state.errors.push(`#${n} ${what}: ${res.stderr.trim()}`)
 	}
 	// Pass 0: the App's own PRs that lost their label.
-	for (const n of tick.adopt) await edit(n, ['--add-label', 'ai-review'], 'adopted')
+	for (const n of tick.adopt)
+		await edit(n, ['--add-label', 'ai-review'], 'adopted', 'Back in the review queue.')
 	if (r.dependabotAutoReview) {
 		for (const n of await unlabelledDependabot(gh))
-			await edit(n, ['--add-label', 'ai-review'], 'dependabot → review')
+			await edit(n, ['--add-label', 'ai-review'], 'dependabot → review', 'Queued for review.')
 	}
 	// Pass 3: verdicts a reviewer posted but never labelled.
 	for (const v of tick.verdicts) {
@@ -142,7 +162,11 @@ export async function tickRepo(r: RepoSettings, deps: SchedulerDeps): Promise<Re
 						...claim,
 						...(v.verdict === 'PASS-NOTES' ? ['--add-label', 'ai-notes'] : []),
 					]
-		await edit(v.pr, labels, `${v.arm} ${v.verdict}`)
+		const handoff =
+			v.verdict === 'CHANGES'
+				? `The ${v.arm} review requested changes; back to a fixer.`
+				: `The ${v.arm} review passed.`
+		await edit(v.pr, labels, `${v.arm} ${v.verdict}`, handoff)
 	}
 
 	// Passes 1, 2 and the claims for 3 and 4.

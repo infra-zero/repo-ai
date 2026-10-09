@@ -1,7 +1,9 @@
+<!-- brand-kit:banner:start -->
 <picture>
   <source media="(max-width: 640px)" srcset="./brand/banner-mobile.png">
   <img src="./brand/banner.png" alt="repo-ai banner" width="1600">
 </picture>
+<!-- brand-kit:banner:end -->
 
 # @infrazero/repo-ai
 
@@ -53,6 +55,12 @@ The plugin carries the skills only. Pass 3 and Pass 4 run their Workflow scripts
 
 **Moving over from repo-tooling?** Skills installed by `@rtorcato/repo-tooling` carry that package's version stamp, so this installer treats them as local edits and won't overwrite them. Run it once with `--force-skills`.
 
+### loop-watch (experimental)
+
+> **Experimental.** `loop-watch` is a Claude Code mod built on the early-access mod API (Claude Code 2.1.292), which may change between Claude Code releases. It is optional: neither `setup` nor `fix` installs it.
+
+A live ai-loop view inside Claude Code: a status line segment (`🤖 <summary> · next 9m · 2 agents · 1 ready to merge`), a `/loop-watch` pane of the open PRs and issues with `ai-*` labels, a toast and chime when a PR passes both reviews, and a dock above the prompt with one tile per running subagent. Install it from the same marketplace with `/plugin install loop-watch@repo-ai`. It reads the same `.claude/ai-loop-status` as the statusline segment and polls `gh` every 2 minutes. It sees only this session's agents; agents in other sessions show up through their labels and the status file.
+
 ## Commands
 
 | Command | What it does |
@@ -69,7 +77,7 @@ The plugin carries the skills only. Pass 3 and Pass 4 run their Workflow scripts
 | `loop env` | Print a tick's values (root, worktree root, owner/repo, agent and human users) for a human; the skill reads them from `loop tick --json`. |
 | `loop worktree add <slug>` | Create an `ai-*` worktree off `origin/main` and link its dependencies. |
 | `loop cleanup` | Remove `ai-*` worktrees whose PR has landed or closed. |
-| `loop apply` | Apply a tick's deterministic writes: Pass 1's disarm, handoff, send-back, `merge-ready` strip and branch update; Pass 2's worktree removal (then the `node_modules` rebuild gate), `ai-wip` relabel and the label side of each stall. Its only merge is an `autoMerge` handoff. Reports every edit, and in `comments` each comment the caller still owes. |
+| `loop apply` | Apply a tick's deterministic writes: Pass 1's disarm, handoff, send-back, `merge-ready` strip and branch update; Pass 2's worktree removal (then the `node_modules` rebuild gate), `ai-wip` relabel and the label side of each stall. Its only merge is an `autoMerge` handoff. Each label edit is preceded by an upserted transition comment naming the agent (`REPO_AI_AGENT`) and the next owner (#332). Reports every edit, and in `comments` each comment the caller still owes. |
 | `loop reap` | Report agents stalled past 45 minutes and what to do about each. |
 | `loop comment <pr>` / `loop verdict <pr>` | Upsert the decision comment, and read a reviewer's verdict marker. |
 | `loop tick` | Compute one tick's whole work list (guard, cleanup, reap, verdicts, pickups). `.skippedPickups[]` names each `ai-ready` issue it passed over and why (an untrusted author, or a file an `ai-wip` issue also names); `.dependabotRecreate` lists the red or `DIRTY` Dependabot PRs in the loop that `loop apply` asks to `@dependabot recreate`. Read-only: writes no GitHub state and removes no worktree — `loop apply` does that. |
