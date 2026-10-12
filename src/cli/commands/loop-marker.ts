@@ -137,6 +137,18 @@ export interface LoopVerdictResult {
 	error?: string
 }
 
+const BEFORE_MERGING = '### Before merging'
+
+/**
+ * #349: a `PASS-NOTES` whose `### Before merging` says only `Nothing.` has no
+ * note to read, so it adopts as a plain `PASS` — no `ai-notes`. A body with no
+ * such section keeps its `PASS-NOTES`: a missing note is no proof of none.
+ */
+function nothingBeforeMerging(body: string): boolean {
+	const at = body.lastIndexOf(BEFORE_MERGING)
+	return at !== -1 && /^\s*Nothing\.?\s*$/.test(body.slice(at + BEFORE_MERGING.length))
+}
+
 export interface LoopVerdictOptions {
 	dir?: string
 	arm: string
@@ -184,8 +196,10 @@ export async function runLoopVerdict(
 	for (const r of reviews) {
 		// The head gate: a verdict expires with the diff it read.
 		if (r.user?.login !== me || r.commit_id !== head) continue
-		const m = (r.body ?? '').match(marker)
-		if (m) verdict = m[1] as Verdict
+		const body = r.body ?? ''
+		const m = body.match(marker)
+		if (m)
+			verdict = m[1] === 'PASS-NOTES' && nothingBeforeMerging(body) ? 'PASS' : (m[1] as Verdict)
 	}
 	return { pr: n, arm, head, verdict }
 }
