@@ -1,6 +1,6 @@
 # Contributing
 
-`main` is protected: every change lands through a squash-merged PR, and the `verify` CI job is the
+`main` is protected: every change lands through a squash-merged PR, and the `ci` CI job is the
 required check.
 
 1. **Open or pick an issue**, then branch per issue from `main`:
