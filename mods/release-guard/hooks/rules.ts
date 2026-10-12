@@ -2,15 +2,20 @@
 // It guards against an agent slipping, not an adversary.
 // Each rule matches only where a command starts (line start, or after ; & | ( $( ),
 // so the same words inside a heredoc or a quoted issue body don't trip it.
-// A `then`/`do`/`else` after the boundary, and any `env`/`sudo`/`npx` and `VAR=value` prefixes, are skipped.
-const AT = String.raw`(?:^|[;&|(]|\$\()\s*(?:(?:then|do|else)\s+)?(?:(?:env|sudo|npx)\s+|\w+=\S*\s+)*`
+// A `then`/`do`/`else` after the boundary, and any `env`/`command`/`time`/`sudo`/`npx` and `VAR=value` prefixes, are skipped.
+const AT = String.raw`(?:^|[;&|(]|\$\()\s*(?:(?:then|do|else)\s+)?(?:(?:env|command|time|sudo|npx)\s+|\w+=\S*\s+)*`
 // `git -C <dir>` / `git -c k=v` before the subcommand, as worktree agents write it.
 const GIT = String.raw`git(?:\s+-[Cc]\s+\S+)*\s+`
 const rule = (body: string, flags = '') => new RegExp(AT + body, `m${flags}`)
 
 const RULES: [RegExp, string][] = [
 	[rule(String.raw`(npm|pnpm|yarn|bun)\b[^\n;&|]*\spublish(?![\w-])`), 'publishing to npm'],
-	[rule(String.raw`(npm|pnpm|yarn|bun\s+pm)\s+version\b`), 'bumping the version'],
+	[
+		rule(
+			String.raw`(?:(npm|pnpm|yarn|bun\s+pm)\s+version\b|(npm|pnpm)\s+pkg\s+set\b[^\n;&|]*\s["']?version=)`
+		),
+		'bumping the version',
+	],
 	[
 		rule(
 			String.raw`(?:(?:npm|pnpm|yarn)\s+(?:dlx|exec|run)\s+|(?:pnpm|yarn|bunx)\s+)?semantic-release\b`
@@ -32,9 +37,21 @@ const RULES: [RegExp, string][] = [
 		'force pushing, pushing --tags/--follow-tags, or deleting a remote ref',
 	],
 	[
+		// A single tag by name: `tag v1`, `refs/tags/…`, or a `v1.2.3`-shaped ref (`v2-migration` stays a branch).
+		rule(
+			GIT +
+				String.raw`push\b[^\n;&|]*\s(?:tag\s|\S*refs/tags/|(?:\S*:)?v\d+(?:\.\d+){2}(?:[-+][\w.]+)?(?![\w./-])|(?:\S*:)?v\d+(?:\.\d+)*(?![\w./-]))`
+		),
+		'pushing a tag',
+	],
+	[
 		// Flags (with or without a value) may sit before the workflow name or file. The flag name stops
 		// at `=` and a value can't start with `-`, so each token parses one way only: no backtracking blowup.
 		rule(String.raw`gh\s+workflow\s+run\s+(?:-[^\s=]+(?:[\s=][^-\s]\S*)?\s+)*\S*release`, 'i'),
+		'dispatching the release workflow',
+	],
+	[
+		rule(String.raw`gh\s+api\b[^\n;&|]*actions/workflows/[^\s/]*release[^\s/]*/dispatches`, 'i'),
 		'dispatching the release workflow',
 	],
 	[rule(String.raw`gh\s+release\s+create\b`), 'creating a GitHub release'],
