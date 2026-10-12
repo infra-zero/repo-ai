@@ -44,8 +44,8 @@ importers:
         specifier: 'link:'
         version: 'link:'
       '@rtorcato/repo-tooling':
-        specifier: ^5.4.1
-        version: 5.4.1(@biomejs/biome@2.5.14)(@commitlint/cli@21.2.3(@types/node@26.6.4)(conventional-commits-parser@7.1.2)(typescript@7.0.2))(@commitlint/config-conventional@21.2.3)(@commitlint/types@21.2.3)(@semantic-release/commit-analyzer@13.0.1(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/github@12.0.10(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/npm@13.2.0(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/release-notes-generator@14.1.1(semantic-release@25.0.9(typescript@7.0.2)))(@types/node@26.6.4)(conventional-changelog-conventionalcommits@10.4.0)(prettier@3.9.9)(semantic-release@25.0.9(typescript@7.0.2))(tslib@2.8.1)(typescript@7.0.2)(vitest@5.0.2(@types/node@26.6.4)(vite@8.3.2(@types/node@26.6.4)(jiti@2.7.0)(terser@5.51.2)))
+        specifier: ^6.0.0
+        version: 6.0.0(@biomejs/biome@2.5.14)(@commitlint/cli@21.2.3(@types/node@26.6.4)(conventional-commits-parser@7.1.2)(typescript@7.0.2))(@commitlint/config-conventional@21.2.3)(@commitlint/types@21.2.3)(@semantic-release/commit-analyzer@13.0.1(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/github@12.0.10(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/npm@13.2.0(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/release-notes-generator@14.1.1(semantic-release@25.0.9(typescript@7.0.2)))(@types/node@26.6.4)(conventional-changelog-conventionalcommits@10.4.0)(prettier@3.9.9)(semantic-release@25.0.9(typescript@7.0.2))(tslib@2.8.1)(typescript@7.0.2)(vitest@5.0.2(@types/node@26.6.4)(vite@8.3.2(@types/node@26.6.4)(jiti@2.7.0)(terser@5.51.2)))
       '@semantic-release/commit-analyzer':
         specifier: ^13.0.1
         version: 13.0.1(semantic-release@25.0.9(typescript@7.0.2))
@@ -2994,6 +2994,121 @@ packages:
       rollup: ^4.0.0
       semantic-release: ^25.0.0
       size-limit: ^12.0.0
+      ts-jest: ^29.0.0
+      tslib: ^2.0.0
+      tsup: ^8.0.0
+      typescript: '>=5.0.0'
+      typescript-eslint: ^8.0.0
+      vitest: '>=3.0.0'
+    peerDependenciesMeta:
+      '@biomejs/biome':
+        optional: true
+      '@commitlint/cli':
+        optional: true
+      '@commitlint/config-conventional':
+        optional: true
+      '@commitlint/types':
+        optional: true
+      '@eslint/js':
+        optional: true
+      '@ianvs/prettier-plugin-sort-imports':
+        optional: true
+      '@next/eslint-plugin-next':
+        optional: true
+      '@rollup/plugin-typescript':
+        optional: true
+      '@semantic-release/changelog':
+        optional: true
+      '@semantic-release/commit-analyzer':
+        optional: true
+      '@semantic-release/exec':
+        optional: true
+      '@semantic-release/git':
+        optional: true
+      '@semantic-release/github':
+        optional: true
+      '@semantic-release/npm':
+        optional: true
+      '@semantic-release/release-notes-generator':
+        optional: true
+      '@size-limit/preset-small-lib':
+        optional: true
+      '@total-typescript/ts-reset':
+        optional: true
+      '@typescript-eslint/eslint-plugin':
+        optional: true
+      '@typescript-eslint/parser':
+        optional: true
+      conventional-changelog-conventionalcommits:
+        optional: true
+      esbuild:
+        optional: true
+      esbuild-node-externals:
+        optional: true
+      eslint:
+        optional: true
+      eslint-plugin-import:
+        optional: true
+      eslint-plugin-jest:
+        optional: true
+      jest:
+        optional: true
+      prettier:
+        optional: true
+      rollup:
+        optional: true
+      semantic-release:
+        optional: true
+      size-limit:
+        optional: true
+      ts-jest:
+        optional: true
+      tslib:
+        optional: true
+      tsup:
+        optional: true
+      typescript:
+        optional: true
+      typescript-eslint:
+        optional: true
+      vitest:
+        optional: true
+
+  '@rtorcato/repo-tooling@6.0.0':
+    resolution: {integrity: sha512-zReKrcSvdVof8yMvLv6kZH2pwm07zeiTLLZxlOXC0DOhTaPuU5jthOMtb3k3YZtONrCN2w2Y8gt34qURl9x83Q==}
+    engines: {node: '>=22'}
+    hasBin: true
+    peerDependencies:
+      '@biomejs/biome': ^2.5.0
+      '@commitlint/cli': ^20.0.0 || ^21.0.0
+      '@commitlint/config-conventional': ^21.2.3
+      '@commitlint/types': ^21.2.3
+      '@eslint/js': ^9.0.0
+      '@ianvs/prettier-plugin-sort-imports': ^4.0.0
+      '@next/eslint-plugin-next': ^16.3.0
+      '@rollup/plugin-typescript': ^12.0.0
+      '@semantic-release/changelog': ^6.0.0
+      '@semantic-release/commit-analyzer': ^13.0.0
+      '@semantic-release/exec': ^7.0.0
+      '@semantic-release/git': ^10.0.0
+      '@semantic-release/github': ^12.0.10
+      '@semantic-release/npm': ^13.0.0
+      '@semantic-release/release-notes-generator': ^14.0.0
+      '@size-limit/preset-small-lib': ^12.0.0 || ^13.0.0 || ^14.0.0
+      '@total-typescript/ts-reset': ^0.6.0
+      '@typescript-eslint/eslint-plugin': ^8.0.0
+      '@typescript-eslint/parser': ^8.0.0
+      conventional-changelog-conventionalcommits: ^9.0.0 || ^10.0.0
+      esbuild: ^0.25.0 || ^0.27.0 || ^0.28.0
+      esbuild-node-externals: ^1.0.0 || ^2.0.0
+      eslint: '>=9.0.0'
+      eslint-plugin-import: ^2.0.0
+      eslint-plugin-jest: ^29.0.0
+      jest: ^29.0.0
+      prettier: ^3.0.0
+      rollup: ^4.0.0
+      semantic-release: ^25.0.0
+      size-limit: ^12.0.0 || ^13.0.0 || ^14.0.0
       ts-jest: ^29.0.0
       tslib: ^2.0.0
       tsup: ^8.0.0
@@ -12965,6 +13080,31 @@ snapshots:
   '@rolldown/pluginutils@1.0.1': {}
 
   '@rtorcato/repo-tooling@5.4.1(@biomejs/biome@2.5.14)(@commitlint/cli@21.2.3(@types/node@26.6.4)(conventional-commits-parser@7.1.2)(typescript@7.0.2))(@commitlint/config-conventional@21.2.3)(@commitlint/types@21.2.3)(@semantic-release/commit-analyzer@13.0.1(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/github@12.0.10(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/npm@13.2.0(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/release-notes-generator@14.1.1(semantic-release@25.0.9(typescript@7.0.2)))(@types/node@26.6.4)(conventional-changelog-conventionalcommits@10.4.0)(prettier@3.9.9)(semantic-release@25.0.9(typescript@7.0.2))(tslib@2.8.1)(typescript@7.0.2)(vitest@5.0.2(@types/node@26.6.4)(vite@8.3.2(@types/node@26.6.4)(jiti@2.7.0)(terser@5.51.2)))':
+    dependencies:
+      chalk: 6.0.1
+      commander: 15.0.0
+      diff: 9.0.0
+      fs-extra: 11.4.1
+      inquirer: 14.2.2(@types/node@26.6.4)
+    optionalDependencies:
+      '@biomejs/biome': 2.5.14
+      '@commitlint/cli': 21.2.3(@types/node@26.6.4)(conventional-commits-parser@7.1.2)(typescript@7.0.2)
+      '@commitlint/config-conventional': 21.2.3
+      '@commitlint/types': 21.2.3
+      '@semantic-release/commit-analyzer': 13.0.1(semantic-release@25.0.9(typescript@7.0.2))
+      '@semantic-release/github': 12.0.10(semantic-release@25.0.9(typescript@7.0.2))
+      '@semantic-release/npm': 13.2.0(semantic-release@25.0.9(typescript@7.0.2))
+      '@semantic-release/release-notes-generator': 14.1.1(semantic-release@25.0.9(typescript@7.0.2))
+      conventional-changelog-conventionalcommits: 10.4.0
+      prettier: 3.9.9
+      semantic-release: 25.0.9(typescript@7.0.2)
+      tslib: 2.8.1
+      typescript: 7.0.2
+      vitest: 5.0.2(@types/node@26.6.4)(vite@8.3.2(@types/node@26.6.4)(jiti@2.7.0)(terser@5.51.2))
+    transitivePeerDependencies:
+      - '@types/node'
+
+  '@rtorcato/repo-tooling@6.0.0(@biomejs/biome@2.5.14)(@commitlint/cli@21.2.3(@types/node@26.6.4)(conventional-commits-parser@7.1.2)(typescript@7.0.2))(@commitlint/config-conventional@21.2.3)(@commitlint/types@21.2.3)(@semantic-release/commit-analyzer@13.0.1(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/github@12.0.10(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/npm@13.2.0(semantic-release@25.0.9(typescript@7.0.2)))(@semantic-release/release-notes-generator@14.1.1(semantic-release@25.0.9(typescript@7.0.2)))(@types/node@26.6.4)(conventional-changelog-conventionalcommits@10.4.0)(prettier@3.9.9)(semantic-release@25.0.9(typescript@7.0.2))(tslib@2.8.1)(typescript@7.0.2)(vitest@5.0.2(@types/node@26.6.4)(vite@8.3.2(@types/node@26.6.4)(jiti@2.7.0)(terser@5.51.2)))':
     dependencies:
       chalk: 6.0.1
       commander: 15.0.0
