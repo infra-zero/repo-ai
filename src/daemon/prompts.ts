@@ -98,7 +98,7 @@ list what you checked and found clean. Later work that does not decide this merg
 Then apply exactly one verdict, clearing your claim in the same command:
 - Clean or nits → \`gh pr edit ${t.pr} ${passes} ${claims}\`
 - A real defect an agent could fix → \`gh pr edit ${t.pr} --add-label ai-changes --remove-label ai-review ${claims}\`
-Add \`--add-label ai-notes\` only if your section is not \`Nothing.\`. A question only a human can answer
+Add \`--add-label ai-notes\`, and mark the verdict PASS-NOTES, only if your section is not \`Nothing.\`. A question only a human can answer
 is a pass plus ai-notes, never ai-changes. End your reply with the line \`VERDICT: <PASS|PASS-NOTES|CHANGES>\`.
 
 ${RELAYED}`

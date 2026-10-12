@@ -114,7 +114,7 @@ gh issue close <N> --comment '🤖 *Automated — `ai-loop` Pass 2.* Unclaimed `
 
 Pass 4's Workflow normally reviews and fixes its own PRs; this pass picks up what it left — a dead agent, a restart, an adopted PR, a send-back.
 
-**Adopt posted verdicts** — `.verdicts[]` (`<claim>`/`<pass>` = `ai-reviewing-<arm>`/`ai-ok-<arm>`): `PASS` → `gh pr edit <N> --add-label <pass> --remove-label <claim>`; `PASS-NOTES` → the same plus `--add-label ai-notes`; `CHANGES` → `gh pr edit <N> --add-label ai-changes --remove-label ai-review --remove-label <claim>`.
+**Adopt posted verdicts** — `.verdicts[]` (`<claim>`/`<pass>` = `ai-reviewing-<arm>`/`ai-ok-<arm>`): `PASS` → `gh pr edit <N> --add-label <pass> --remove-label <claim>`; `PASS-NOTES` → the same plus `--add-label ai-notes` (`loop verdict` already reports a `PASS-NOTES` whose `### Before merging` is `Nothing.` as `PASS`, #349); `CHANGES` → `gh pr edit <N> --add-label ai-changes --remove-label ai-review --remove-label <claim>`.
 
 **Queue exactly what `loop apply` claimed** — `.claimed.reviews[]` becomes one review task each, `{label: "code:#<N>", agentType, prompt}`, the template below with `<N>`, `<M>`, `<ownerRepo>` substituted. `agentType` is `code-reviewer` / `security-expert` when listed, else `general-purpose` — never skip a review (#611). `arm: both` (a docs-only PR) is one task, `both:#<N>`, with the combined prompt.
 
@@ -129,7 +129,7 @@ Pass 4's Workflow normally reviews and fixes its own PRs; this pass picks up wha
 > 🤖 *Automated review — \`<your agent type>\` via ai-loop.*
 > ```
 >
-> then a blank line; the verdict must agree with your labels. It **must end** with `### Before merging` and either one bullet per finding that changes whether or how a human merges (semver, a deliberate omission, a risky migration, a human-only decision) or `Nothing.` — the common verdict. ≤600 characters above it; narrate only where the PR is **wrong** or **silent**.
+> then a blank line; the verdict must agree with your labels and your section: `PASS-NOTES` if and only if `### Before merging` has a bullet, so `Nothing.` is always `PASS`. It **must end** with `### Before merging` and either one bullet per finding that changes whether or how a human merges (semver, a deliberate omission, a risky migration, a human-only decision) or `Nothing.` — the common verdict. ≤600 characters above it; narrate only where the PR is **wrong** or **silent**.
 >
 > **An open question is not a finding.** Settle it with a read-only check (e.g. `gh api`), or pass with `Nothing.`, or file a follow-up — but an unverified risk (can't tell if an input is sanitized) is a `CHANGES` candidate first. Never write a note concluding "no action needed". **Later work is an issue, not a note:** `gh issue create --label ai-suggested --title "<what>" --body "🤖 *Automated — \`<your agent type>\` via ai-loop.*` + blank line + `Surfaced reviewing #<N>. <What. Why. One-line fix sketch.>"` (≤10 lines), then `Follow-up: #<new>` above `### Before merging`.
 >

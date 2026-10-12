@@ -162,7 +162,7 @@ Then apply exactly one verdict label, clearing your claim in the same command:
   \`gh pr edit ${pr} --add-label ${v.pass} --remove-label ${v.unclaim ?? v.claim}\`
 - A real defect a maintainer would block on →
   \`gh pr edit ${pr} --add-label ai-changes --remove-label ai-review --remove-label ${v.unclaim ?? v.claim}\`
-Plus \`--add-label ai-notes\` if and only if your section is not Nothing.
+Plus \`--add-label ai-notes\`, and the PASS-NOTES marker, if and only if your section is not Nothing.
 A question only a human can answer → pass + ai-notes, never ai-changes.
 
 ${RELAYED}`,

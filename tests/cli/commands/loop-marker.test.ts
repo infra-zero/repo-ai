@@ -90,6 +90,15 @@ describe('runLoopVerdict', () => {
 		expect((await runLoopVerdict(7, { arm: 'sec', gh })).verdict).toBeNull()
 	})
 
+	it('adopts PASS-NOTES with "Before merging: Nothing." as a plain PASS (#349)', async () => {
+		const body = (tail: string) =>
+			`${verdict('sec', 'PASS-NOTES')}\n\nLooks fine.\n\n### Before merging\n${tail}`
+		const { gh } = fakeGh([[review('me-bot', 'abc', body('\nNothing.\n'))]])
+		expect((await runLoopVerdict(7, { arm: 'sec', gh })).verdict).toBe('PASS')
+		const noted = fakeGh([[review('me-bot', 'abc', body('- Bumps a major.\n'))]])
+		expect((await runLoopVerdict(7, { arm: 'sec', gh: noted.gh })).verdict).toBe('PASS-NOTES')
+	})
+
 	it('errors on an unknown arm or a failed listing', async () => {
 		expect((await runLoopVerdict(7, { arm: 'x', gh: fakeGh([]).gh })).error).toMatch(/--arm/)
 		const r = await runLoopVerdict(7, { arm: 'code', gh: fakeGh([], { listFails: true }).gh })
