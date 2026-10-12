@@ -96,7 +96,7 @@ export async function resolveSkillsDir(
 
 const CLAUDE_BINS = process.platform === 'win32' ? ['claude.exe', 'claude.cmd'] : ['claude']
 
-async function claudeOnPath(searchPath: string): Promise<boolean> {
+export async function claudeOnPath(searchPath: string = process.env.PATH ?? ''): Promise<boolean> {
 	for (const entry of searchPath.split(path.delimiter).filter(Boolean)) {
 		for (const bin of CLAUDE_BINS) if (await fs.pathExists(path.join(entry, bin))) return true
 	}

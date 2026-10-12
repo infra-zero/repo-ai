@@ -39,7 +39,8 @@ Four things follow from that:
   install (`~/.claude` exists or `claude` is on `PATH`), `~/.claude/skills` is
   created for you. Only on a machine with no sign of Claude Code is
   `--skills-dir` required alongside `--yes` / `--json` or without a terminal,
-  since there is no prompt to ask where.
+  since there is no prompt to ask where. `setup` always creates
+  `~/.claude/skills`, and says so when Claude Code isn't installed yet.
 - **A stow-managed symlink is written *through*, not replaced.** If
   `~/.claude/skills/ai-loop/SKILL.md` is a symlink into a dotfiles
   checkout, the content lands in dotfiles and stays version-controlled with the
