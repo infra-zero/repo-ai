@@ -35,6 +35,22 @@ test('blocks release commands', () => {
 		'git push --follow-tags',
 		'gh workflow run -R o/r --ref=main -f a=b release.yml',
 		'gh workflow run --repo=infra-zero/repo-ai release.yml',
+		'npm pkg set version=1.2.3',
+		'pnpm pkg set "version=2.0.0"',
+		'npm pkg set description=x version=1.2.3',
+		'git push origin v1.2.3',
+		'git push origin v1',
+		'git push origin v1.2.3-beta.1',
+		'git push origin refs/tags/v1',
+		'git push origin HEAD:refs/tags/v1',
+		'git push origin tag v1.2.3',
+		'git -C ../wt push origin v2.0.0',
+		'env CI=1 npm publish',
+		'command npm publish',
+		'time npm publish',
+		'time pnpm version patch',
+		'gh api -X POST repos/o/r/actions/workflows/release.yml/dispatches -f ref=main',
+		'gh api "repos/o/r/actions/workflows/Release.yaml/dispatches" -f ref=main',
 	])
 		expect(blockedBash(cmd)).toBeDefined()
 })
@@ -61,6 +77,14 @@ test('allows everyday commands', () => {
 		'gh issue create --title "then npm publish breaks"',
 		"cat > notes.md <<'X'\n- Bash: npm|pnpm … publish, git tag <name>, git push --force\nX",
 		'gh issue create --title "blocks npm publish and git push --force"',
+		'npm pkg set description=x',
+		'npm pkg get version',
+		'git push origin v2-migration',
+		'git push -u origin feat/330-v1.2',
+		'command -v pnpm',
+		'time pnpm test',
+		'gh api repos/o/r/actions/workflows/release.yml',
+		'gh api -X POST repos/o/r/actions/workflows/ci.yml/dispatches -f ref=main',
 	])
 		expect(blockedBash(cmd)).toBeUndefined()
 })
