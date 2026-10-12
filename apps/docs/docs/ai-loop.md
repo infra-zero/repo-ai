@@ -382,6 +382,8 @@ only once `CHANGES` is ruled out: an open question that is itself an unverified
 risk (say, whether an input is sanitized) is a `CHANGES` candidate first, not a
 pass or a follow-up. A note that concludes "no action needed" is never written.
 `ai-notes` on every PR is the failure mode — it trains the reader to ignore it.
+So `PASS-NOTES` means at least one `### Before merging` bullet: a `PASS-NOTES`
+whose section is `Nothing.` is adopted as a plain pass, with no `ai-notes`.
 
 ## Repo prerequisites
 
