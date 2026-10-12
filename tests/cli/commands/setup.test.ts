@@ -6,6 +6,7 @@ import { NOTICE, NOTICE_HASH } from '../../../src/base/notice.js'
 import {
 	acknowledgeNotice,
 	runSetup,
+	setupCommand,
 	type StepRun,
 	setupSteps,
 } from '../../../src/cli/commands/setup.js'
@@ -106,6 +107,20 @@ describe('setup notice', () => {
 		expect(await acknowledgeNotice({ dir: '.', yes: true }, { file, ask })).toBe(true)
 		expect(ask).not.toHaveBeenCalled()
 		expect(fs.readJsonSync(file).hash).toBe(NOTICE_HASH)
+	})
+
+	it('exits 1 with a hint instead of prompting when there is no terminal (#358)', async () => {
+		const tty = process.stdin.isTTY
+		const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+		Object.defineProperty(process.stdin, 'isTTY', { value: undefined, configurable: true })
+		try {
+			await setupCommand({ dir: newTmpDir() })
+			expect(process.exitCode).toBe(1)
+			expect(error.mock.calls.flat().join('\n')).toContain('re-run with --yes')
+		} finally {
+			Object.defineProperty(process.stdin, 'isTTY', { value: tty, configurable: true })
+			process.exitCode = 0
+		}
 	})
 
 	it('matches the README and docs copies', () => {

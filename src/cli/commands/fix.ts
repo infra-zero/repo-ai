@@ -139,16 +139,16 @@ async function installSkills({ skillsDir, forceSkills, yes, json }: FixOptions) 
 
 /**
  * Where to install, asking only when nothing resolves. Under `--yes` / `--json`
- * a prompt is not available and guessing a directory is not an option, so the
- * run fails and names `--skills-dir`.
+ * or without a terminal (#358) a prompt is not available and guessing a
+ * directory is not an option, so the run fails and names `--skills-dir`.
  */
 async function resolveInstallDir(explicit: string | undefined, assumeYes: boolean) {
 	const { dir } = await resolveSkillsDir(explicit)
 	if (dir) return dir
-	if (assumeYes) {
+	if (assumeYes || !process.stdin.isTTY) {
 		throw new FixerAbort(
 			'no-skills-dir',
-			'no ~/.claude/skills found, and --yes/--json cannot prompt for one',
+			'no ~/.claude/skills found, and there is no prompt to ask for one (--yes/--json, or no terminal)',
 			'pass --skills-dir <path>'
 		)
 	}

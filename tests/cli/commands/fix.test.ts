@@ -168,8 +168,10 @@ describe('fixCommand', () => {
 
 		it('aborts as a JSON error when --yes is given but there is nowhere to install', async () => {
 			const dir = newTmpDir()
-			// mockHome.current has no ~/.claude/skills, and no --skills-dir is given.
+			// mockHome.current has no ~/.claude, no --skills-dir is given, and no `claude` on PATH.
+			vi.stubEnv('PATH', '')
 			await fixCommand('claude-skills', options(dir, { yes: true, json: true }))
+			vi.unstubAllEnvs()
 			expect(process.exitCode).toBe(1)
 			expect(JSON.parse(logSpy.mock.calls[0]?.[0])).toMatchObject({
 				target: 'claude-skills',

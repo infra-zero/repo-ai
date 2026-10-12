@@ -137,6 +137,18 @@ async function askToContinue(): Promise<boolean> {
 
 export async function setupCommand(options: FixOptions): Promise<void> {
 	const directory = path.resolve(options.dir)
+	// No terminal — e.g. Claude Code's Bash tool — means no prompt; inquirer would die with a stack trace (#358).
+	if (!options.yes && !options.json && !process.stdin.isTTY) {
+		console.error(chalk.yellow.bold('Costs and liability.'), NOTICE)
+		console.error(`Full text: ${RISKS_URL}`)
+		console.error(
+			chalk.red(
+				'No terminal to prompt in: re-run with --yes to accept the notice and run every step.'
+			)
+		)
+		process.exitCode = 1
+		return
+	}
 	if (!(await acknowledgeNotice(options))) {
 		console.error('Setup cancelled: the notice was not accepted.')
 		process.exitCode = 1

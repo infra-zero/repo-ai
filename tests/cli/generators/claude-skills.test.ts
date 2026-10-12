@@ -61,7 +61,25 @@ describe('resolveSkillsDir', () => {
 	})
 
 	it('resolves to nothing rather than creating ~/.claude uninvited', async () => {
-		expect(await resolveSkillsDir(undefined, newTmpDir())).toEqual({ dir: null, source: 'none' })
+		expect(await resolveSkillsDir(undefined, newTmpDir(), '')).toEqual({
+			dir: null,
+			source: 'none',
+		})
+	})
+
+	it('resolves ~/.claude/skills on a fresh Claude Code install (#358)', async () => {
+		const home = newTmpDir()
+		await fs.ensureDir(join(home, '.claude'))
+		const skills = { dir: join(home, '.claude', 'skills'), source: 'user' }
+		expect(await resolveSkillsDir(undefined, home, '')).toEqual(skills)
+
+		const bare = newTmpDir()
+		const bin = newTmpDir()
+		await fs.outputFile(join(bin, process.platform === 'win32' ? 'claude.exe' : 'claude'), '')
+		expect(await resolveSkillsDir(undefined, bare, bin)).toEqual({
+			dir: join(bare, '.claude', 'skills'),
+			source: 'user',
+		})
 	})
 })
 

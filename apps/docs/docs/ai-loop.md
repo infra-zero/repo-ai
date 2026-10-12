@@ -35,9 +35,11 @@ finding against your repo.
 
 Four things follow from that:
 
-- **`--skills-dir <path>`** overrides the destination. It is required alongside
-  `--yes` / `--json` when `~/.claude/skills` does not exist, since a prompt
-  would corrupt the JSON payload.
+- **`--skills-dir <path>`** overrides the destination. On a fresh Claude Code
+  install (`~/.claude` exists or `claude` is on `PATH`), `~/.claude/skills` is
+  created for you. Only on a machine with no sign of Claude Code is
+  `--skills-dir` required alongside `--yes` / `--json` or without a terminal,
+  since there is no prompt to ask where.
 - **A stow-managed symlink is written *through*, not replaced.** If
   `~/.claude/skills/ai-loop/SKILL.md` is a symlink into a dotfiles
   checkout, the content lands in dotfiles and stays version-controlled with the

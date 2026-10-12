@@ -71,8 +71,10 @@ export interface SkillsDirResolution {
 
 /**
  * Where to install. `explicit` is `--skills-dir`; otherwise the user-level
- * `~/.claude/skills` when it already exists. A machine with neither resolves to
- * null rather than creating `~/.claude` uninvited.
+ * `~/.claude/skills` when it already exists, or when Claude Code is evidently
+ * installed (`~/.claude` exists or `claude` is on `PATH`) but has no skills yet
+ * — a fresh install (#358). A machine with none of those resolves to null
+ * rather than creating `~/.claude` uninvited.
  *
  * There is deliberately no separate "symlinked" case: a stow-managed
  * `SKILL.md` symlink lives *inside* that same directory, and writing through it
@@ -80,12 +82,25 @@ export interface SkillsDirResolution {
  */
 export async function resolveSkillsDir(
 	explicit?: string,
-	home: string = os.homedir()
+	home: string = os.homedir(),
+	searchPath: string = process.env.PATH ?? ''
 ): Promise<SkillsDirResolution> {
 	if (explicit) return { dir: path.resolve(explicit), source: 'explicit' }
 	const userDir = path.join(home, '.claude', 'skills')
 	if (await fs.pathExists(userDir)) return { dir: userDir, source: 'user' }
+	if ((await fs.pathExists(path.dirname(userDir))) || (await claudeOnPath(searchPath))) {
+		return { dir: userDir, source: 'user' }
+	}
 	return { dir: null, source: 'none' }
+}
+
+const CLAUDE_BINS = process.platform === 'win32' ? ['claude.exe', 'claude.cmd'] : ['claude']
+
+async function claudeOnPath(searchPath: string): Promise<boolean> {
+	for (const entry of searchPath.split(path.delimiter).filter(Boolean)) {
+		for (const bin of CLAUDE_BINS) if (await fs.pathExists(path.join(entry, bin))) return true
+	}
+	return false
 }
 
 function readStamp(content: string, key: string): string | null {
