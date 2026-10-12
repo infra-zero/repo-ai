@@ -10,7 +10,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Never cancelled: a cancelled run's test legs end `cancelled`, its `verify`
+  # Never cancelled: a cancelled run's test legs end `cancelled`, its `ci`
   # (always()) then fails, and that blocks the PR even when a second run on the
   # same SHA passed. A superseded run just finishes.
   cancel-in-progress: false
@@ -59,7 +59,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ["22", "24"]
+        # The engines floor (>=22) and the newest Node.
+        node: ["22", "26"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -100,15 +101,15 @@ jobs:
           out="$(npx --no-install repo-ai doctor --json)" || [ $? -eq 1 ]
           node -e 'JSON.parse(require("fs").readFileSync(0, "utf8"))' <<< "$out"
 
-  # The required status check. Branch protection names `verify`, so this one
+  # The required status check. Branch protection names only `ci`, so this one
   # job stands for every matrix leg: it fails unless all of them succeeded,
   # including when one was cancelled — and skipped, unless the skip was earned.
   # Passes only when `changes` succeeded AND either it found a docs-only PR
   # (code == 'false') or `test` succeeded. A failed or cancelled `changes`, or
-  # a cancelled/failed/skipped `test` on a code change, fails `verify`: a
+  # a cancelled/failed/skipped `test` on a code change, fails `ci`: a
   # skipped required check counts as passing, so the skip must never be a
   # side effect of something going wrong.
-  verify:
+  ci:
     needs: [changes, test]
     if: always()
     runs-on: ubuntu-latest

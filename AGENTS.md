@@ -24,7 +24,7 @@ Config is read from the consuming repo's `.repo-ai.json`: `agentUser` and `requi
 
 ## Working on this repo
 
-`main` is protected: every change lands through a PR, and the `verify` CI job is the required check.
+`main` is protected: every change lands through a PR, and the `ci` CI job is the required check.
 
 - Branch per issue: `<type>/<issue-N>-<short-name>`, e.g. `fix/12-reap-timeout`.
 - The PR title is a Conventional Commit, because it becomes the squash commit subject on `main`.
