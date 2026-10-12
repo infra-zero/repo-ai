@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Item, Snapshot } from '../types'
-import { agentIcon, aiItems, describeCall, isMergeReady, parseStatus } from './parse'
+import { agentIcon, aiItems, clean, describeCall, isMergeReady, parseStatus } from './parse'
 
 const PANE = 'loop-watch'
 const snapshot = atom({ plugin: 'loop-watch', key: 'snapshot' } as const, null)
@@ -26,7 +26,7 @@ async function refreshGh($: EngineInterface) {
 			$.process.run(['gh', 'issue', 'list', ...fields]),
 		])
 		if (prs.exitCode || issues.exitCode) {
-			ghError = (prs.stderr || issues.stderr).trim().split('\n')[0]
+			ghError = clean((prs.stderr || issues.stderr).trim().split('\n')[0] ?? '')
 			return
 		}
 		items = [
@@ -41,7 +41,7 @@ async function refreshGh($: EngineInterface) {
 		for (const pr of fresh) $.ui.toast(`✅ PR #${pr.number} ready to merge: ${pr.title}`)
 		if (fresh.length) void $.audio.play({ asset: 'sounds/ready.wav' }).catch(() => {})
 	} catch (err) {
-		ghError = String(err)
+		ghError = clean(String(err))
 	}
 }
 
@@ -56,7 +56,7 @@ async function refresh($: EngineInterface) {
 	}
 	const agents = (await $.agent.list())
 		.filter((a) => a.status === 'running' || a.status === 'pending' || a.status === 'waiting')
-		.map((a) => ({ id: a.id, type: a.type, description: a.description, status: a.status }))
+		.map((a) => ({ id: a.id, type: a.type, description: clean(a.description), status: a.status }))
 	await update($, snapshot, () => ({ loop, items, agents, ghError, updatedAt: nowMs }))
 
 	const parts: string[] = []

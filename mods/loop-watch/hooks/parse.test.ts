@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { agentIcon, aiItems, describeCall, isMergeReady, parseStatus } from './parse'
+import { agentIcon, aiItems, clean, describeCall, isMergeReady, parseStatus } from './parse'
 
 test('parses summary, next tick and staleness', () => {
 	expect(parseStatus('2 in flight\n\n1600\n', 1000, 1000)).toEqual({
@@ -39,4 +39,14 @@ test('describes a subagent tool call in one short line', () => {
 	expect(describeCall('TodoWrite', { todos: [] })).toBe('TodoWrite')
 	expect(agentIcon('Explore')).toBe('🔍')
 	expect(agentIcon('anything')).toBe('🤖')
+})
+
+test('strips terminal escapes and control characters from display strings', () => {
+	expect(clean('a\x1b[31mred\x1b[0m b')).toBe('ared b')
+	expect(clean('\x1b]8;;https://evil\x07link\x1b]8;;\x1b\\ x')).toBe('link x')
+	expect(clean('one\ntwo\u202ethree\x00')).toBe('one two three')
+	expect(
+		aiItems('pr', [{ number: 1, title: 'x\x1b[2Jy', labels: [{ name: 'ai-wip' }] }])[0]?.title
+	).toBe('xy')
+	expect(parseStatus('\x1b]0;pwned\x07idle\n', 0, 0)?.summary).toBe('idle')
 })

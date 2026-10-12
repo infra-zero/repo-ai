@@ -30,6 +30,21 @@ const POLL_MS = 5 * 60 * 1000
 // ponytail: a fixed slack; a slower idleMinutes hides a little sooner than the statusline.
 const STALE_SLACK_S = 5 * 60
 
+// Line 1 of the status file is rendered in the band and in /repo-ai: drop ESC/OSC sequences,
+// then every other control and bidi character. Same as mods/loop-watch's clean(); a plugin
+// installed on its own can't import it.
+export function clean(s: string): string {
+	return (
+		s
+			// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping them is the point
+			.replace(/\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)?)/g, '')
+			// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping them is the point
+			.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, ' ')
+			.replace(/\s+/g, ' ')
+			.trim()
+	)
+}
+
 export function age(seconds: number): string {
 	if (seconds < 60) return `${seconds}s`
 	if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
@@ -64,7 +79,7 @@ async function loopStatus($: EngineInterface): Promise<Pick<Snapshot, 'loop' | '
 		// A crashed loop never rewrites the file, so its last `working·…` would stay up forever.
 		if (next > 0 && now > next + STALE_SLACK_S) return { loop: null, loopAge: null }
 		return {
-			loop: lines[0]?.trim() || null,
+			loop: clean(lines[0] ?? '') || null,
 			loopAge: changed > 0 ? Math.max(0, now - changed) : null,
 		}
 	} catch {
