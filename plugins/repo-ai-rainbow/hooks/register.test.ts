@@ -70,3 +70,22 @@ test('/repo-ai degrades when gh fails', async ($, on) => {
 
 	expect(text).toContain('no GitHub data')
 })
+
+test('/repo-ai strips terminal escapes from the loop status', async ($, on) => {
+	on('process.run', async () => ({
+		value: {
+			exitCode: 0,
+			stdout: '[]',
+			stderr: '',
+			isStdoutTruncated: false,
+			isStderrTruncated: false,
+		},
+	}))
+	on('fs.read', async () => ({ value: 'idle\x1b[2J\x1b]0;pwned\x07·cron\n\n\n1000\n' }))
+	on('clock.now', async () => ({ value: 1_120_000 }))
+
+	const { text } = await $.command.run({ command: 'repo-ai' })
+
+	expect(text).toContain('loop idle·cron (for 2m)')
+	expect(text).not.toContain('\x1b')
+})
