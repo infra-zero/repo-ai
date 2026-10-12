@@ -7,6 +7,7 @@ import {
 	acknowledgeNotice,
 	runSetup,
 	setupCommand,
+	setupSkills,
 	type StepRun,
 	setupSteps,
 } from '../../../src/cli/commands/setup.js'
@@ -126,5 +127,37 @@ describe('setup notice', () => {
 	it('matches the README and docs copies', () => {
 		for (const f of ['README.md', 'apps/docs/docs/intro.md', 'apps/docs/docs/ai-loop.md'])
 			expect(fs.readFileSync(f, 'utf8')).toContain(NOTICE)
+	})
+})
+
+describe('setupSkills (#358)', () => {
+	const run: StepRun = async () => ['ran']
+
+	it('creates ~/.claude/skills and says so when Claude Code is not on PATH', async () => {
+		const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+		const home = newTmpDir()
+		const files = await setupSkills('.', { dir: '.' }, { home, hasClaude: async () => false, run })
+		expect(files).toEqual(['ran'])
+		expect(fs.existsSync(join(home, '.claude', 'skills'))).toBe(true)
+		expect(err.mock.calls.flat().join('\n')).toContain('Claude Code not found')
+	})
+
+	it('stays quiet when Claude Code is on PATH', async () => {
+		const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+		const home = newTmpDir()
+		await setupSkills('.', { dir: '.' }, { home, hasClaude: async () => true, run })
+		expect(fs.existsSync(join(home, '.claude', 'skills'))).toBe(true)
+		expect(err).not.toHaveBeenCalled()
+	})
+
+	it('leaves HOME alone when --skills-dir is given', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {})
+		const home = newTmpDir()
+		await setupSkills(
+			'.',
+			{ dir: '.', skillsDir: newTmpDir() },
+			{ home, hasClaude: async () => false, run }
+		)
+		expect(fs.existsSync(join(home, '.claude'))).toBe(false)
 	})
 })

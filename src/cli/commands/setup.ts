@@ -1,5 +1,7 @@
+import os from 'node:os'
 import path from 'node:path'
 import chalk from 'chalk'
+import fs from 'fs-extra'
 import inquirer from 'inquirer'
 import { FixerAbort } from '../../base/fixer-abort.js'
 import { applyLoopLabels } from '../../base/labels.js'
@@ -14,6 +16,7 @@ import type { CheckResult } from '../../base/types.js'
 import { printResults, runDoctor } from './doctor.js'
 import { FIXERS, type FixOptions } from './fix.js'
 import { configuredAgentUser } from './loop-guard.js'
+import { claudeOnPath } from '../generators/claude-skills.js'
 import { getToolVersion } from '../utils/version.js'
 
 /**
@@ -34,9 +37,32 @@ export interface StepResult {
 	hint?: string
 }
 
+/**
+ * `setup` is the explicit opt-in, so unlike `fix claude-skills` it creates
+ * `~/.claude/skills` itself. Otherwise a machine without Claude Code fails the
+ * first run and passes the second, once `statusline` has made `~/.claude` (#358).
+ */
+export async function setupSkills(
+	dir: string,
+	o: FixOptions,
+	deps: { home?: string; hasClaude?: () => Promise<boolean>; run?: StepRun } = {}
+): Promise<string[]> {
+	if (!o.skillsDir) {
+		await fs.ensureDir(path.join(deps.home ?? os.homedir(), '.claude', 'skills'))
+		if (!(await (deps.hasClaude ?? claudeOnPath)())) {
+			console.error(
+				chalk.dim(
+					'   Claude Code not found; skills installed to ~/.claude/skills for when you install it'
+				)
+			)
+		}
+	}
+	return (deps.run ?? FIXERS['claude-skills'].run)(dir, o)
+}
+
 const STEPS: Record<string, StepRun> = {
 	config: FIXERS.config.run,
-	'claude-skills': FIXERS['claude-skills'].run,
+	'claude-skills': (dir, o) => setupSkills(dir, o),
 	labels: (dir) => applyLoopLabels(dir, undefined, { bootstrap: true }),
 	'ai-loop-identity': FIXERS['ai-loop-identity'].run,
 	statusline: FIXERS.statusline.run,
