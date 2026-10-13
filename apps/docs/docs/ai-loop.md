@@ -97,7 +97,7 @@ optional:
 | `staleMinutes` | integer | `45`; values below `1` are ignored | `loop tick`'s `.env.staleMinutes`, `loop reap` and `loop tick`. A claim label (`ai-wip`, `ai-reviewing-*`, `ai-fixing`) this old marks a dead agent. |
 | `busyMinutes` | integer | `10`; values below `1` are ignored | `loop tick`'s `.env.busyMinutes`. The skill's cron cadence while work is in flight and no `loop watch` Monitor runs. |
 | `idleMinutes` | integer | `30`; values below `1` are ignored | `loop tick`'s `.env.idleMinutes`. The skill's cron cadence when idle, and its fallback cadence under a `loop watch` Monitor. |
-| `autoMerge` | boolean | `false` | `loop tick`. Lets Pass 1 merge a fully-passed issue PR unattended — only on a repo whose publishing job also runs behind an environment with `required_reviewers`. `doctor` warns when it is on without that gate. |
+| `autoMerge` | boolean | `false` | `loop tick`. Lets Pass 1 merge a fully-passed issue PR unattended — only on a repo whose publishing job also runs behind an environment with `required_reviewers`. A PR that changes release config is always handed to you instead (#370). `doctor` warns when it is on without that gate. |
 | `ciWorkflow` | string | `ci.yml` | `loop tick` and `doctor`, which watch that workflow's runs on the default branch for the no-jobs, stuck-release and failed-release warnings. `doctor` warns when the file does not exist in `.github/workflows`. PR checks need no setting — they cover every workflow. |
 
 The schema is [`schemas/repo-ai.json`](https://docs.infrazero.dev/repo-ai/repo-ai.json)
@@ -518,7 +518,11 @@ reports each in `.applied[]`, and returns the comments still owed in `.comments[
   agent. `ai-notes` survives to the merge.
 - **The one unattended merge** — a handoff with `.autoMerge`, set only when
   `.repo-ai.json` has `"autoMerge": true`, publishing runs behind an environment
-  with required reviewers, and the PR has no `ai-notes`. Unreadable answers fail closed.
+  with required reviewers, the PR has no `ai-notes`, and it changes no release
+  config: `.github/workflows/**`, `release.config.*`, `.releaserc*`, `.npmrc`,
+  `.changeset/config.json`, or `publishConfig` in a `package.json` (#370). Such a
+  PR is handed over with `.releaseConfig` set, and `loop apply` writes the
+  decision comment naming the file. Unreadable answers fail closed.
 - **Reconcile** — `.stripMergeReady`: removes `merge-ready` from a PR no longer
   `CLEAN`, or carrying `ai-changes`.
 - **Update the branch** — `.updateBranches[]`: a passed `BEHIND` PR gets
