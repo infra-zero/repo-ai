@@ -11,7 +11,7 @@ description: What repo-ai is, what it ships, and where to start.
 takes an `ai-ready` GitHub issue, implements it in its own git worktree, opens a
 PR, has two agents review it, and hands it to a human to merge.
 
-issue → loop → PR → two reviews → you merge → [you release](./getting-started.md#8-merging-and-releasing).
+issue → loop → PR → two reviews → you merge → [you release](./getting-started.md#6-merging-and-releasing).
 
 It was split out of [`@rtorcato/repo-tooling`](https://docs.torcato.dev/repo-tooling/)
 so the tooling can be used without the loop. repo-tooling still owns the
@@ -53,12 +53,14 @@ Workflow runs show in `/workflows`. If you edit the scripts in `workflows/`, loa
 
 ## Start here
 
-Follow [Getting started](./getting-started.md) for the full walkthrough, or the
-short version:
+The [Minimum path](./minimum-path.md) is three commands, with no options:
 
-1. Run `npx @infrazero/repo-ai setup` — skills, labels, agent identity and statusline, asking before each.
-2. Check the repo meets the [prerequisites](./ai-loop.md#repo-prerequisites).
-3. File an issue with `/ai-issue`, then run `/ai-loop` in Claude Code.
+1. Run `npx @infrazero/repo-ai setup`.
+2. File an issue with `/ai-issue` in Claude Code.
+3. Run `/ai-loop`.
+
+[Getting started](./getting-started.md) is the full walkthrough: the repo
+settings, a bot account, the sandbox, stopping, merging and releasing.
 
 ## Installing the skills
 

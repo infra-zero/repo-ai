@@ -143,32 +143,27 @@ avatar misrepresents who reviewed the code.
 
 Give the reviewing agents their own GitHub account — a machine user invited as a
 collaborator, or a GitHub App — and the reviewer is no longer the PR author, so
-`--approve` works and the `ai-ok-*` labels stop being necessary. Keep the two
-apart on the machine rather than switching profiles, so an agent can never act
-as you by accident:
+`--approve` works and the `ai-ok-*` labels stop being necessary.
 
-```bash
-GH_CONFIG_DIR=~/.config/gh-bot gh auth login --web --scopes repo   # once, as the bot
-GH_CONFIG_DIR=~/.config/gh-bot gh pr review 42 --approve           # runs as the bot
-```
+The recommended way is a per-session `GH_TOKEN`: the bot signs in to `gh`
+alongside you, and only the loop's session runs as it. Your own terminals stay
+you, so an agent can never act as you by accident.
 
-Complete the device flow in a private window logged in as the bot — your default
-browser will authorise *you* instead, leaving two profiles holding one identity.
+First:
 
-When `.repo-ai.json` declares `agentUser`, `loop guard` halts any tick not running as that
-account. `npx @infrazero/repo-ai fix ai-loop-identity`
-wires a checkout to it: it checks that `~/.config/gh-<agentUser>` (or
-`--gh-config-dir <path>`) is signed in as the agent, then merges
-`"env": {"GH_CONFIG_DIR": "<dir>"}` into the gitignored
-`.claude/settings.local.json`. Relaunch Claude afterwards. **Every** session in
-that checkout then runs as the agent, hands-on ones included — so use it on a
-checkout dedicated to the loop. It is opt-in: a bare `fix --yes` never runs it.
+1. **Give the bot write access.** Invite it as a collaborator with `push`
+   permission and accept the invite as the bot. Read access can't push branches
+   or apply labels.
+2. **Sign `gh` in as the bot too.** `gh auth login --web --scopes repo` a second
+   time, as the bot, adds it to the keyring. Complete the device flow in a
+   private window logged in as the bot. Your default browser will authorise
+   *you* instead, leaving two keyring entries holding one identity.
+3. **Declare it.** Put `{"agentUser": "<agentUser>"}` in `.repo-ai.json`. From
+   then on, `loop guard` halts any tick not running as that account.
 
 #### Per session, with `GH_TOKEN`
 
-If the bot is already signed in to `gh` alongside you (`gh auth login` a second
-time, as the bot, adds it to the keyring), you can skip the separate config
-directory and run just the loop's session as the bot:
+Launch the loop's session as the bot:
 
 ```bash
 GH_TOKEN=$(gh auth token --user <agentUser>) claude    # this session only
@@ -186,12 +181,14 @@ when the shell starts:
 alias claude-ai-loop='GH_TOKEN=$(gh auth token --user <agentUser>) claude'
 ```
 
-Either way, first:
+A GitHub App works the same way:
+`GH_TOKEN=$(npx @infrazero/repo-ai auth app-token --repo <owner/repo>)` gives
+`gh` and `git` the App's identity for an hour. Set `REPO_AI_GH_LOGIN` alongside
+it; see [`auth app-token`](./commands.md#setup).
 
-1. **Give the bot write access.** Invite it as a collaborator with `push`
-   permission and accept the invite as the bot. Read access can't push branches
-   or apply labels.
-2. **Declare it.** Put `{"agentUser": "<agentUser>"}` in `.repo-ai.json`.
+`npx @infrazero/repo-ai fix ai-loop-identity` is **deprecated** (#285). It
+pointed every Claude session in a checkout at a separate `gh` config directory
+(`GH_CONFIG_DIR`), hands-on sessions included. Prefer `GH_TOKEN`.
 
 Once `agentUser` is set, a session running as anyone else halts every tick:
 
@@ -199,8 +196,8 @@ Once `agentUser` is set, a session running as anyone else halts every tick:
 ⚠ agentUser is <agentUser> but gh authenticates as <you> — the tick would commit, push and review as the wrong account. Run `npx @infrazero/repo-ai fix ai-loop-identity` in this checkout, then relaunch the Claude session; or run just one session as the agent: `GH_TOKEN=$(gh auth token --user <agentUser>) claude`
 ```
 
-That is the guard working. Restart the session as the bot, either for the whole
-checkout or [per session](#per-session-with-gh_token), or remove `agentUser` to
+That is the guard working. Restart the session as the bot
+[with `GH_TOKEN`](#per-session-with-gh_token), or remove `agentUser` to
 go back to running as yourself. `loop watch` is the exception: it writes nothing
 to GitHub, so it prints the warning once to stderr and keeps polling. The loop trusts only verdicts posted by its
 own login, so after a switch, PRs already under review are reviewed again by

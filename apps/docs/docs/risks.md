@@ -18,12 +18,23 @@ legal advice.
 Claude plan's usage limits. CI runs on the PRs it opens spend your GitHub
 Actions minutes.
 
-**The loop's limits are best-effort, not a spending guarantee.** The
-[limits](./ai-loop.md#limits) (issues in flight, fix rounds, agents per
-tick) are instructions an agent follows, not caps enforced outside the agent;
-enforcing them in the Workflow scripts is tracked in
-[#41](https://github.com/infra-zero/repo-ai/issues/41). A misbehaving agent, a
-bug, or a loop left running can still spend more than you expect.
+**The loop's limits are best-effort, not a spending guarantee.** Some of the
+[limits](./ai-loop.md#limits) are enforced in code. Others, such as
+reviewers reading only the diff, are instructions an agent follows:
+
+- **Enforced in code.** `loop tick` computes the free in-flight slots
+  (`maxInFlight`) and the fix-round cap (`maxFixRounds`). The `ai-loop-recover`
+  and `ai-loop-pickup` Workflow scripts skip any task past the per-tick cap
+  (`maxTasksPerTick`) or the token budget (`budgetTokens`) rather than spawn it.
+- **What that doesn't cover.** `budgetTokens` counts **output tokens only**;
+  input and cache reads, which run several times higher, aren't counted.
+  Without Claude Code's Workflow tool, the loop falls back to background agents
+  and runs with no token cap at all, and it says so in its report. And the agent
+  driving the tick is what calls those scripts, so nothing outside your Claude
+  session enforces any limit.
+
+A misbehaving agent, a bug, or a loop left running can still spend more than
+you expect.
 
 So:
 
