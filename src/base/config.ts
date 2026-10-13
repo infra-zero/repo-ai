@@ -5,6 +5,7 @@
  */
 import path from 'node:path'
 import fs from 'fs-extra'
+import { LOGIN } from './agent-user.js'
 
 export const CONFIG_FILE = '.repo-ai.json'
 export type ConfigSource = 'repo-ai.json' | 'none'
@@ -45,8 +46,19 @@ export interface RepoAiConfig {
 	source: ConfigSource
 }
 
+/**
+ * A GitHub login, else nothing: `agentUser` and `humanUser` are written into
+ * shell text unescaped (#388). `doctor`'s schema check names a bad value.
+ */
 export function asLogin(value: unknown): string | undefined {
-	return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined
+	return typeof value === 'string' && LOGIN.test(value.trim()) ? value.trim() : undefined
+}
+
+/** A workflow file name under `.github/workflows` — no path, no shell metacharacters (#388). */
+export const WORKFLOW_FILE = /^[A-Za-z0-9_][A-Za-z0-9._-]*\.ya?ml$/
+
+function asWorkflow(value: unknown): string | undefined {
+	return typeof value === 'string' && WORKFLOW_FILE.test(value.trim()) ? value.trim() : undefined
 }
 
 /**
@@ -119,7 +131,7 @@ export async function readConfig(dir: string): Promise<RepoAiConfig> {
 			quietStopMinutes: asAtLeast(own.quietStopMinutes, 0),
 			autoMerge: own.autoMerge === true,
 			maxAgents: asAtLeast(own.maxAgents, 1),
-			ciWorkflow: asLogin(own.ciWorkflow),
+			ciWorkflow: asWorkflow(own.ciWorkflow),
 			checkCommand: asCommand(own.checkCommand),
 			...Object.fromEntries(
 				Object.entries(LIMITS).map(([k, { min }]) => [k, asAtLeast(own[k], min)])
