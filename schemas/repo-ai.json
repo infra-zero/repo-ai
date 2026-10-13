@@ -12,10 +12,12 @@
     },
     "agentUser": {
       "type": "string",
+      "pattern": "^[a-zA-Z0-9](?:-?[a-zA-Z0-9]){0,38}$",
       "description": "GitHub login the loop must run as. `loop guard` halts a tick authenticated as anyone else; unset, the loop runs as whoever `gh` is signed in as."
     },
     "humanUser": {
       "type": "string",
+      "pattern": "^[a-zA-Z0-9](?:-?[a-zA-Z0-9]){0,38}$",
       "description": "GitHub login to assign merge-ready PRs, ai-blocked issues and declined issues to. Defaults to the repo owner when it is a user; an organisation-owned repo has no such owner, so set this or those handoffs get no assignee."
     },
     "requiredSkills": {
@@ -97,6 +99,7 @@
     },
     "ciWorkflow": {
       "type": "string",
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]*\\.ya?ml$",
       "default": "ci.yml",
       "description": "File name of the CI workflow under .github/workflows that runs on pushes to the default branch. `loop tick` and `doctor` watch its runs for cancelled-with-no-jobs, stuck-approval and failed-release symptoms; `doctor` warns when the file does not exist. PR checks need no setting — they cover every workflow."
     },
