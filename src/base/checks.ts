@@ -11,6 +11,14 @@ import {
 import { installWorkflow, SHIPPED_WORKFLOWS, workflowsDirFor } from '../cli/generators/workflows.js'
 import type { CheckResult } from './types.js'
 
+/** Any shipped skill installed, by `fix claude-skills` or the Claude Code plugin (#359). */
+export async function skillsInstalled(skillsDir?: string, home?: string): Promise<boolean> {
+	for (const name of SHIPPED_SKILLS) {
+		if ((await claudeSkillStatus(name, skillsDir)).installed) return true
+	}
+	return (await pluginInstallPaths(home)).length > 0
+}
+
 /**
  * The user-global agent skills this package ships (#404).
  *
