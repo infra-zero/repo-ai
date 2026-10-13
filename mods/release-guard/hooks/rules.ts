@@ -7,6 +7,9 @@ const AT = String.raw`(?:^|[;&|(]|\$\()\s*(?:(?:then|do|else)\s+)?(?:(?:env|comm
 // `git -C <dir>` / `git -c k=v` before the subcommand, as worktree agents write it.
 const GIT = String.raw`git(?:\s+-[Cc]\s+\S+)*\s+`
 const rule = (body: string, flags = '') => new RegExp(AT + body, `m${flags}`)
+// `gh workflow run` flags, with or without a value, before the workflow name or file. The flag name
+// stops at `=` and a value can't start with `-`, so each token parses one way only: no backtracking blowup.
+const RUN = String.raw`gh\s+workflow\s+run\s+(?:-[^\s=]+(?:[\s=][^-\s]\S*)?\s+)*`
 
 const RULES: [RegExp, string][] = [
 	[rule(String.raw`(npm|pnpm|yarn|bun)\b[^\n;&|]*\spublish(?![\w-])`), 'publishing to npm'],
@@ -44,15 +47,27 @@ const RULES: [RegExp, string][] = [
 		),
 		'pushing a tag',
 	],
-	[
-		// Flags (with or without a value) may sit before the workflow name or file. The flag name stops
-		// at `=` and a value can't start with `-`, so each token parses one way only: no backtracking blowup.
-		rule(String.raw`gh\s+workflow\s+run\s+(?:-[^\s=]+(?:[\s=][^-\s]\S*)?\s+)*\S*release`, 'i'),
-		'dispatching the release workflow',
-	],
+	[rule(RUN + String.raw`\S*release`, 'i'), 'dispatching the release workflow'],
 	[
 		rule(String.raw`gh\s+api\b[^\n;&|]*actions/workflows/[^\s/]*release[^\s/]*/dispatches`, 'i'),
 		'dispatching the release workflow',
+	],
+	// A numeric workflow ID can't be resolved offline, so any one might be release.yml.
+	[
+		rule(RUN + String.raw`["']?\d+["']?(?![^\s;&|)])`),
+		'dispatching a workflow by numeric ID (it may be the release workflow)',
+	],
+	[
+		rule(String.raw`gh\s+api\b[^\n;&|]*actions/workflows/\d+/dispatches`),
+		'dispatching a workflow by numeric ID (it may be the release workflow)',
+	],
+	// release.yml also fires on `milestone: closed`. ponytail: `-f`/`-F`/`--field` only; a body sent
+	// with `--input` isn't seen.
+	[
+		rule(
+			String.raw`gh\s+api\b(?=[^\n;&|]*milestones/\d+)[^\n;&|]*(?:\s|--(?:raw-)?field=|-[fF])["']?state=["']?closed\b`
+		),
+		'closing a milestone (it fires the release workflow)',
 	],
 	[rule(String.raw`gh\s+release\s+create\b`), 'creating a GitHub release'],
 ]

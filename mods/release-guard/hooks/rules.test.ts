@@ -51,6 +51,15 @@ test('blocks release commands', () => {
 		'time pnpm version patch',
 		'gh api -X POST repos/o/r/actions/workflows/release.yml/dispatches -f ref=main',
 		'gh api "repos/o/r/actions/workflows/Release.yaml/dispatches" -f ref=main',
+		'gh workflow run 123456',
+		'gh workflow run -R o/r --ref main 123456',
+		'gh workflow run "123456" -f a=b',
+		'gh api -X POST repos/o/r/actions/workflows/123456/dispatches -f ref=main',
+		'gh api -X PATCH repos/o/r/milestones/3 -f state=closed',
+		'gh api --method PATCH -F "state=closed" /repos/o/r/milestones/12',
+		'gh api repos/o/r/milestones/3 --field=state=closed -X PATCH',
+		'gh api -X PATCH repos/o/r/milestones/3 -fstate=closed',
+		"cd x && gh api -X PATCH repos/o/r/milestones/3 -f 'state=closed'",
 	])
 		expect(blockedBash(cmd)).toBeDefined()
 })
@@ -85,6 +94,17 @@ test('allows everyday commands', () => {
 		'time pnpm test',
 		'gh api repos/o/r/actions/workflows/release.yml',
 		'gh api -X POST repos/o/r/actions/workflows/ci.yml/dispatches -f ref=main',
+		'gh workflow run ci.yml -f retries=3',
+		'gh workflow run ci.yml --ref 2026',
+		'gh api repos/o/r/actions/workflows/123456',
+		'gh api repos/o/r/actions/workflows/123456/runs',
+		'gh api repos/o/r/milestones/3',
+		'gh api -X PATCH repos/o/r/milestones/3 -f state=open',
+		'gh api -X PATCH repos/o/r/milestones/3 -f description="state=closed soon"',
+		'gh api repos/o/r/milestones -f title=v2.1',
+		'gh api -X PATCH repos/o/r/issues/3 -f state=closed',
+		'gh issue edit 3 --milestone v2.1',
+		'gh api repos/o/r/milestones/3 | jq .state; echo state=closed',
 	])
 		expect(blockedBash(cmd)).toBeUndefined()
 })
