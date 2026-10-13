@@ -170,7 +170,7 @@ describe('resolveLoopEnv', () => {
 		expect((await resolveLoopEnv({ dir: root, gh: fakeGh().gh, env: {} })).installCommand).toBe('')
 		fs.writeFileSync(join(root, 'package-lock.json'), '{}')
 		expect((await resolveLoopEnv({ dir: root, gh: fakeGh().gh, env: {} })).installCommand).toBe(
-			"npm --prefix '<worktree>' install"
+			"npm --prefix '<worktree>' install --ignore-scripts"
 		)
 	})
 
