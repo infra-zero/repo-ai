@@ -2,7 +2,7 @@ import os from 'node:os'
 import path from 'node:path'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
-import { fixSandboxExcludes } from '../../base/allow-rules.js'
+import { fixAllowRules, fixSandboxExcludes } from '../../base/allow-rules.js'
 import { setupAgentIdentity } from '../../base/ai-loop-identity.js'
 import { writeConfigSchema } from '../../base/config-schema.js'
 import { FixerAbort } from '../../base/fixer-abort.js'
@@ -73,6 +73,11 @@ export const FIXERS = {
 		description:
 			"Set the GitHub settings the loop needs — squash-only, auto-merge, delete branch on merge, no required reviews — keeping the repo's required checks; shows the plan and asks first",
 		run: (dir, o) => fixRepoSettings(dir, o),
+	},
+	'allow-rules': {
+		description:
+			"Add the loop's missing Claude Code allow rules (gh, git, the lockfile's package manager, repo-ai) to this checkout's gitignored .claude/settings.local.json",
+		run: (dir) => fixAllowRules(dir, os.homedir()),
 	},
 	sandbox: {
 		description:

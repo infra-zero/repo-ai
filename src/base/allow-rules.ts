@@ -103,7 +103,7 @@ export async function checkAllowRules(dir: string, home: string): Promise<CheckR
 		check,
 		status: 'drift',
 		detail: `no "${rule}" allow rule — the loop's calls will prompt or hit the auto-mode classifier`,
-		hint: `Run \`npx @infrazero/repo-ai setup\` to add it to ${SETTINGS_LOCAL}, or add "${rule}" to permissions.allow yourself`,
+		hint: `Run \`npx @infrazero/repo-ai fix allow-rules\` to add it to ${SETTINGS_LOCAL}, or add "${rule}" to permissions.allow yourself`,
 	}))
 }
 
