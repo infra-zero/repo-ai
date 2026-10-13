@@ -7,6 +7,7 @@ import type { GhExec } from '../../../src/base/gh.js'
 import {
 	dependsOn,
 	isDocsOnly,
+	releaseConfigFiles,
 	recreateMarker,
 	stalledMarker,
 	problemLines,
@@ -120,6 +121,8 @@ interface World {
 	required?: string[]
 	/** Required contexts from rulesets, via `rules/branches/<b>` (#362). */
 	rules?: string[]
+	/** `<ref>:<path>` → raw file content via the contents API (#370); unset is a 404. */
+	contents?: Record<string, string>
 }
 
 function fakeGh(w: World): GhExec {
@@ -202,6 +205,11 @@ function fakeGh(w: World): GhExec {
 					protection: { required_status_checks: { contexts: w.required ?? [] } },
 					commit: { sha: h.sha, commit: { tree: { sha: 'tree' }, committer: { date } } },
 				})
+			}
+			const file = args[3]?.match(/^repos\/acme\/widget\/contents\/(.+)\?ref=(.+)$/)
+			if (file) {
+				const body = w.contents?.[`${decodeURIComponent(file[2] as string)}:${file[1]}`]
+				return body === undefined ? { ok: false, stdout: '', stderr: 'HTTP 404' } : ok(body)
 			}
 			const runMatch = b?.match(/^repos\/acme\/widget\/actions\/runs\/(\d+)$/)
 			if (runMatch) return ok({ run_attempt: w.runAttempts?.[Number(runMatch[1])] ?? 1 })
@@ -547,7 +555,11 @@ describe('runLoopTick', () => {
 	})
 
 	describe('autoMerge needs the opt-in and the release gate (#142)', () => {
-		const tick = async (optIn: boolean, gated: boolean) => {
+		const tick = async (
+			optIn: boolean,
+			gated: boolean,
+			extra: Partial<World> = { diffs: { 10: ['src/a.ts'] } }
+		) => {
 			const root = checkout(newTmpDir())
 			fs.outputFileSync(
 				join(root, '.github/workflows/release.yml'),
@@ -565,6 +577,7 @@ describe('runLoopTick', () => {
 					wip: [1],
 					prs: [pr(10, 'ai-1-ready', ['ai-review', 'ai-ok-code', 'ai-ok-sec'])],
 					merge: { 10: 'CLEAN' },
+					...extra,
 				}),
 			})
 			expect(r.releaseGated).toBe(gated)
@@ -581,6 +594,70 @@ describe('runLoopTick', () => {
 			expect(await tick(true, true)).toEqual([
 				{ pr: 10, issue: 1, title: 'pr-10', notes: false, autoMerge: true },
 			])
+		})
+
+		describe('never auto-merges a PR that changes release config (#370)', () => {
+			const handed = (releaseConfig: string[]) => [
+				{ pr: 10, issue: 1, title: 'pr-10', notes: false, autoMerge: false, releaseConfig },
+			]
+
+			it.each([
+				'.github/workflows/release.yml',
+				'.github/workflows/ci.yml',
+				'release.config.js',
+				'.releaserc.json',
+				'.npmrc',
+				'packages/a/.npmrc',
+				'.changeset/config.json',
+			])('%s', async (f) => {
+				expect(await tick(true, true, { diffs: { 10: ['src/a.ts', f] } })).toEqual(handed([f]))
+			})
+
+			it('a package.json whose publishConfig changed', async () => {
+				const contents = {
+					'main:package.json': '{"name":"w","publishConfig":{"access":"public"}}',
+					'head:package.json': '{"name":"w","publishConfig":{"access":"restricted"}}',
+				}
+				expect(await tick(true, true, { diffs: { 10: ['package.json'] }, contents })).toEqual(
+					handed(['package.json (publishConfig)'])
+				)
+			})
+
+			it('a publishConfig added where there was none', async () => {
+				const contents = {
+					'main:pkg/package.json': '{"name":"w"}',
+					'head:pkg/package.json': '{"name":"w","publishConfig":{"registry":"https://evil"}}',
+				}
+				expect(await tick(true, true, { diffs: { 10: ['pkg/package.json'] }, contents })).toEqual(
+					handed(['pkg/package.json (publishConfig)'])
+				)
+			})
+
+			it('still auto-merges a package.json change that leaves publishConfig alone', async () => {
+				const contents = {
+					'main:package.json': '{"version":"1.0.0","publishConfig":{"access":"public"}}',
+					'head:package.json': '{"version":"1.1.0","publishConfig":{"access":"public"}}',
+				}
+				expect(await tick(true, true, { diffs: { 10: ['package.json'] }, contents })).toEqual([
+					{ pr: 10, issue: 1, title: 'pr-10', notes: false, autoMerge: true },
+				])
+			})
+
+			it('fails closed on an unparseable package.json or an unreadable diff', async () => {
+				const garbled = { 'main:package.json': '{', 'head:package.json': '{}' }
+				expect(
+					await tick(true, true, { diffs: { 10: ['package.json'] }, contents: garbled })
+				).toEqual(handed(['package.json (publishConfig)']))
+				expect(await tick(true, true, { diffs: {} })).toEqual(
+					handed(['its changed files (the diff could not be read)'])
+				)
+			})
+
+			it('skips the check when autoMerge is off anyway', async () => {
+				expect(
+					await tick(false, true, { diffs: { 10: ['.github/workflows/release.yml'] } })
+				).toEqual([{ pr: 10, issue: 1, title: 'pr-10', notes: false, autoMerge: false }])
+			})
 		})
 
 		it('opt-in but not release-gated: no autoMerge', async () => {
@@ -1410,5 +1487,33 @@ describe('problemLines (#128)', () => {
 			stripVTControlCharacters
 		)
 		expect(lines).toEqual(['  error: gh api failed', '  warning: stale skill'])
+	})
+})
+
+describe('releaseConfigFiles (#370)', () => {
+	it('matches release config by whole path, and nothing that merely mentions it', () => {
+		const hits = [
+			'.github/workflows/release.yml',
+			'.github/workflows/ci.yml',
+			'release.config.js',
+			'packages/a/release.config.cjs',
+			'.releaserc',
+			'.releaserc.yml',
+			'packages/a/.releaserc.json',
+			'.npmrc',
+			'packages/a/.npmrc',
+			'.changeset/config.json',
+		]
+		const misses = [
+			'docs/release.md',
+			'src/release.ts',
+			'apps/x/.github/workflows/ci.yml',
+			'.changeset/brave-cats.md',
+			'package.json',
+			'my.releaserc.json',
+			'.npmrc.example',
+			'docs/npmrc.md',
+		]
+		expect(releaseConfigFiles([...hits, ...misses])).toEqual(hits)
 	})
 })

@@ -180,6 +180,11 @@ export function blockedDecision(
 	}`
 }
 
+/** Why an opted-in PR was handed over instead of auto-merged (#370). File names come from the PR: no backtick or newline escapes the code span. */
+export function releaseConfigDecision(header: string, files: string[], human: string): string {
+	return `${header}\nNot auto-merged: this PR changes release config (${files.map((f) => `\`${f.replace(/[`\r\n]/g, '')}\``).join(', ')}). Merging that unattended could remove the release gate that allows auto-merge, so ${human} merges it by hand.`
+}
+
 /** `+\`a\`, −\`b\`` from an edit's label flags; empty when it changes none. */
 export function labelDiff(args: string[]): string {
 	return args
@@ -363,6 +368,16 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 			)
 			if ('error' in r) result.errors.push(`decision comment on #${h.pr} failed: ${r.error}`)
 		} else if (h.notes) result.comments.push({ kind: 'notes', pr: h.pr, handoff: h })
+		// #370: the loop declined an opted-in merge, so the decision comment says which file did it.
+		if (h.releaseConfig?.length) {
+			const r = await upsertMarked(
+				target,
+				h.pr,
+				DECISION_MARKER,
+				releaseConfigDecision(header, h.releaseConfig, human)
+			)
+			if ('error' in r) result.errors.push(`decision comment on #${h.pr} failed: ${r.error}`)
+		}
 		// The one unattended merge: `loop tick` sets `autoMerge` only with the opt-in and the release gate.
 		if (h.autoMerge)
 			await run(1, 'merge', h.pr, ['pr', 'merge', String(h.pr), '--squash', '--auto'])

@@ -8,6 +8,7 @@ import {
 	blockedDecision,
 	type LoopApplyResult,
 	pickupSlug,
+	releaseConfigDecision,
 	runLoopApply,
 } from '../../../src/cli/commands/loop-apply.js'
 import type { LoopEnv } from '../../../src/cli/commands/loop-env.js'
@@ -692,6 +693,29 @@ describe('green-but-BLOCKED handoff (#362)', () => {
 		expect(blockedDecision('h', ['build'], 'a human')).not.toContain('admin')
 		expect(blockedDecision('h', [], 'a human')).not.toContain('admin')
 		expect(blockedDecision('h', ['a`@x\nb'], 'a human')).toContain('`a@xb`')
+	})
+})
+
+describe('release config handoff (#370)', () => {
+	it('hands over without merging and names the blocking file in the decision comment', async () => {
+		const fake = fakeGh()
+		const result = await runLoopApply({
+			tick: tick(checkout(newTmpDir()), {
+				handoffs: [{ ...handoff, releaseConfig: ['.github/workflows/release.yml'] }],
+			}),
+			gh: fake.gh,
+			env: {},
+		})
+		expect(fake.calls.some((c) => c[1] === 'merge')).toBe(false)
+		const decision = fake.notes.find((n) => n.body.startsWith('<!-- ai-issue-loop:decision -->'))
+		expect(decision?.body).toContain('Not auto-merged')
+		expect(decision?.body).toContain('`.github/workflows/release.yml`')
+		expect(result.errors).toEqual([])
+	})
+
+	it('keeps a hostile file name inside its code span', () => {
+		const text = releaseConfigDecision('h', ['.github/workflows/a`@x\nb.yml'], 'a human')
+		expect(text).toContain('`.github/workflows/a@xb.yml`')
 	})
 })
 
