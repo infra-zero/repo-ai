@@ -663,13 +663,44 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 	return result
 }
 
+/** The fields the skill reads after `loop apply`, so it needs no standalone `jq` (#359). */
+export function applySummary(r: LoopApplyResult) {
+	return {
+		applied: r.applied.map((a) => `${a.transition} #${a.number} ${a.ok}`),
+		comments: r.comments.map((c) => ({
+			kind: c.kind,
+			pr: 'pr' in c ? c.pr : null,
+			issue: 'issue' in c ? c.issue : null,
+		})),
+		claimed: {
+			reviews: r.claimed.reviews.map((x) => `${x.arm}:#${x.pr}`),
+			fixes: r.claimed.fixes.map((f) => f.pr),
+			pickups: r.claimed.pickups.map((p) => ({
+				number: p.number,
+				slug: p.slug,
+				worktree: p.worktree,
+				needsInstall: p.needsInstall,
+				base: p.base ?? null,
+				stackedOn: p.stackedOn ?? null,
+			})),
+		},
+		removed: r.removed.map((w) => w.issue),
+		rebuild: r.rebuild,
+		halt: r.halt,
+		errors: r.errors,
+	}
+}
+
 export async function loopApplyCommand(options: {
 	root?: string
 	worktreeRoot?: string
 	json?: boolean
+	summary?: boolean
 }): Promise<void> {
 	const result = await runLoopApply(options)
-	if (options.json) {
+	if (options.summary) {
+		console.log(JSON.stringify(applySummary(result)))
+	} else if (options.json) {
 		console.log(JSON.stringify(result, null, 2))
 	} else {
 		if (result.halt) console.error(chalk.red(`✖ halt: ${result.halt}`))

@@ -97,9 +97,22 @@ jobs:
           npm install --no-audit --no-fund "$tarball"
           npx --no-install repo-ai --version
           # doctor exits 1 on drift/missing — a bare dir has no .repo-ai.json (#159).
-          # Only a crash (any other code) or non-JSON output fails the smoke test.
+          # Exit 1 is accepted only for the failures this dir is expected to have:
+          # no loop config, not a git repo, and on the runner no gh login and no
+          # `claude` (#359). Anything else failing, a crash or non-JSON fails the step.
           out="$(npx --no-install repo-ai doctor --json)" || [ $? -eq 1 ]
-          node -e 'JSON.parse(require("fs").readFileSync(0, "utf8"))' <<< "$out"
+          node -e '
+            const { results } = JSON.parse(require("fs").readFileSync(0, "utf8"))
+            const expected = ["Loop config", "GitHub remote", "gh auth", "Claude Code"]
+            const failing = results.filter((r) => r.status === "drift" || r.status === "missing").map((r) => r.check)
+            const bad = [
+              ...failing.filter((c) => !expected.includes(c)).map((c) => `unexpected failure: ${c}`),
+              ...(failing.includes("Loop config") ? [] : ["Loop config was not reported missing"]),
+              ...["Node", "git", "gh"].filter((c) => results.find((r) => r.check === c)?.status !== "ok").map((c) => `${c} is not ok`),
+              ...results.filter((r) => r.status === "ok" && r.detail.startsWith("skipped — could not")).map((r) => `skip shown as ok: ${r.check}`),
+            ]
+            if (bad.length) { console.error(JSON.stringify(results, null, 2)); for (const b of bad) console.error(`::error::${b}`); process.exit(1) }
+          ' <<< "$out"
 
   # The required status check. Branch protection names only `ci`, so this one
   # job stands for every matrix leg: it fails unless all of them succeeded,

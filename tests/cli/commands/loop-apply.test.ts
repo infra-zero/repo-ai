@@ -4,6 +4,8 @@ import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
 import type { GhExec } from '../../../src/base/gh.js'
 import {
+	applySummary,
+	type LoopApplyResult,
 	pickupSlug,
 	releaseConfigDecision,
 	runLoopApply,
@@ -680,5 +682,52 @@ describe('release config handoff (#370)', () => {
 	it('keeps a hostile file name inside its code span', () => {
 		const text = releaseConfigDecision('h', ['.github/workflows/a`@x\nb.yml'], 'a human')
 		expect(text).toContain('`.github/workflows/a@xb.yml`')
+	})
+})
+
+describe('applySummary (#359)', () => {
+	it('projects the fields the skill used to pull out with jq', () => {
+		const result = {
+			applied: [{ pass: 1, transition: 'handoff', number: 7, ok: true }],
+			comments: [
+				{ kind: 'notes', pr: 7, handoff: {} },
+				{ kind: 'blocked', issue: 3, stall: {} },
+			],
+			claimed: {
+				reviews: [{ arm: 'code', pr: 9 }],
+				fixes: [{ pr: 4 }],
+				pickups: [{ number: 5, title: 't', slug: 's', worktree: '/w', needsInstall: false }],
+			},
+			removed: [{ issue: 2 }],
+			rebuild: 'not-requested',
+			halt: null,
+			errors: [],
+			exitCode: 0,
+		} as unknown as LoopApplyResult
+		expect(applySummary(result)).toEqual({
+			applied: ['handoff #7 true'],
+			comments: [
+				{ kind: 'notes', pr: 7, issue: null },
+				{ kind: 'blocked', pr: null, issue: 3 },
+			],
+			claimed: {
+				reviews: ['code:#9'],
+				fixes: [4],
+				pickups: [
+					{
+						number: 5,
+						slug: 's',
+						worktree: '/w',
+						needsInstall: false,
+						base: null,
+						stackedOn: null,
+					},
+				],
+			},
+			removed: [2],
+			rebuild: 'not-requested',
+			halt: null,
+			errors: [],
+		})
 	})
 })

@@ -47,6 +47,19 @@ function fakeGh(
 }
 
 describe('resolveLoopEnv', () => {
+	it("says why the GitHub repo can't be resolved (#359)", async () => {
+		const root = checkout(newTmpDir())
+		const gh: GhExec = async () => ({
+			ok: false,
+			stdout: '',
+			stderr: 'Error: spawn gh ENOENT',
+			code: null,
+		})
+		const env = await resolveLoopEnv({ dir: root, gh, env: {} })
+		expect(env.ownerRepo).toBe('')
+		expect(env.warnings).toContainEqual(expect.stringContaining('gh is not on PATH'))
+	})
+
 	it('resolves ROOT to the main checkout from inside a linked worktree', async () => {
 		const tmp = newTmpDir()
 		const root = checkout(tmp)
