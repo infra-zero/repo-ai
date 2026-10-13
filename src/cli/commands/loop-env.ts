@@ -10,7 +10,7 @@ import {
 import { resolveDefaultBranch } from '../../base/default-branch.js'
 import { type GitExec, realGitExec } from '../../base/git.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
-import { detectPackageManager, INSTALL_COMMANDS } from '../../base/package-manager.js'
+import { installCommand } from '../../base/package-manager.js'
 import { ghFailure } from '../../base/prereqs.js'
 import { configuredAgentUser, defaultWorktreeRoot } from './loop-guard.js'
 
@@ -121,7 +121,6 @@ export async function resolveLoopEnv(options: LoopEnvOptions = {}): Promise<Loop
 	const me = await ghLogin(gh, env)
 	const budgetTokens = config?.budgetTokens ?? DEFAULT_BUDGET_TOKENS
 	const quietStopMinutes = config?.quietStopMinutes ?? DEFAULT_QUIET_STOP_MINUTES
-	const pm = await detectPackageManager(root)
 
 	return {
 		root,
@@ -134,7 +133,7 @@ export async function resolveLoopEnv(options: LoopEnvOptions = {}): Promise<Loop
 		budgetTokens,
 		quietStopMinutes,
 		checkCommand: config?.checkCommand ?? '',
-		installCommand: pm ? INSTALL_COMMANDS[pm] : '',
+		installCommand: await installCommand(root),
 		maxInFlight: limit(config, 'maxInFlight'),
 		maxFixRounds: limit(config, 'maxFixRounds'),
 		maxTasksPerTick: limit(config, 'maxTasksPerTick'),
