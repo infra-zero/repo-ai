@@ -138,6 +138,7 @@ loop
 	.option('--root <path>', 'Main checkout the loop branches worktrees from', process.cwd())
 	.option('--worktree-root <path>', 'Where ai-* worktrees live (default: <root>-worktrees)')
 	.option('--json', 'Emit machine-readable JSON output')
+	.option('--summary', 'Emit only the JSON fields the ai-loop skill reads (implies --json)')
 	.addHelpText(
 		'after',
 		'\nReads the same state as `loop tick`, then applies it. Comments stay with the caller:\n' +

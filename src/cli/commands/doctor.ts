@@ -9,6 +9,7 @@ import {
 	checkPluginSkills,
 	checkRequiredSkills,
 	checkWorkflows,
+	skillsInstalled,
 } from '../../base/checks.js'
 import {
 	ciRunWarning,
@@ -20,6 +21,7 @@ import { CONFIG_FILE, readConfig } from '../../base/config.js'
 import { checkConfigSchema } from '../../base/config-schema.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
 import { checkLoopLabels } from '../../base/labels.js'
+import { type CmdExec, checkPrerequisites } from '../../base/prereqs.js'
 import { releaseGated } from '../../base/release-gate.js'
 import { securityAlertWarning } from '../../base/security-alerts.js'
 import { checkStatusline } from '../../base/statusline.js'
@@ -27,21 +29,42 @@ import type { CheckResult } from '../../base/types.js'
 import { ghOut } from './loop-env.js'
 
 /**
- * The loop's own audit — the four checks that used to ride along in
+ * The loop's own audit — the prerequisites (#359), the four checks that used to ride along in
  * `repo-tooling doctor`, plus the statusline (#11). Same config file, same verdicts, same exit rule:
  * `drift` / `missing` fail, everything else is informational.
  */
-export async function runDoctor(dir: string, skillsDir?: string): Promise<CheckResult[]> {
+export async function runDoctor(
+	dir: string,
+	skillsDir?: string,
+	exec?: CmdExec
+): Promise<CheckResult[]> {
 	const config = await readConfig(dir)
+	const { results: prereqs, ghBlocked } = await checkPrerequisites(dir, exec)
+	// #359: a skip is not a pass — without gh these say so instead of printing ✓.
+	const viaGh = (check: string, run: () => Promise<CheckResult>): Promise<CheckResult> =>
+		ghBlocked
+			? Promise.resolve({
+					check,
+					status: 'optional-missing',
+					detail: `not run because ${ghBlocked}`,
+				})
+			: run()
 	const results = [
-		await checkLoopLabels(dir),
-		await checkAgentUser(dir, config.agentUser),
-		await checkHumanUser(dir, config.humanUser),
-		await checkAutoMerge(dir, config.autoMerge === true),
-		await checkCiRuns(dir),
-		await checkReleaseStuck(dir),
-		await checkReleaseFailed(dir),
-		await checkSecurityAlerts(dir),
+		...prereqs,
+		await viaGh('AI loop labels', () => checkLoopLabels(dir)),
+		config.agentUser
+			? await viaGh('AI loop agent', () => checkAgentUser(dir, config.agentUser))
+			: await checkAgentUser(dir, config.agentUser),
+		config.humanUser
+			? await checkHumanUser(dir, config.humanUser)
+			: await viaGh('Human user', () => checkHumanUser(dir, config.humanUser)),
+		config.autoMerge === true
+			? await viaGh('Unattended merge', () => checkAutoMerge(dir, true))
+			: await checkAutoMerge(dir, false),
+		await viaGh('CI runs', () => checkCiRuns(dir)),
+		await viaGh('Release approval', () => checkReleaseStuck(dir)),
+		await viaGh('Release run', () => checkReleaseFailed(dir)),
+		await viaGh('Security alerts', () => checkSecurityAlerts(dir)),
 		await checkClaudeSkills(skillsDir),
 		await checkPluginSkills(),
 		await checkWorkflows(skillsDir),
@@ -63,7 +86,8 @@ export async function runDoctor(dir: string, skillsDir?: string): Promise<CheckR
 	if (config.agentUser && required.length > 0) {
 		results.push(await checkRequiredSkills(required, skillsDir))
 	}
-	if (config.agentUser) {
+	// #359: installed skills mean the loop runs here, bot account or not.
+	if (config.agentUser || (await skillsInstalled(skillsDir))) {
 		results.push(...(await checkAllowRules(dir, os.homedir())))
 		results.push(...(await checkSandboxExcludes(dir, os.homedir())))
 	}
