@@ -438,6 +438,10 @@ classifier, which can block the tick. Add these to `permissions.allow` in
 }
 ```
 
+`npx @infrazero/repo-ai setup` offers to add the loop's rules to
+`.claude/settings.local.json` for you. That grant covers only this checkout,
+and `--yes` accepts it. It appends rules and never removes one.
+
 **With Claude Code's sandbox on**, an allow rule only skips the prompt, and the
 call still runs sandboxed. There `gh` fails TLS verification on macOS (Seatbelt
 blocks the keychain) and `npx` can't write `~/.npm/_cacache`. The tick then
