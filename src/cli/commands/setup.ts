@@ -162,12 +162,17 @@ async function askToContinue(): Promise<boolean> {
 }
 
 /**
- * #368: setup notes a missing Claude Code instead of failing, since its files land
- * either way. doctor alone still fails on it — the loop can't run without it (#359).
+ * `setup` fails only on what it is responsible for fixing (#369). It can't install
+ * Claude Code (#368) or write allow rules (#371) or sandbox excludes, so those are
+ * notes here, each naming its fix; `doctor` alone still fails on them (#359).
  */
-export function claudeAsNote(results: CheckResult[]): CheckResult[] {
+const NOT_SETUPS_JOB = new Set(['Claude Code', 'Claude Code permissions', 'Claude Code sandbox'])
+
+export function asSetupNotes(results: CheckResult[]): CheckResult[] {
 	return results.map((r) =>
-		r.check === 'Claude Code' && r.status === 'missing' ? { ...r, status: 'optional-missing' } : r
+		NOT_SETUPS_JOB.has(r.check) && (r.status === 'missing' || r.status === 'drift')
+			? { ...r, status: 'optional-missing' }
+			: r
 	)
 }
 
@@ -191,7 +196,7 @@ export async function setupCommand(options: FixOptions): Promise<void> {
 		return
 	}
 	const steps = await runSetup(directory, options)
-	const doctor = claudeAsNote(await runDoctor(directory, options.skillsDir))
+	const doctor = asSetupNotes(await runDoctor(directory, options.skillsDir))
 	const failed =
 		steps.some((s) => s.status === 'failed') ||
 		doctor.some((r) => r.status === 'drift' || r.status === 'missing')

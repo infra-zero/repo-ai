@@ -5,7 +5,7 @@ import { FixerAbort } from '../../../src/base/fixer-abort.js'
 import { NOTICE, NOTICE_HASH } from '../../../src/base/notice.js'
 import {
 	acknowledgeNotice,
-	claudeAsNote,
+	asSetupNotes,
 	runSetup,
 	setupCommand,
 	setupSkills,
@@ -163,12 +163,25 @@ describe('setupSkills (#358)', () => {
 	})
 })
 
-describe('claudeAsNote (#369)', () => {
-	it('downgrades only a missing Claude Code, so setup notes it instead of failing', () => {
-		const out = claudeAsNote([
+describe('asSetupNotes (#369)', () => {
+	it('notes what setup cannot fix, and still fails on what it can', () => {
+		const out = asSetupNotes([
 			{ check: 'Claude Code', status: 'missing', detail: 'claude is not on PATH' },
+			{ check: 'Claude Code permissions', status: 'drift', detail: 'no "Bash(gh:*)" allow rule' },
+			{
+				check: 'Claude Code sandbox',
+				status: 'drift',
+				detail: 'sandbox is on and "gh *" is not excluded',
+			},
 			{ check: 'gh', status: 'missing', detail: 'gh is not on PATH' },
+			{ check: 'AI loop labels', status: 'drift', detail: 'missing labels' },
 		])
-		expect(out.map((r) => r.status)).toEqual(['optional-missing', 'missing'])
+		expect(out.map((r) => r.status)).toEqual([
+			'optional-missing',
+			'optional-missing',
+			'optional-missing',
+			'missing',
+			'drift',
+		])
 	})
 })
