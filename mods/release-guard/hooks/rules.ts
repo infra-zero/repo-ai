@@ -10,6 +10,8 @@ const rule = (body: string, flags = '') => new RegExp(AT + body, `m${flags}`)
 // `gh workflow run` flags, with or without a value, before the workflow name or file. The flag name
 // stops at `=` and a value can't start with `-`, so each token parses one way only: no backtracking blowup.
 const RUN = String.raw`gh\s+workflow\s+run\s+(?:-[^\s=]+(?:[\s=][^-\s]\S*)?\s+)*`
+// Only flags until the command ends, so a `$var` counts as the workflow only when it is the last positional.
+const FLAGS = String.raw`(?:\s+-[^\s=]+(?:[\s=][^-\s]\S*)?)*\s*(?:$|[;&|)])`
 
 const RULES: [RegExp, string][] = [
 	[rule(String.raw`(npm|pnpm|yarn|bun)\b[^\n;&|]*\spublish(?![\w-])`), 'publishing to npm'],
@@ -54,7 +56,7 @@ const RULES: [RegExp, string][] = [
 	],
 	// A numeric workflow ID, or a `$var` holding one, can't be resolved offline, so any one might be release.yml.
 	[
-		rule(RUN + String.raw`["']?(?:\d+["']?(?![^\s;&|)])|\$)`),
+		rule(RUN + String.raw`["']?(?:\d+["']?(?![^\s;&|)])|\$[^\s;&|)]*` + FLAGS + ')'),
 		'dispatching a workflow by numeric ID or variable (it may be the release workflow)',
 	],
 	[

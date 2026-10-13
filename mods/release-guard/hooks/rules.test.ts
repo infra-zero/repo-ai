@@ -66,6 +66,9 @@ test('blocks release commands', () => {
 		'gh api -X POST "repos/o/r/actions/workflows/${ID}/dispatches" -f ref=main',
 		'gh workflow run $WF',
 		'gh workflow run -R o/r "$WF" -f a=b',
+		'gh workflow run "${WF}"',
+		'gh workflow run -R "$REPO" "$WF"',
+		'gh workflow run $WF && echo done',
 	])
 		expect(blockedBash(cmd)).toBeDefined()
 })
@@ -115,6 +118,9 @@ test('allows everyday commands', () => {
 		'gh api -X PATCH repos/o/r/milestones/$M -f state=open',
 		'gh api repos/o/r/actions/workflows/$ID/runs',
 		'gh workflow run ci.yml -f ref=$BRANCH',
+		'gh workflow run -R "$REPO" ci.yml',
+		'gh workflow run --ref "$BRANCH" ci.yml',
+		'gh workflow run --ref $B ci.yml',
 	])
 		expect(blockedBash(cmd)).toBeUndefined()
 })
