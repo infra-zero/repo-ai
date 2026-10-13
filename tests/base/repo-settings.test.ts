@@ -135,6 +135,11 @@ describe('fixRepoSettings (#362)', () => {
 		expect(ready.writes).toEqual([])
 	})
 
+	it('aborts cleanly, not with a stack trace, on output that is not JSON', async () => {
+		const gh: GhExec = async () => ({ ok: true, stdout: 'acme/widget\n', stderr: '', code: 0 })
+		await expect(fixRepoSettings('.', yes, { gh })).rejects.toThrow('could not read the repo')
+	})
+
 	it('aborts, writing nothing, when it cannot read the branch protection', async () => {
 		const { gh, writes } = stub({ protection: 'forbidden' })
 		await expect(fixRepoSettings('.', yes, { gh })).rejects.toThrow('HTTP 403')

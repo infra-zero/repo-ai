@@ -53,14 +53,14 @@ export async function fixRepoSettings(
 	}
 	const read = async <T>(args: string[]): Promise<T> => {
 		const r = await gh(args)
-		if (!r.ok) {
-			throw new FixerAbort(
-				'repo-settings-unreadable',
-				`could not read ${args.find((a) => a.startsWith('repos/')) ?? 'the repo'}: ${r.stderr.trim() || 'gh failed'}`,
-				'Run inside a GitHub checkout, signed in to gh as a repo admin'
-			)
-		}
-		return JSON.parse(r.stdout) as T
+		try {
+			if (r.ok) return JSON.parse(r.stdout) as T
+		} catch {}
+		throw new FixerAbort(
+			'repo-settings-unreadable',
+			`could not read ${args.find((a) => a.startsWith('repos/')) ?? 'the repo'}: ${r.stderr.trim() || 'gh gave no JSON'}`,
+			'Run inside a GitHub checkout, signed in to gh as a repo admin'
+		)
 	}
 
 	const view = await read<{ nameWithOwner: string; defaultBranchRef: { name: string } }>([
