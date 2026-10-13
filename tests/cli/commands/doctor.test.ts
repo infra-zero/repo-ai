@@ -10,9 +10,21 @@ import {
 	checkSecurityAlerts,
 	runDoctor,
 } from '../../../src/cli/commands/doctor.js'
+import type { CmdExec } from '../../../src/base/prereqs.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
 
 const newTmpDir = useTmpDir()
+
+/** Prerequisites without spawning anything: a healthy machine, unless `gh` is `false`. */
+const machine =
+	(gh = true): CmdExec =>
+	async (cmd, args) => {
+		if (cmd === 'gh' && !gh)
+			return { ok: false, stdout: '', stderr: 'Error: spawn gh ENOENT', code: null }
+		if (cmd === 'git' && args[0] === 'remote')
+			return { ok: true, stdout: 'git@github.com:acme/widget.git\n', stderr: '', code: 0 }
+		return { ok: true, stdout: '2.1.0\n', stderr: '', code: 0 }
+	}
 
 describe('runDoctor — loop config location', () => {
 	it('reports .repo-ai.json missing, even with a .repo-tooling.json (#159)', async () => {
@@ -20,7 +32,7 @@ describe('runDoctor — loop config location', () => {
 		fs.outputJsonSync(join(dir, '.repo-tooling.json'), {
 			rules: { aiLoop: { agentUser: 'legacy-bot' } },
 		})
-		const results = await runDoctor(dir)
+		const results = await runDoctor(dir, undefined, machine())
 		expect(results).toContainEqual(
 			expect.objectContaining({ check: 'Loop config', status: 'missing' })
 		)
@@ -29,13 +41,56 @@ describe('runDoctor — loop config location', () => {
 	it('says nothing about loop config with .repo-ai.json in place', async () => {
 		const dir = newTmpDir()
 		fs.outputJsonSync(join(dir, '.repo-ai.json'), { agentUser: 'new-bot' })
-		const results = await runDoctor(dir)
+		const results = await runDoctor(dir, undefined, machine())
 		expect(results.find((r) => r.check === 'Loop config')).toBeUndefined()
 	})
 
 	it('reports loop config missing with neither file', async () => {
-		const results = await runDoctor(newTmpDir())
+		const results = await runDoctor(newTmpDir(), undefined, machine())
 		expect(results.find((r) => r.check === 'Loop config')?.status).toBe('missing')
+	})
+})
+
+describe('runDoctor — prerequisites (#359)', () => {
+	it('shows a missing gh as ✗ and every GitHub check as not run, never ✓', async () => {
+		const dir = newTmpDir()
+		fs.ensureDirSync(join(dir, '.git'))
+		fs.outputJsonSync(join(dir, '.repo-ai.json'), { agentUser: 'bot', autoMerge: true })
+		const results = await runDoctor(dir, undefined, machine(false))
+		expect(results[0]?.check).toBe('Node')
+		expect(results.find((r) => r.check === 'gh')).toMatchObject({
+			status: 'missing',
+			hint: expect.stringContaining('https://cli.github.com'),
+		})
+		for (const check of [
+			'AI loop labels',
+			'AI loop agent',
+			'Human user',
+			'Unattended merge',
+			'CI runs',
+			'Release approval',
+			'Release run',
+			'Security alerts',
+		]) {
+			expect(results.find((r) => r.check === check)).toEqual({
+				check,
+				status: 'optional-missing',
+				detail: 'not run because gh is unavailable',
+			})
+		}
+		expect(
+			results.some((r) => r.status === 'ok' && r.detail.startsWith('skipped — could not'))
+		).toBe(false)
+	})
+
+	it('runs the permission and sandbox checks when the skills are installed, without agentUser', async () => {
+		const dir = newTmpDir()
+		fs.outputJsonSync(join(dir, '.repo-ai.json'), {})
+		const skillsDir = join(dir, 'skills')
+		fs.outputFileSync(join(skillsDir, 'ai-loop', 'SKILL.md'), '---\nname: ai-loop\n---\n')
+		const results = await runDoctor(dir, skillsDir, machine())
+		expect(results.some((r) => r.check === 'Claude Code permissions')).toBe(true)
+		expect(results.some((r) => r.check === 'Claude Code sandbox')).toBe(true)
 	})
 })
 

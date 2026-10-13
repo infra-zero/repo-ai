@@ -10,6 +10,7 @@ import {
 import { resolveDefaultBranch } from '../../base/default-branch.js'
 import { type GitExec, realGitExec } from '../../base/git.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
+import { ghFailure } from '../../base/prereqs.js'
 import { configuredAgentUser, defaultWorktreeRoot } from './loop-guard.js'
 
 /**
@@ -78,15 +79,13 @@ export async function resolveLoopEnv(options: LoopEnvOptions = {}): Promise<Loop
 	if (!root) warnings.push('not a git repository')
 	const worktreeRoot = root ? defaultWorktreeRoot(root) : ''
 
-	const ownerRepo = await ghOut(gh, [
-		'repo',
-		'view',
-		'--json',
-		'nameWithOwner',
-		'--jq',
-		'.nameWithOwner',
-	])
-	if (!ownerRepo) warnings.push('could not resolve the GitHub repo from the working directory')
+	const repo = await gh(['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'])
+	const ownerRepo = repo.ok ? repo.stdout.trim() : ''
+	// #359: say why — gh missing, logged out, or a remote that isn't on GitHub.
+	if (!ownerRepo)
+		warnings.push(
+			`could not resolve the GitHub repo from the working directory: ${ghFailure(repo)} — run \`npx @infrazero/repo-ai doctor\``
+		)
 
 	const defaultBranch = await resolveDefaultBranch(git, gh)
 	if (!defaultBranch) warnings.push('could not resolve the default branch')
