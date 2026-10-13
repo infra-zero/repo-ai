@@ -36,7 +36,7 @@ describe('detectPackageManager (#360)', () => {
 // #382: a stacked pickup installs an unmerged branch's lockfile, so no manager runs lifecycle scripts.
 describe('installCommand', () => {
 	it.each([
-		[{ 'pnpm-lock.yaml': '' }, "pnpm -C '<worktree>' install"],
+		[{ 'pnpm-lock.yaml': '' }, "pnpm -C '<worktree>' install --ignore-scripts --ignore-pnpmfile"],
 		[{ 'bun.lock': '' }, "bun install --cwd '<worktree>'"],
 		[{ 'package-lock.json': '{}' }, "npm --prefix '<worktree>' install --ignore-scripts"],
 		[{ 'yarn.lock': '' }, "yarn --cwd '<worktree>' install --ignore-scripts"],
