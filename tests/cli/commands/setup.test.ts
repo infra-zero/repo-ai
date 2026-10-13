@@ -5,11 +5,12 @@ import { FixerAbort } from '../../../src/base/fixer-abort.js'
 import { NOTICE, NOTICE_HASH } from '../../../src/base/notice.js'
 import {
 	acknowledgeNotice,
+	claudeAsNote,
 	runSetup,
 	setupCommand,
 	setupSkills,
-	type StepRun,
 	setupSteps,
+	type StepRun,
 } from '../../../src/cli/commands/setup.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
 
@@ -159,5 +160,15 @@ describe('setupSkills (#358)', () => {
 			{ home, hasClaude: async () => false, run }
 		)
 		expect(fs.existsSync(join(home, '.claude'))).toBe(false)
+	})
+})
+
+describe('claudeAsNote (#369)', () => {
+	it('downgrades only a missing Claude Code, so setup notes it instead of failing', () => {
+		const out = claudeAsNote([
+			{ check: 'Claude Code', status: 'missing', detail: 'claude is not on PATH' },
+			{ check: 'gh', status: 'missing', detail: 'gh is not on PATH' },
+		])
+		expect(out.map((r) => r.status)).toEqual(['optional-missing', 'missing'])
 	})
 })

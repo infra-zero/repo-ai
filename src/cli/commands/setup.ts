@@ -161,6 +161,16 @@ async function askToContinue(): Promise<boolean> {
 	return Boolean(ok)
 }
 
+/**
+ * #368: setup notes a missing Claude Code instead of failing, since its files land
+ * either way. doctor alone still fails on it — the loop can't run without it (#359).
+ */
+export function claudeAsNote(results: CheckResult[]): CheckResult[] {
+	return results.map((r) =>
+		r.check === 'Claude Code' && r.status === 'missing' ? { ...r, status: 'optional-missing' } : r
+	)
+}
+
 export async function setupCommand(options: FixOptions): Promise<void> {
 	const directory = path.resolve(options.dir)
 	// No terminal — e.g. Claude Code's Bash tool — means no prompt; inquirer would die with a stack trace (#358).
@@ -181,7 +191,7 @@ export async function setupCommand(options: FixOptions): Promise<void> {
 		return
 	}
 	const steps = await runSetup(directory, options)
-	const doctor: CheckResult[] = await runDoctor(directory, options.skillsDir)
+	const doctor = claudeAsNote(await runDoctor(directory, options.skillsDir))
 	const failed =
 		steps.some((s) => s.status === 'failed') ||
 		doctor.some((r) => r.status === 'drift' || r.status === 'missing')
