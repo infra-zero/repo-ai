@@ -71,6 +71,12 @@ export interface Handoff {
 	notes: boolean
 	/** The gated-repo arm: both reviews passed, no `ai-notes`, CLEAN, and `release` gates the publish. */
 	autoMerge: boolean
+	/**
+	 * Set when GitHub says BLOCKED though every check is green (#362): the required
+	 * checks that never ran on the head, or empty when protection wants something
+	 * that isn't a check (a review). No agent can fix either, so a human gets it.
+	 */
+	blockedChecks?: string[]
 }
 
 export interface SendBack {
@@ -82,8 +88,6 @@ export interface SendBack {
 	label: 'ai-changes' | 'ai-conflicts'
 	/** Failing required checks, for the comment. */
 	failing: { name: string; link: string }[]
-	/** Required contexts that never reported on the head, e.g. a job the diff removed or renamed (#268). Absent when none. */
-	missing?: string[]
 }
 
 export interface RerunFailed {
@@ -442,6 +446,39 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		return null
 	}
 
+	/**
+	 * Null unless the head has checks and all are green (#362). Then the base's
+	 * required contexts — branch protection and rulesets — the head never reported:
+	 * a job renamed, removed or never in CI. The bot can read the branch endpoint;
+	 * `/protection` 404s for it.
+	 */
+	const blockedGreen = async (p: Pr): Promise<string[] | null> => {
+		const rollup = p.statusCheckRollup ?? []
+		const green =
+			rollup.length > 0 &&
+			rollup.every((c) => ['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(c.conclusion ?? ''))
+		if (!green) return null
+		const base = await json<{
+			protection?: { required_status_checks?: { contexts?: string[] } }
+		}>(['api', `repos/${ownerRepo}/branches/${p.baseRefName}`])
+		// Rulesets carry required checks too; a repo without any answers `[]`, an old GHES 404s.
+		const rules = await gh(['api', `repos/${ownerRepo}/rules/branches/${p.baseRefName}`])
+		let ruled: string[] = []
+		try {
+			ruled = (
+				JSON.parse(rules.ok ? rules.stdout : '[]') as {
+					type: string
+					parameters?: { required_status_checks?: { context: string }[] }
+				}[]
+			)
+				.filter((r) => r.type === 'required_status_checks')
+				.flatMap((r) => r.parameters?.required_status_checks?.map((c) => c.context) ?? [])
+		} catch {}
+		const seen = new Set(rollup.map((c) => c.name ?? c.context).filter(Boolean))
+		const required = [...(base?.protection?.required_status_checks?.contexts ?? []), ...ruled]
+		return [...new Set(required)].filter((c) => !seen.has(c))
+	}
+
 	// From the diff's file list, never the title, labels or body.
 	const docsOnly = async (n: number) => {
 		const r = await gh(['pr', 'diff', String(n), '--name-only'])
@@ -657,6 +694,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 				'mergeStateStatus',
 			])
 			const s = view?.mergeStateStatus ?? 'UNKNOWN'
+			const stuck = s === 'BLOCKED' ? await blockedGreen(pr) : null
 			if (s === 'CLEAN') {
 				const notes = has('ai-notes')
 				result.handoffs.push({
@@ -668,27 +706,22 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 				})
 			} else if (s === 'BEHIND') {
 				result.updateBranches.push({ pr: pr.number, issue })
+			} else if (stuck !== null) {
+				// Green but BLOCKED: a fix round can't change branch protection (#362). Before the
+				// `pending` wait too: a required check that never runs reads as "none reported yet".
+				result.handoffs.push({
+					pr: pr.number,
+					issue,
+					title: pr.title,
+					notes: has('ai-notes'),
+					autoMerge: false,
+					blockedChecks: stuck,
+				})
 			} else if (s === 'BLOCKED' && pending) {
 				// Required checks still running: the next tick sees them land.
 			} else if (isDep && SEND_BACK_STATES.has(s)) {
 				recreate()
 			} else if (SEND_BACK_STATES.has(s)) {
-				// A required check that never runs leaves a green PR BLOCKED with no reason given (#268).
-				// The bot can read this branch endpoint; `/protection` 404s for it.
-				const missing: string[] = []
-				const rollup = pr.statusCheckRollup ?? []
-				// A pending or failing check is its own reason; only an all-green head names a missing one.
-				const allGreen = rollup.every((c) =>
-					['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(c.conclusion ?? '')
-				)
-				if (s === 'BLOCKED' && allGreen) {
-					const base = await json<{
-						protection?: { required_status_checks?: { contexts?: string[] } }
-					}>(['api', `repos/${ownerRepo}/branches/${pr.baseRefName}`])
-					const seen = new Set(rollup.map((c) => c.name ?? c.context).filter(Boolean))
-					for (const c of base?.protection?.required_status_checks?.contexts ?? [])
-						if (!seen.has(c)) missing.push(c)
-				}
 				result.sendBacks.push({
 					pr: pr.number,
 					issue,
@@ -696,7 +729,6 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 					// DIRTY wants the default branch merged in, not a fix — it costs no review round (#176).
 					label: s === 'DIRTY' ? 'ai-conflicts' : 'ai-changes',
 					failing: [],
-					...(missing.length > 0 && { missing }),
 				})
 			} else if (s !== 'UNKNOWN' && has('merge-ready')) {
 				result.stripMergeReady.push(pr.number)

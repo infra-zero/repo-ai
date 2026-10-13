@@ -7,6 +7,7 @@ import { setupAgentIdentity } from '../../base/ai-loop-identity.js'
 import { writeConfigSchema } from '../../base/config-schema.js'
 import { FixerAbort } from '../../base/fixer-abort.js'
 import { applyLoopLabels } from '../../base/labels.js'
+import { fixRepoSettings } from '../../base/repo-settings.js'
 import { installStatusline } from '../../base/statusline.js'
 import {
 	installClaudeSkill,
@@ -67,6 +68,11 @@ export const FIXERS = {
 		description:
 			'Install the loop status segment to ~/.claude/ai-loop-statusline.sh; set it as the statusline only when none is configured',
 		run: () => installStatusline(os.homedir()),
+	},
+	'repo-settings': {
+		description:
+			"Set the GitHub settings the loop needs — squash-only, auto-merge, delete branch on merge, no required reviews — keeping the repo's required checks; shows the plan and asks first",
+		run: (dir, o) => fixRepoSettings(dir, o),
 	},
 	sandbox: {
 		description:

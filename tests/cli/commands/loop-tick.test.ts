@@ -118,6 +118,8 @@ interface World {
 	prStates?: Record<number, string>
 	/** The base branch's required status contexts (#268). */
 	required?: string[]
+	/** Required contexts from rulesets, via `rules/branches/<b>` (#362). */
+	rules?: string[]
 }
 
 function fakeGh(w: World): GhExec {
@@ -181,6 +183,17 @@ function fakeGh(w: World): GhExec {
 				return ok([
 					(w.securityAlerts ?? []).map((severity) => ({ security_vulnerability: { severity } })),
 				])
+			if (b?.startsWith('repos/acme/widget/rules/branches/'))
+				return ok(
+					w.rules
+						? [
+								{
+									type: 'required_status_checks',
+									parameters: { required_status_checks: w.rules.map((context) => ({ context })) },
+								},
+							]
+						: []
+				)
 			const branch = b?.match(/^repos\/acme\/widget\/branches\/(.+)$/)
 			if (branch) {
 				const h = w.branchHeads?.[branch[1] as string] ?? { sha: 'head', minutesAgo: 60 }
@@ -740,30 +753,74 @@ describe('runLoopTick', () => {
 		])
 	})
 
-	it('names a required check that never reported on a green BLOCKED PR (#268)', async () => {
-		const root = checkout(newTmpDir())
+	describe('a green PR GitHub calls BLOCKED goes to the human (#362)', () => {
 		const labels = ['ai-review', 'ai-ok-code', 'ai-ok-sec']
 		const green = [{ name: 'verify', conclusion: 'SUCCESS' }]
-		const r = await runLoopTick({
-			root,
-			env: {},
-			now: NOW,
-			gh: fakeGh({
-				wip: [1, 2, 3],
+		const tick = (w: World) =>
+			runLoopTick({ root: checkout(newTmpDir()), env: {}, now: NOW, gh: fakeGh(w) })
+
+		it('names the required checks that never ran, from protection and rulesets', async () => {
+			const r = await tick({
+				wip: [1, 2],
 				prs: [
 					pr(10, 'ai-1-missing', labels, { rollup: green }),
-					pr(11, 'ai-2-reported', labels, { rollup: green }),
-					pr(12, 'ai-3-pending', labels, {
+					pr(12, 'ai-2-running', labels, {
 						rollup: [...green, { name: 'lint', conclusion: null }],
 					}),
 				],
-				merge: { 10: 'BLOCKED', 11: 'BLOCKED', 12: 'BLOCKED' },
+				merge: { 10: 'BLOCKED', 12: 'BLOCKED' },
 				required: ['verify', 'build'],
-			}),
+				rules: ['ci-gate', 'verify'],
+			})
+			expect(r.handoffs).toEqual([
+				{
+					pr: 10,
+					issue: 1,
+					title: 'pr-10',
+					notes: false,
+					autoMerge: false,
+					blockedChecks: ['build', 'ci-gate'],
+				},
+			])
+			// A check still running is not green: the old send-back, never a handoff.
+			expect(r.sendBacks.map((b) => b.pr)).toEqual([12])
 		})
-		const missing = (n: number) => r.sendBacks.find((s) => s.pr === n)?.missing
-		expect(missing(10)).toEqual(['build'])
-		expect(missing(12)).toBeUndefined()
+
+		it('hands over even when no required check ever reports, which reads as pending', async () => {
+			const r = await tick({
+				wip: [1],
+				prs: [pr(10, 'ai-1-renamed', labels, { rollup: green })],
+				merge: { 10: 'BLOCKED' },
+				unreported: [10],
+				required: ['test'],
+			})
+			expect(r.handoffs.map((h) => h.blockedChecks)).toEqual([['test']])
+			expect(r.sendBacks).toEqual([])
+		})
+
+		it('hands over with no names when every required check reported (a required review)', async () => {
+			const r = await tick({
+				wip: [1],
+				prs: [pr(10, 'ai-1-review', [...labels, 'ai-notes'], { rollup: green })],
+				merge: { 10: 'BLOCKED' },
+				required: ['verify'],
+			})
+			expect(r.handoffs).toEqual([
+				{ pr: 10, issue: 1, title: 'pr-10', notes: true, autoMerge: false, blockedChecks: [] },
+			])
+		})
+
+		it('keeps waiting on a PR with no checks at all yet', async () => {
+			const r = await tick({
+				wip: [1],
+				prs: [pr(10, 'ai-1-fresh', labels)],
+				merge: { 10: 'BLOCKED' },
+				unreported: [10],
+				required: ['verify'],
+			})
+			expect(r.handoffs).toEqual([])
+			expect(r.sendBacks).toEqual([])
+		})
 	})
 
 	it('sends a DIRTY passed PR back with ai-conflicts, not ai-changes (#176)', async () => {

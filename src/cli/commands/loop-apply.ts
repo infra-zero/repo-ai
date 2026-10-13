@@ -5,7 +5,7 @@ import { type GhExec, realGhExec } from '../../base/gh.js'
 import { safeText } from '../../base/sanitize.js'
 import { type CleanupEntry, runLoopCleanup } from './loop-cleanup.js'
 import { type InstallExec, type RebuildOutcome, runLoopGuard } from './loop-guard.js'
-import { type Target, upsertMarked } from './loop-marker.js'
+import { DECISION_MARKER, type Target, upsertMarked } from './loop-marker.js'
 import type { ReapEntry } from './loop-reap.js'
 import {
 	type FixRound,
@@ -156,6 +156,27 @@ export function agentHeader(env: NodeJS.ProcessEnv): string {
 	if (!name) return '🤖 *Automated — `ai-loop` label change.*'
 	const tag = safeText(env.REPO_AI_AGENT_TAG, 60).replaceAll('`', '')
 	return `🤖 *Automated — \`@${name}\`${tag ? ` ${tag}` : ''} via ai-loop.*`
+}
+
+/**
+ * Why a green PR GitHub calls BLOCKED went to a human, not a fixer (#362). Check
+ * names come from the repo's protection; no backtick or newline escapes a code span.
+ */
+export function blockedDecision(
+	header: string,
+	checks: string[],
+	human: string,
+	notes = false
+): string {
+	const why =
+		checks.length > 0
+			? `Branch protection requires ${checks.map((c) => `\`${c.replace(/[`\r\n]/g, '')}\``).join(', ')}, which never ran on this PR: a CI job that was renamed, removed or never added. No fix round can change that, so ${human} takes it: rename the job to match, update the required checks (Settings → Branches, or the ruleset), or merge as an admin.`
+			: `Every required check reported, so protection wants something that isn't a check, most often a required review, which the loop can never give its own PR. ${human} takes it: drop required reviews (\`npx @infrazero/repo-ai fix repo-settings\`), or merge as an admin.`
+	return `${header}\nNot merged: GitHub reports this PR BLOCKED although every check on it passed. ${why}${
+		notes
+			? "\n\nBoth reviews passed with notes: read the reviewer's `### Before merging` above."
+			: ''
+	}`
 }
 
 /** `+\`a\`, −\`b\`` from an edit's label flags; empty when it changes none. */
@@ -325,7 +346,17 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 			...flag('--remove-assignee', agentUser),
 		])
 		if (!ok) continue
-		if (h.notes) result.comments.push({ kind: 'notes', pr: h.pr, handoff: h })
+		if (h.blockedChecks) {
+			// #362: the one decision comment says why; it carries the notes pointer too, since a
+			// skill-written `notes` comment would upsert over it.
+			const r = await upsertMarked(
+				target,
+				h.pr,
+				DECISION_MARKER,
+				blockedDecision(header, h.blockedChecks, human, h.notes)
+			)
+			if ('error' in r) result.errors.push(`decision comment on #${h.pr} failed: ${r.error}`)
+		} else if (h.notes) result.comments.push({ kind: 'notes', pr: h.pr, handoff: h })
 		// The one unattended merge: `loop tick` sets `autoMerge` only with the opt-in and the release gate.
 		if (h.autoMerge)
 			await run(1, 'merge', h.pr, ['pr', 'merge', String(h.pr), '--squash', '--auto'])

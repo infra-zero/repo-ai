@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
 import type { GhExec } from '../../../src/base/gh.js'
-import { pickupSlug, runLoopApply } from '../../../src/cli/commands/loop-apply.js'
+import { blockedDecision, pickupSlug, runLoopApply } from '../../../src/cli/commands/loop-apply.js'
 import type { LoopEnv } from '../../../src/cli/commands/loop-env.js'
 import { emptyTick, type LoopTickResult } from '../../../src/cli/commands/loop-tick.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
@@ -653,5 +653,31 @@ describe('runLoopApply transition comments (#332)', () => {
 			gh: fake.gh,
 		})
 		expect(fake.notes).toEqual([])
+	})
+})
+
+describe('green-but-BLOCKED handoff (#362)', () => {
+	it('hands over, never merges, and names the checks that never ran', async () => {
+		const fake = fakeGh()
+		const result = await runLoopApply({
+			tick: tick(checkout(newTmpDir()), {
+				handoffs: [{ ...handoff, notes: true, blockedChecks: ['build'] }],
+			}),
+			gh: fake.gh,
+			env: {},
+		})
+		expect(fake.calls.some((c) => c[1] === 'merge')).toBe(false)
+		expect(fake.calls[0]?.slice(0, 3)).toEqual(['pr', 'edit', '10'])
+		const decision = fake.notes.find((n) => n.body.startsWith('<!-- ai-issue-loop:decision -->'))
+		expect(decision?.body).toContain('Branch protection requires `build`, which never ran')
+		// The notes pointer rides in the same comment; no skill-written one to overwrite it.
+		expect(decision?.body).toContain('### Before merging')
+		expect(result.comments).toEqual([])
+		expect(result.errors).toEqual([])
+	})
+
+	it('names a required review when no check is missing, and keeps names in code spans', () => {
+		expect(blockedDecision('h', [], 'a human')).toContain('fix repo-settings')
+		expect(blockedDecision('h', ['a`@x\nb'], 'a human')).toContain('`a@xb`')
 	})
 })

@@ -220,7 +220,7 @@ only genuine second party either way, which is why the loop hands issue PRs to a
 human regardless.
 
 Two things to settle before relying on it. Repo-settings tooling — including this
-package's own `fix github-settings` — asserts `required_pull_request_reviews:
+package's own `fix repo-settings` — asserts `required_pull_request_reviews:
 null`, because required review deadlocks solo Dependabot auto-merge; it will
 revert an approval rule on its next run unless you change that standard first.
 And the shipped skill still records verdicts as labels, so today this is
@@ -247,7 +247,7 @@ Hover a chip for its description. The colours come from the same table `doctor` 
 | `ai-reviewing-sec` | PR | `security-expert` claimed and running. Cleared with its verdict. |
 | `ai-ok-code` | PR | `code-reviewer` passed. In-flight only — the handoff strips it. |
 | `ai-ok-sec` | PR | `security-expert` passed. In-flight only — the handoff strips it. |
-| `ai-changes` | PR | A reviewer requested changes, or Pass 1 sent the PR back: a required check failed, or the PR is `BLOCKED` by a ruleset. On a PR opened by hand, with no loop worktree, it waits for you instead of a fixer. |
+| `ai-changes` | PR | A reviewer requested changes, or Pass 1 sent the PR back: a required check failed, or the PR is `BLOCKED` while a check is not green. On a PR opened by hand, with no loop worktree, it waits for you instead of a fixer. |
 | `ai-conflicts` | PR | Pass 1 sent the PR back `DIRTY` — it conflicts with the default branch. A fixer merges the default branch in; this never counts toward the 2-fix-round cap. |
 | `ai-fixing` | PR | Fix-round implementer claimed and running. Cleared with its push. |
 | `ai-notes` | PR | Passed, but a reviewer left something to read before merging. |
@@ -391,16 +391,16 @@ whose section is `Nothing.` is adopted as a plain pass, with no `ai-notes`.
 ## Repo prerequisites
 
 ```bash
-npx @rtorcato/repo-tooling fix github-settings --yes
+npx @infrazero/repo-ai fix repo-settings
 ```
 
-`GITHUB_STANDARD` already encodes exactly what the loop needs: squash as the
+It sets exactly what the loop needs, after showing the plan: squash as the
 *only* merge method (Pass 2 finds the `(#N)` squash subject on `main` to confirm
 work landed — a merge commit makes it look like nothing merged, and the worktree
-leaks), auto-merge, delete-branch-on-merge, and `required_pull_request_reviews: null`
-with a comment explaining that required review deadlocks auto-merge. You also
-need **at least one required status check** — that is the gate doing the real
-work.
+leaks), auto-merge, delete-branch-on-merge, and no required pull request reviews
+(required review deadlocks auto-merge). You also need **at least one required
+status check** — that is the gate doing the real work. It keeps the ones you
+have; with none, it offers the checks from the default branch's last CI run.
 
 Verify:
 
@@ -535,6 +535,12 @@ reports each in `.applied[]`, and returns the comments still owed in `.comments[
   verdicts) gets a fast-forward empty commit on the branch, through the API, so
   GitHub resyncs it. Until the PR catches up, the tick reads nothing else of it —
   no checks, no verdicts. Never while `ai-fixing` is claimed (#219).
+- **Green but `BLOCKED`** — a handoff with `.blockedChecks`: every check passed,
+  yet GitHub says `BLOCKED`. Branch protection (or a ruleset) wants a check that
+  never ran, or something that isn't a check, such as a required review. No fix
+  round can change that, so it goes to the human as `merge-ready`, never
+  auto-merged, and `loop apply` writes the decision comment naming the missing
+  checks (#362).
 - **Send back** — `.sendBacks[]`: `ci-red` or `BLOCKED` becomes `ai-changes`,
   `DIRTY` becomes `ai-conflicts` (off the round cap, #176). `ai-changes` drops every
   review label; `ai-conflicts` keeps the pass and `ai-notes`, which the fixer strips
