@@ -156,6 +156,15 @@ describe('resolveLoopEnv', () => {
 		expect((await resolveLoopEnv({ dir: root, gh: fakeGh().gh, env: {} })).quietStopMinutes).toBe(0)
 	})
 
+	it('carries checkCommand, empty when unset (#361)', async () => {
+		const root = checkout(newTmpDir())
+		expect((await resolveLoopEnv({ dir: root, gh: fakeGh().gh, env: {} })).checkCommand).toBe('')
+		fs.writeJsonSync(join(root, '.repo-ai.json'), { checkCommand: 'pnpm verify' })
+		expect((await resolveLoopEnv({ dir: root, gh: fakeGh().gh, env: {} })).checkCommand).toBe(
+			'pnpm verify'
+		)
+	})
+
 	it('leaves HUMAN_USER empty for an organisation repo', async () => {
 		const root = checkout(newTmpDir())
 		const env = await resolveLoopEnv({
@@ -228,6 +237,7 @@ describe('toShell', () => {
 			me: '$(id)',
 			budgetTokens: 400_000,
 			quietStopMinutes: 120,
+			checkCommand: "npm test; echo '$HOME'",
 			maxInFlight: 6,
 			maxFixRounds: 2,
 			maxTasksPerTick: 8,
@@ -242,6 +252,7 @@ describe('toShell', () => {
 		expect(out).toContain(`AGENT_USER=''`)
 		expect(out).toContain(`BUDGET_TOKENS='400000'`)
 		expect(out).toContain(`QUIET_STOP_MINUTES='120'`)
+		expect(out).toContain(`CHECK_COMMAND='npm test; echo '\\''$HOME'\\'''`)
 		expect(out).toContain(`MAX_FIX_ROUNDS='2'`)
 		expect(out).toContain(`IDLE_MINUTES='30'`)
 	})

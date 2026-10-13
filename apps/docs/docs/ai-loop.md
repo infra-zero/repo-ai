@@ -99,6 +99,7 @@ optional:
 | `idleMinutes` | integer | `30`; values below `1` are ignored | `loop tick`'s `.env.idleMinutes`. The skill's cron cadence when idle, and its fallback cadence under a `loop watch` Monitor. |
 | `autoMerge` | boolean | `false` | `loop tick`. Lets Pass 1 merge a fully-passed issue PR unattended — only on a repo whose publishing job also runs behind an environment with `required_reviewers`. A PR that changes release config is always handed to you instead (#370). `doctor` warns when it is on without that gate. |
 | `ciWorkflow` | string | `ci.yml` | `loop tick` and `doctor`, which watch that workflow's runs on the default branch for the no-jobs, stuck-release and failed-release warnings. `doctor` warns when the file does not exist in `.github/workflows`. PR checks need no setting — they cover every workflow. |
+| `checkCommand` | string | unset | The command implementer and fixer agents run before pushing, fixing until it passes (e.g. `"pnpm verify"`). Unset, they follow the pre-commit checks in the repo's `CLAUDE.md` or `AGENTS.md`. repo-ai writes neither file, so `doctor` warns when there's no `checkCommand` and neither file (#361). One line, no backticks. |
 
 The schema is [`schemas/repo-ai.json`](https://docs.infrazero.dev/repo-ai/repo-ai.json)
 (JSON Schema draft 2020-12), which ships in the npm package too. It sets
@@ -437,6 +438,10 @@ classifier, which can block the tick. Add these to `permissions.allow` in
   }
 }
 ```
+
+`npx @infrazero/repo-ai setup` offers to add the loop's rules to
+`.claude/settings.local.json` for you. That grant covers only this checkout,
+and `--yes` accepts it. It appends rules and never removes one.
 
 **With Claude Code's sandbox on**, an allow rule only skips the prompt, and the
 call still runs sandboxed. There `gh` fails TLS verification on macOS (Seatbelt

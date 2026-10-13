@@ -5,8 +5,11 @@
  */
 import path from 'node:path'
 import fs from 'fs-extra'
+import { ensureIgnored, SETTINGS_LOCAL } from './ai-loop-identity.js'
+import { FixerAbort } from './fixer-abort.js'
 import type { CheckResult } from './types.js'
 
+// ponytail: `pnpm:*` is hard-wired like the loop's package manager; follow the detected one once #360 lands.
 export const LOOP_ALLOW_RULES = [
 	'Bash(gh:*)',
 	'Bash(git *)',
@@ -32,17 +35,63 @@ async function allowRules(file: string): Promise<string[]> {
 	return strings(settings?.permissions?.allow)
 }
 
-/** One result per missing rule, or a single `ok` when all are present. */
-export async function checkAllowRules(dir: string, home: string): Promise<CheckResult[]> {
-	const check = 'Claude Code permissions'
+/** The loop's rules no settings file grants yet; null when a bare `Bash` allows everything. */
+async function missingAllowRules(dir: string, home: string): Promise<string[] | null> {
 	const have = new Set(
 		(await Promise.all(settingsFiles(dir, home).map(allowRules))).flat().map(normalise)
 	)
 	// A bare `Bash` (or `Bash(*)`) allows every command.
-	if (have.has('Bash') || have.has('Bash(*)')) {
+	if (have.has('Bash') || have.has('Bash(*)')) return null
+	return LOOP_ALLOW_RULES.filter((r) => !have.has(normalise(r)))
+}
+
+/**
+ * `setup`'s allow-rules step (#371): merge the missing rules into this checkout's
+ * gitignored `.claude/settings.local.json`, so the grant covers only this repo and
+ * is never committed. Appends only — existing rules and every other key stay put.
+ * Logs each rule it adds; returns the files written.
+ */
+export async function fixAllowRules(dir: string, home: string): Promise<string[]> {
+	const missing = await missingAllowRules(dir, home)
+	if (!missing?.length) {
+		console.error("   the loop's allow rules are already present")
+		return []
+	}
+	const file = path.join(dir, SETTINGS_LOCAL)
+	let settings: Record<string, unknown> = {}
+	if (await fs.pathExists(file)) {
+		try {
+			settings = await fs.readJson(file)
+		} catch {
+			throw new FixerAbort(
+				'settings-local-unparseable',
+				`${SETTINGS_LOCAL} is not valid JSON — not overwriting it`,
+				`Fix the file by hand, or add ${missing.map((r) => `"${r}"`).join(', ')} to permissions.allow yourself`
+			)
+		}
+	}
+	const permissions = (settings.permissions ?? {}) as Record<string, unknown>
+	await fs.outputJson(
+		file,
+		{
+			...settings,
+			permissions: { ...permissions, allow: [...strings(permissions.allow), ...missing] },
+		},
+		{ spaces: 2 }
+	)
+	for (const rule of missing) console.error(`   allowed ${rule}`)
+	const written = [SETTINGS_LOCAL]
+	if (await ensureIgnored(dir)) written.push('.gitignore')
+	return written
+}
+
+/** One result per missing rule, or a single `ok` when all are present. */
+export async function checkAllowRules(dir: string, home: string): Promise<CheckResult[]> {
+	const check = 'Claude Code permissions'
+	const missing = await missingAllowRules(dir, home)
+	if (missing === null) {
 		return [{ check, status: 'ok', detail: 'all Bash commands are allowed' }]
 	}
-	const missing = LOOP_ALLOW_RULES.filter((r) => !have.has(normalise(r)))
 	if (missing.length === 0) {
 		return [{ check, status: 'ok', detail: "all of the loop's allow rules are present" }]
 	}
@@ -50,7 +99,7 @@ export async function checkAllowRules(dir: string, home: string): Promise<CheckR
 		check,
 		status: 'drift',
 		detail: `no "${rule}" allow rule — the loop's calls will prompt or hit the auto-mode classifier`,
-		hint: `Add "${rule}" to permissions.allow in .claude/settings.json or ~/.claude/settings.json`,
+		hint: `Run \`npx @infrazero/repo-ai setup\` to add it to ${SETTINGS_LOCAL}, or add "${rule}" to permissions.allow yourself`,
 	}))
 }
 
