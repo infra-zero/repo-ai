@@ -12,6 +12,7 @@ import {
 	identityHint,
 	SETUP_STEPS,
 	setupSkills,
+	warnDeprecatedOptions,
 	type StepRun,
 } from '../../../src/cli/commands/setup.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
@@ -94,6 +95,22 @@ describe('setup', () => {
 			message: 'not signed in',
 			hint: 'gh auth login',
 		})
+	})
+})
+
+describe('setup --gh-config-dir (#365)', () => {
+	it('warns that it is ignored and points at GH_TOKEN', () => {
+		const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+		warnDeprecatedOptions({ dir: '.', ghConfigDir: 'x' })
+		const out = error.mock.calls.flat().join('\n')
+		expect(out).toContain('--gh-config-dir is deprecated and ignored')
+		expect(out).toContain('GH_TOKEN=$(gh auth token --user <agentUser>) claude')
+	})
+
+	it('says nothing without the flag', () => {
+		const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+		warnDeprecatedOptions({ dir: '.' })
+		expect(error).not.toHaveBeenCalled()
 	})
 })
 

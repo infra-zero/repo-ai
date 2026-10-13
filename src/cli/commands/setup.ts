@@ -193,7 +193,18 @@ export function asSetupNotes(results: CheckResult[]): CheckResult[] {
 	)
 }
 
+/** `setup --gh-config-dir` is accepted so old invocations don't break, and does nothing (#365). */
+export function warnDeprecatedOptions(options: FixOptions): void {
+	if (options.ghConfigDir === undefined) return
+	console.error(
+		chalk.yellow(
+			'⚠ setup --gh-config-dir is deprecated and ignored: setup no longer runs fix ai-loop-identity. Run the loop as the agent with `GH_TOKEN=$(gh auth token --user <agentUser>) claude`.'
+		)
+	)
+}
+
 export async function setupCommand(options: FixOptions): Promise<void> {
+	warnDeprecatedOptions(options)
 	const directory = path.resolve(options.dir)
 	// No terminal — e.g. Claude Code's Bash tool — means no prompt; inquirer would die with a stack trace (#358).
 	if (!options.yes && !options.json && !process.stdin.isTTY) {
