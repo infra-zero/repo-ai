@@ -8,6 +8,7 @@ import {
 	checkClaudeSkills,
 	checkPluginSkills,
 	checkRequiredSkills,
+	checkReviewerAgents,
 	checkWorkflows,
 	skillsInstalled,
 } from '../../base/checks.js'
@@ -68,6 +69,7 @@ export async function runDoctor(
 		await checkClaudeSkills(skillsDir),
 		await checkPluginSkills(),
 		await checkWorkflows(skillsDir),
+		await checkReviewerAgents(dir, os.homedir()),
 		await checkStatusline(os.homedir()),
 		await checkAgentInstructions(dir, config.checkCommand),
 	]
