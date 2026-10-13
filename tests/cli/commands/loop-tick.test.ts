@@ -593,6 +593,8 @@ describe('runLoopTick', () => {
 				'.github/workflows/ci.yml',
 				'release.config.js',
 				'.releaserc.json',
+				'.npmrc',
+				'packages/a/.npmrc',
 				'.changeset/config.json',
 			])('%s', async (f) => {
 				expect(await tick(true, true, { diffs: { 10: ['src/a.ts', f] } })).toEqual(handed([f]))
@@ -1410,6 +1412,8 @@ describe('releaseConfigFiles (#370)', () => {
 			'.releaserc',
 			'.releaserc.yml',
 			'packages/a/.releaserc.json',
+			'.npmrc',
+			'packages/a/.npmrc',
 			'.changeset/config.json',
 		]
 		const misses = [
@@ -1419,6 +1423,8 @@ describe('releaseConfigFiles (#370)', () => {
 			'.changeset/brave-cats.md',
 			'package.json',
 			'my.releaserc.json',
+			'.npmrc.example',
+			'docs/npmrc.md',
 		]
 		expect(releaseConfigFiles([...hits, ...misses])).toEqual(hits)
 	})

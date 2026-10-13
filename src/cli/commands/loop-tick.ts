@@ -257,13 +257,13 @@ export function isDocsOnly(files: string[]): boolean {
 }
 
 /**
- * Release config (#370): a PR that edits it could remove the very gate that let
+ * Release config (#370; `.npmrc` can redirect the registry or its auth): a PR that edits it could remove the very gate that let
  * `loop tick` auto-merge, so it is always handed to a human. Same whole-path test
  * as {@link isDocsOnly}; `publishConfig` lives inside `package.json`, so that one
  * is compared by content in the tick.
  */
 const RELEASE_CONFIG =
-	/^\.github\/workflows\/|(^|\/)(release\.config\.[^/]+|\.releaserc[^/]*|\.changeset\/config\.json)$/
+	/^\.github\/workflows\/|(^|\/)(release\.config\.[^/]+|\.releaserc[^/]*|\.npmrc|\.changeset\/config\.json)$/
 
 export function releaseConfigFiles(files: string[]): string[] {
 	return files.filter((f) => RELEASE_CONFIG.test(f))

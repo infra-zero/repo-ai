@@ -519,7 +519,7 @@ reports each in `.applied[]`, and returns the comments still owed in `.comments[
 - **The one unattended merge** — a handoff with `.autoMerge`, set only when
   `.repo-ai.json` has `"autoMerge": true`, publishing runs behind an environment
   with required reviewers, the PR has no `ai-notes`, and it changes no release
-  config: `.github/workflows/**`, `release.config.*`, `.releaserc*`,
+  config: `.github/workflows/**`, `release.config.*`, `.releaserc*`, `.npmrc`,
   `.changeset/config.json`, or `publishConfig` in a `package.json` (#370). Such a
   PR is handed over with `.releaseConfig` set, and `loop apply` writes the
   decision comment naming the file. Unreadable answers fail closed.
