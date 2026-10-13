@@ -3,6 +3,8 @@ import path from 'node:path'
 import chalk from 'chalk'
 import fs from 'fs-extra'
 import inquirer from 'inquirer'
+import { SETTINGS_LOCAL } from '../../base/ai-loop-identity.js'
+import { fixAllowRules, LOOP_ALLOW_RULES } from '../../base/allow-rules.js'
 import { FixerAbort } from '../../base/fixer-abort.js'
 import { applyLoopLabels } from '../../base/labels.js'
 import {
@@ -63,6 +65,7 @@ export async function setupSkills(
 const STEPS: Record<string, StepRun> = {
 	config: FIXERS.config.run,
 	'claude-skills': (dir, o) => setupSkills(dir, o),
+	'allow-rules': (dir) => fixAllowRules(dir, os.homedir()),
 	labels: (dir) => applyLoopLabels(dir, undefined, { bootstrap: true }),
 	'ai-loop-identity': FIXERS['ai-loop-identity'].run,
 	statusline: FIXERS.statusline.run,
@@ -73,6 +76,7 @@ export function setupSteps(agentUser: string | null | undefined): string[] {
 	return [
 		'config',
 		'claude-skills',
+		'allow-rules',
 		'labels',
 		...(agentUser ? ['ai-loop-identity'] : []),
 		'statusline',
@@ -119,6 +123,7 @@ export async function runSetup(
 
 // `fix labels` only repairs; here the step also creates the set.
 const PROMPTS: Record<string, string> = {
+	'allow-rules': `Allow the loop's own shell calls in this checkout's ${SETTINGS_LOCAL} (gitignored, this repo only), so an unattended tick doesn't stall on permission prompts:\n  ${LOOP_ALLOW_RULES.join('\n  ')}\n Add them`,
 	labels: 'Create or repair the ai-loop labels on GitHub via `gh label`',
 }
 

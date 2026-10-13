@@ -33,7 +33,9 @@ function recorder(fail: Record<string, FixerAbort> = {}) {
 			return [`${name}-file`]
 		}
 	const steps = Object.fromEntries(
-		['config', 'claude-skills', 'labels', 'ai-loop-identity', 'statusline'].map((n) => [n, step(n)])
+		['config', 'claude-skills', 'allow-rules', 'labels', 'ai-loop-identity', 'statusline'].map(
+			(n) => [n, step(n)]
+		)
 	)
 	return { ran, steps }
 }
@@ -44,10 +46,17 @@ describe('setup', () => {
 	})
 
 	it('orders the steps and adds the identity step only with an agent user', () => {
-		expect(setupSteps(undefined)).toEqual(['config', 'claude-skills', 'labels', 'statusline'])
+		expect(setupSteps(undefined)).toEqual([
+			'config',
+			'claude-skills',
+			'allow-rules',
+			'labels',
+			'statusline',
+		])
 		expect(setupSteps('bot')).toEqual([
 			'config',
 			'claude-skills',
+			'allow-rules',
 			'labels',
 			'ai-loop-identity',
 			'statusline',
@@ -57,16 +66,25 @@ describe('setup', () => {
 	it('runs every step under --yes, in order', async () => {
 		const { ran, steps } = recorder()
 		const results = await runSetup(repo('bot'), { dir: '.', yes: true }, { steps })
-		expect(ran).toEqual(['config', 'claude-skills', 'labels', 'ai-loop-identity', 'statusline'])
+		expect(ran).toEqual([
+			'config',
+			'claude-skills',
+			'allow-rules',
+			'labels',
+			'ai-loop-identity',
+			'statusline',
+		])
 		expect(results.every((r) => r.status === 'applied')).toBe(true)
 	})
 
 	it('skips a step the user declines', async () => {
 		const { ran, steps } = recorder()
-		const confirm = async (t: string) => t !== 'labels'
+		// Declining allow-rules (#371) leaves them as setup notes, nothing written.
+		const confirm = async (t: string) => t !== 'labels' && t !== 'allow-rules'
 		const results = await runSetup(repo(), { dir: '.' }, { steps, confirm })
 		expect(ran).toEqual(['config', 'claude-skills', 'statusline'])
 		expect(results.find((r) => r.target === 'labels')?.status).toBe('skipped')
+		expect(results.find((r) => r.target === 'allow-rules')?.status).toBe('skipped')
 	})
 
 	it('keeps going after a fixer aborts, and reports why', async () => {

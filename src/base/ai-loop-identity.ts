@@ -96,7 +96,7 @@ const IGNORE_LINES = new Set([
 	'/.claude/',
 ])
 
-async function ensureIgnored(targetDir: string): Promise<boolean> {
+export async function ensureIgnored(targetDir: string): Promise<boolean> {
 	const file = path.join(targetDir, '.gitignore')
 	const existing = (await fs.pathExists(file)) ? await fs.readFile(file, 'utf-8') : ''
 	if (existing.split('\n').some((l) => IGNORE_LINES.has(l.trim()))) return false
