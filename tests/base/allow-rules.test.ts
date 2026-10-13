@@ -1,9 +1,10 @@
 import { join } from 'node:path'
 import fs from 'fs-extra'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
 	checkAllowRules,
 	checkSandboxExcludes,
+	fixAllowRules,
 	fixSandboxExcludes,
 	LOOP_ALLOW_RULES,
 	LOOP_SANDBOX_EXCLUDES,
@@ -104,5 +105,68 @@ describe('checkSandboxExcludes (#257)', () => {
 			excludedCommands: ['npx @infrazero/repo-ai *'],
 		})
 		expect((await checkSandboxExcludes(dir, home))[0].status).toBe('ok')
+	})
+})
+
+describe('fixAllowRules (#371)', () => {
+	beforeEach(() => {
+		vi.spyOn(console, 'error').mockImplementation(() => {})
+	})
+
+	const local = (dir: string) => join(dir, '.claude', 'settings.local.json')
+
+	it('writes every missing rule into the gitignored settings.local.json, then doctor is ok', async () => {
+		const home = newTmpDir()
+		const dir = newTmpDir()
+		expect(await fixAllowRules(dir, home)).toEqual(['.claude/settings.local.json', '.gitignore'])
+		expect(fs.readJsonSync(local(dir)).permissions.allow).toEqual(LOOP_ALLOW_RULES)
+		expect(fs.readFileSync(join(dir, '.gitignore'), 'utf8')).toContain(
+			'.claude/settings.local.json'
+		)
+		expect(await checkAllowRules(dir, home)).toEqual([expect.objectContaining({ status: 'ok' })])
+	})
+
+	it('is idempotent', async () => {
+		const home = newTmpDir()
+		const dir = newTmpDir()
+		await fixAllowRules(dir, home)
+		const before = fs.readFileSync(local(dir), 'utf8')
+		expect(await fixAllowRules(dir, home)).toEqual([])
+		expect(fs.readFileSync(local(dir), 'utf8')).toBe(before)
+	})
+
+	it('appends only: keeps other keys, existing rules and their order, and skips equivalents', async () => {
+		const home = newTmpDir()
+		const dir = newTmpDir()
+		fs.outputJsonSync(local(dir), {
+			env: { GH_CONFIG_DIR: '/x' },
+			permissions: { allow: ['Read', 'Bash(gh *)'], deny: ['Bash(rm:*)'] },
+		})
+		await fixAllowRules(dir, home)
+		expect(fs.readJsonSync(local(dir))).toEqual({
+			env: { GH_CONFIG_DIR: '/x' },
+			permissions: {
+				allow: ['Read', 'Bash(gh *)', ...LOOP_ALLOW_RULES.filter((r) => r !== 'Bash(gh:*)')],
+				deny: ['Bash(rm:*)'],
+			},
+		})
+	})
+
+	it('writes nothing when another settings file already grants them, or a bare Bash does', async () => {
+		const home = newTmpDir()
+		settings(join(home, '.claude', 'settings.json'), [...LOOP_ALLOW_RULES])
+		const dir = newTmpDir()
+		expect(await fixAllowRules(dir, home)).toEqual([])
+		const bare = newTmpDir()
+		settings(join(bare, '.claude', 'settings.json'), ['Bash'])
+		expect(await fixAllowRules(bare, newTmpDir())).toEqual([])
+		expect(fs.existsSync(local(bare))).toBe(false)
+	})
+
+	it('refuses to overwrite an unparseable settings.local.json', async () => {
+		const dir = newTmpDir()
+		fs.outputFileSync(local(dir), '{ not json')
+		await expect(fixAllowRules(dir, newTmpDir())).rejects.toThrow('not valid JSON')
+		expect(fs.readFileSync(local(dir), 'utf8')).toBe('{ not json')
 	})
 })
