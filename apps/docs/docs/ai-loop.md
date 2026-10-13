@@ -193,7 +193,7 @@ pointed every Claude session in a checkout at a separate `gh` config directory
 Once `agentUser` is set, a session running as anyone else halts every tick:
 
 ```
-⚠ agentUser is <agentUser> but gh authenticates as <you> — the tick would commit, push and review as the wrong account. Run `npx @infrazero/repo-ai fix ai-loop-identity` in this checkout, then relaunch the Claude session; or run just one session as the agent: `GH_TOKEN=$(gh auth token --user <agentUser>) claude`
+⚠ agentUser is <agentUser> but gh authenticates as <you> — the tick would commit, push and review as the wrong account. Relaunch the Claude session as the agent: `GH_TOKEN=$(gh auth token --user <agentUser>) claude`
 ```
 
 That is the guard working. Restart the session as the bot
