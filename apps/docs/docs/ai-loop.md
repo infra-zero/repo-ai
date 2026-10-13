@@ -97,7 +97,7 @@ optional:
 | `staleMinutes` | integer | `45`; values below `1` are ignored | `loop tick`'s `.env.staleMinutes`, `loop reap` and `loop tick`. A claim label (`ai-wip`, `ai-reviewing-*`, `ai-fixing`) this old marks a dead agent. |
 | `busyMinutes` | integer | `10`; values below `1` are ignored | `loop tick`'s `.env.busyMinutes`. The skill's cron cadence while work is in flight and no `loop watch` Monitor runs. |
 | `idleMinutes` | integer | `30`; values below `1` are ignored | `loop tick`'s `.env.idleMinutes`. The skill's cron cadence when idle, and its fallback cadence under a `loop watch` Monitor. |
-| `autoMerge` | boolean | `false` | `loop tick`. Lets Pass 1 merge a fully-passed issue PR unattended — only on a repo whose publishing job also runs behind an environment with `required_reviewers`. `doctor` warns when it is on without that gate. |
+| `autoMerge` | boolean | `false` | `loop tick`. Lets Pass 1 merge a fully-passed issue PR unattended — only on a repo whose publishing job also runs behind an environment with `required_reviewers`. A PR that changes release config is always handed to you instead (#370). `doctor` warns when it is on without that gate. |
 | `ciWorkflow` | string | `ci.yml` | `loop tick` and `doctor`, which watch that workflow's runs on the default branch for the no-jobs, stuck-release and failed-release warnings. `doctor` warns when the file does not exist in `.github/workflows`. PR checks need no setting — they cover every workflow. |
 | `checkCommand` | string | unset | The command implementer and fixer agents run before pushing, fixing until it passes (e.g. `"pnpm verify"`). Unset, they follow the pre-commit checks in the repo's `CLAUDE.md` or `AGENTS.md`. repo-ai writes neither file, so `doctor` warns when there's no `checkCommand` and neither file (#361). One line, no backticks. |
 
@@ -412,10 +412,10 @@ gh api repos/$OWNER_REPO/branches/main/protection \
 ```
 
 Worktrees also want `node_modules` symlinked in, so an agent can typecheck
-without a full install per issue. `fix ai` writes that list — the root plus every
-workspace package — into `.claude/settings.json` as
-`worktree.symlinkDirectories`, and Pass 4 reads it and creates the links itself.
-Without it the loop still works: each worktree gets a real `pnpm install`
+without a full install per issue. `npx @rtorcato/repo-tooling fix ai` writes
+that list — the root plus every workspace package — into `.claude/settings.json`
+as `worktree.symlinkDirectories`, and Pass 4 reads it and creates the links
+itself. It's a repo-tooling command, and optional: without it the loop still works: each worktree gets a real `pnpm install`
 instead, which costs a duplicate `node_modules` per issue.
 
 ### Claude Code permissions
@@ -438,6 +438,10 @@ classifier, which can block the tick. Add these to `permissions.allow` in
   }
 }
 ```
+
+`npx @infrazero/repo-ai setup` offers to add the loop's rules to
+`.claude/settings.local.json` for you. That grant covers only this checkout,
+and `--yes` accepts it. It appends rules and never removes one.
 
 **With Claude Code's sandbox on**, an allow rule only skips the prompt, and the
 call still runs sandboxed. There `gh` fails TLS verification on macOS (Seatbelt
@@ -519,7 +523,11 @@ reports each in `.applied[]`, and returns the comments still owed in `.comments[
   agent. `ai-notes` survives to the merge.
 - **The one unattended merge** — a handoff with `.autoMerge`, set only when
   `.repo-ai.json` has `"autoMerge": true`, publishing runs behind an environment
-  with required reviewers, and the PR has no `ai-notes`. Unreadable answers fail closed.
+  with required reviewers, the PR has no `ai-notes`, and it changes no release
+  config: `.github/workflows/**`, `release.config.*`, `.releaserc*`, `.npmrc`,
+  `.changeset/config.json`, or `publishConfig` in a `package.json` (#370). Such a
+  PR is handed over with `.releaseConfig` set, and `loop apply` writes the
+  decision comment naming the file. Unreadable answers fail closed.
 - **Reconcile** — `.stripMergeReady`: removes `merge-ready` from a PR no longer
   `CLEAN`, or carrying `ai-changes`.
 - **Update the branch** — `.updateBranches[]`: a passed `BEHIND` PR gets

@@ -69,8 +69,10 @@ export interface Handoff {
 	issue: number | null
 	title: string
 	notes: boolean
-	/** The gated-repo arm: both reviews passed, no `ai-notes`, CLEAN, and `release` gates the publish. */
+	/** The gated-repo arm: both reviews passed, no `ai-notes`, CLEAN, no release config touched, and `release` gates the publish. */
 	autoMerge: boolean
+	/** Set when release config alone kept an opted-in PR from auto-merging (#370): what it changes. */
+	releaseConfig?: string[]
 }
 
 export interface SendBack {
@@ -252,6 +254,19 @@ export function isDocsOnly(files: string[]): boolean {
 					f.startsWith('.github/ISSUE_TEMPLATE/'))
 		)
 	)
+}
+
+/**
+ * Release config (#370; `.npmrc` can redirect the registry or its auth): a PR that edits it could remove the very gate that let
+ * `loop tick` auto-merge, so it is always handed to a human. Same whole-path test
+ * as {@link isDocsOnly}; `publishConfig` lives inside `package.json`, so that one
+ * is compared by content in the tick.
+ */
+const RELEASE_CONFIG =
+	/^\.github\/workflows\/|(^|\/)(release\.config\.[^/]+|\.releaserc[^/]*|\.npmrc|\.changeset\/config\.json)$/
+
+export function releaseConfigFiles(files: string[]): string[] {
+	return files.filter((f) => RELEASE_CONFIG.test(f))
 }
 
 /**
@@ -446,6 +461,35 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	const docsOnly = async (n: number) => {
 		const r = await gh(['pr', 'diff', String(n), '--name-only'])
 		return r.ok && isDocsOnly(r.stdout.split('\n').filter(Boolean))
+	}
+
+	// `publishConfig` at `ref`, as JSON text; `undefined` when absent, `null` when unreadable.
+	const publishConfig = async (file: string, ref: string) => {
+		// Path and ref come from the PR: each segment encoded into the API path.
+		const route = `repos/${ownerRepo}/contents/${file.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`
+		const r = await gh(['api', '-H', 'Accept: application/vnd.github.raw+json', route])
+		if (!r.ok) return /HTTP 404/.test(r.stderr) ? undefined : null
+		try {
+			return JSON.stringify((JSON.parse(r.stdout) as { publishConfig?: unknown }).publishConfig)
+		} catch {
+			return null
+		}
+	}
+
+	// What release config the PR changes (#370). Fails closed: an unreadable answer counts as a change.
+	const releaseConfig = async (pr: Pr) => {
+		const r = await gh(['pr', 'diff', String(pr.number), '--name-only'])
+		if (!r.ok) return ['its changed files (the diff could not be read)']
+		const files = r.stdout.split('\n').filter(Boolean)
+		const hits = releaseConfigFiles(files)
+		for (const f of files.filter((f) => /(^|\/)package\.json$/.test(f))) {
+			const [base, head] = await Promise.all([
+				publishConfig(f, pr.baseRefName),
+				publishConfig(f, pr.headRefOid ?? pr.headRefName),
+			])
+			if (base === null || head === null || base !== head) hits.push(`${f} (publishConfig)`)
+		}
+		return hits
 	}
 
 	// A closed issue still wearing ai-wip: its worktree is already gone, so no
@@ -659,12 +703,15 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 			const s = view?.mergeStateStatus ?? 'UNKNOWN'
 			if (s === 'CLEAN') {
 				const notes = has('ai-notes')
+				// Only an otherwise-unattended merge needs the file check.
+				const touched = autoMerge && !notes ? await releaseConfig(pr) : []
 				result.handoffs.push({
 					pr: pr.number,
 					issue,
 					title: pr.title,
 					notes,
-					autoMerge: autoMerge && !notes,
+					autoMerge: autoMerge && !notes && touched.length === 0,
+					...(touched.length > 0 ? { releaseConfig: touched } : {}),
 				})
 			} else if (s === 'BEHIND') {
 				result.updateBranches.push({ pr: pr.number, issue })

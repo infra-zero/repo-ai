@@ -54,6 +54,10 @@ describe('runLoopWorktreeAdd', () => {
 		const root = checkout(newTmpDir())
 		const r = await runLoopWorktreeAdd('ai-7-add-thing', { root, base: 'main' })
 		expect(r).toMatchObject({ exitCode: 0, needsInstall: true, linked: [] })
+		// #363: `fix ai` is repo-tooling's command; a bare `repo-ai fix ai` is an unknown target.
+		expect(r.messages).toContain(
+			'no worktree.symlinkDirectories — run a real install in the worktree (optional: `npx @rtorcato/repo-tooling fix ai` writes the list and restores the fast path)'
+		)
 	})
 
 	it('fails when an entry cannot be linked', async () => {
