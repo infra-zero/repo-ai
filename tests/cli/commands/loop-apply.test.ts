@@ -668,6 +668,11 @@ describe('green-but-BLOCKED handoff (#362)', () => {
 		})
 		expect(fake.calls.some((c) => c[1] === 'merge')).toBe(false)
 		expect(fake.calls[0]?.slice(0, 3)).toEqual(['pr', 'edit', '10'])
+		// Not ready to merge: `ai-blocked`, and any `merge-ready` comes off.
+		expect(fake.calls[0]).toContain('ai-blocked')
+		expect(fake.calls[0]?.join(' ')).toContain('--remove-label merge-ready')
+		expect(fake.calls[0]?.join(' ')).not.toContain('--add-label merge-ready')
+		expect(result.applied).toMatchObject([{ transition: 'blocked-handoff', ok: true }])
 		const decision = fake.notes.find((n) => n.body.startsWith('<!-- ai-issue-loop:decision -->'))
 		expect(decision?.body).toContain('Branch protection requires `build`, which never ran')
 		// The notes pointer rides in the same comment; no skill-written one to overwrite it.
@@ -678,6 +683,8 @@ describe('green-but-BLOCKED handoff (#362)', () => {
 
 	it('names a required review when no check is missing, and keeps names in code spans', () => {
 		expect(blockedDecision('h', [], 'a human')).toContain('fix repo-settings')
+		expect(blockedDecision('h', ['build'], 'a human')).not.toContain('admin')
+		expect(blockedDecision('h', [], 'a human')).not.toContain('admin')
 		expect(blockedDecision('h', ['a`@x\nb'], 'a human')).toContain('`a@xb`')
 	})
 })

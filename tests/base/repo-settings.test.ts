@@ -99,7 +99,10 @@ describe('fixRepoSettings (#362)', () => {
 	})
 
 	it('adds picked checks to existing protection without replacing it', async () => {
-		const { gh, writes } = stub({ protection: { enforce_admins: { enabled: true } }, runs: ['ci'] })
+		const { gh, writes } = stub({
+			protection: { enforce_admins: { enabled: true }, required_status_checks: { contexts: [] } },
+			runs: ['ci'],
+		})
 		await fixRepoSettings(
 			'.',
 			{},
@@ -109,6 +112,28 @@ describe('fixRepoSettings (#362)', () => {
 			['PATCH', 'repos/acme/widget/branches/main/protection/required_status_checks'],
 		])
 		expect(writes[0]?.body).toEqual({ strict: false, contexts: ['ci'] })
+	})
+
+	it('skips checks on a branch protected without a status-check rule, which would 404', async () => {
+		const { gh, writes } = stub({
+			protection: {
+				required_status_checks: null,
+				required_pull_request_reviews: { required_approving_review_count: 1 },
+			},
+			runs: ['ci'],
+		})
+		const write = gh
+		const stubbed: GhExec = async (args, stdin) =>
+			args.at(-3)?.endsWith('/required_status_checks')
+				? { ok: false, stdout: '', stderr: 'HTTP 404: Required status checks not enabled', code: 1 }
+				: write(args, stdin)
+		const done = await fixRepoSettings(
+			'.',
+			{},
+			{ gh: stubbed, pickChecks: never, confirm: async () => true }
+		)
+		expect(writes.map((w) => w.args[2])).toEqual(['DELETE'])
+		expect(done).toEqual(['main: no required reviews'])
 	})
 
 	it('under --yes with no required checks, requires none and names the candidates', async () => {

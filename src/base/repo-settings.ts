@@ -95,6 +95,12 @@ export async function fixRepoSettings(
 	let addChecks: string[] = []
 	if (existing.length > 0) {
 		say(`keeping the required checks: ${[...new Set(existing)].join(', ')}`)
+	} else if (protection && !protection.required_status_checks) {
+		// ponytail: PATCH …/required_status_checks 404s with no status-check rule, and a PUT rebuilt
+		// from the GET could drop rules; add it once in Settings, then this keeps it.
+		say(
+			`${branch} is protected without a status-check rule — add the required checks in Settings → Branches`
+		)
 	} else {
 		const runs = await gh([
 			'api',
@@ -154,7 +160,7 @@ export async function fixRepoSettings(
 	}
 	if (addChecks.length > 0) {
 		if (protection) {
-			// Adds to the existing protection; every other rule stays as it is.
+			// Fills the existing, empty status-check rule; every other rule stays as it is.
 			await write(
 				['api', '-X', 'PATCH', `${protectionRoute}/required_status_checks`, '--input', '-'],
 				{

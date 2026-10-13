@@ -771,6 +771,7 @@ describe('runLoopTick', () => {
 				merge: { 10: 'BLOCKED', 12: 'BLOCKED' },
 				required: ['verify', 'build'],
 				rules: ['ci-gate', 'verify'],
+				diffs: { 10: ['src/a.ts'] },
 			})
 			expect(r.handoffs).toEqual([
 				{
@@ -793,9 +794,39 @@ describe('runLoopTick', () => {
 				merge: { 10: 'BLOCKED' },
 				unreported: [10],
 				required: ['test'],
+				diffs: { 10: ['src/a.ts'] },
 			})
 			expect(r.handoffs.map((h) => h.blockedChecks)).toEqual([['test']])
 			expect(r.sendBacks).toEqual([])
+		})
+
+		it('sends back a PR whose diff touches CI, which may have removed the job (#268)', async () => {
+			const r = await tick({
+				wip: [1],
+				prs: [pr(10, 'ai-1-ci', labels, { rollup: green })],
+				merge: { 10: 'BLOCKED' },
+				required: ['test'],
+				diffs: { 10: ['src/a.ts', '.github/workflows/ci.yml'] },
+			})
+			// No readable diff fails the same way: never toward a human's merge.
+			const unread = await tick({
+				wip: [1],
+				prs: [pr(10, 'ai-1-ci', labels, { rollup: green })],
+				merge: { 10: 'BLOCKED' },
+				required: ['test'],
+			})
+			expect(unread.sendBacks.map((b) => b.missing)).toEqual([['test']])
+			expect(r.handoffs).toEqual([])
+			expect(r.sendBacks).toEqual([
+				{
+					pr: 10,
+					issue: 1,
+					reason: 'BLOCKED',
+					label: 'ai-changes',
+					failing: [],
+					missing: ['test'],
+				},
+			])
 		})
 
 		it('hands over with no names when every required check reported (a required review)', async () => {

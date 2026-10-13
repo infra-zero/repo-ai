@@ -88,6 +88,8 @@ export interface SendBack {
 	label: 'ai-changes' | 'ai-conflicts'
 	/** Failing required checks, for the comment. */
 	failing: { name: string; link: string }[]
+	/** Required contexts that never reported on a head whose diff touches CI, e.g. a job it removed or renamed (#268). Absent when none. */
+	missing?: string[]
 }
 
 export interface RerunFailed {
@@ -480,10 +482,11 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	}
 
 	// From the diff's file list, never the title, labels or body.
-	const docsOnly = async (n: number) => {
+	const diffFiles = async (n: number) => {
 		const r = await gh(['pr', 'diff', String(n), '--name-only'])
-		return r.ok && isDocsOnly(r.stdout.split('\n').filter(Boolean))
+		return r.ok ? r.stdout.split('\n').filter(Boolean) : null
 	}
+	const docsOnly = async (n: number) => isDocsOnly((await diffFiles(n)) ?? [])
 
 	// A closed issue still wearing ai-wip: its worktree is already gone, so no
 	// later cleanup would ever report it. Listing it lets Pass 2 strip the label
@@ -706,6 +709,22 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 				})
 			} else if (s === 'BEHIND') {
 				result.updateBranches.push({ pr: pr.number, issue })
+			} else if (
+				stuck?.length &&
+				((await diffFiles(pr.number)) ?? ['.github/workflows/']).some((f) =>
+					f.startsWith('.github/workflows/')
+				)
+			) {
+				// The diff touches CI, so it may have removed or renamed the missing job: the fixer's (#268).
+				// An unreadable diff fails toward the send-back, never toward a human's admin merge.
+				result.sendBacks.push({
+					pr: pr.number,
+					issue,
+					reason: 'BLOCKED',
+					label: 'ai-changes',
+					failing: [],
+					missing: stuck,
+				})
 			} else if (stuck !== null) {
 				// Green but BLOCKED: a fix round can't change branch protection (#362). Before the
 				// `pending` wait too: a required check that never runs reads as "none reported yet".
@@ -1016,13 +1035,14 @@ export function summarize(r: LoopTickResult, t: Turns): string {
 	if (r.idle) return 'idle'
 	const blocked =
 		r.stalled.filter((s) => s.action === 'block').length +
-		r.fixRounds.filter((f) => f.action === 'block').length
+		r.fixRounds.filter((f) => f.action === 'block').length +
+		r.handoffs.filter((h) => h.blockedChecks).length
 	const ciRed =
 		r.sendBacks.filter((s) => s.reason === 'ci-red').length +
 		r.dependabotCiRed.length +
 		r.dependabotRecreate.length
 	const stalled = r.dependabotStalled.length
-	const merge = r.handoffs.length
+	const merge = r.handoffs.filter((h) => !h.blockedChecks).length
 	const saved = r.reviewsToSpawn.filter((s) => s.arm === 'both').length
 	const segments: [number | boolean, string][] = [
 		[r.errors.length > 0, '⚠error'],
