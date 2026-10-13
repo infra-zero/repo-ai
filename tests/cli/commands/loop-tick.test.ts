@@ -49,6 +49,11 @@ function checkout(parent: string): string {
 }
 
 const NOW = new Date('2026-06-01T12:00:00Z')
+/** Both arms passed on the current head. */
+const PASSED: [string, string][] = [
+	['code', 'PASS'],
+	['sec', 'PASS'],
+]
 const daysAgo = (d: number) => new Date(NOW.getTime() - d * 86_400_000).toISOString()
 
 const pr = (
@@ -98,6 +103,8 @@ interface World {
 	unreported?: number[]
 	/** PR → [arm, verdict] markers posted on the current head. */
 	reviews?: Record<number, [string, string][]>
+	/** PR → the commit its review markers were posted on, when not the current head (#375). */
+	reviewedOn?: Record<number, string>
 	changes?: Record<number, number>
 	/** PR → `gh pr diff --name-only`. */
 	diffs?: Record<number, string[]>
@@ -230,7 +237,7 @@ function fakeGh(w: World): GhExec {
 					markers.map(([arm, v]) => ({
 						id: 1,
 						user: { login: 'me-bot' },
-						commit_id: 'head',
+						commit_id: w.reviewedOn?.[Number(reviews[1])] ?? 'head',
 						body: `<!-- ai-issue-loop:verdict:${arm}:${v} -->`,
 					})),
 				])
@@ -555,11 +562,7 @@ describe('runLoopTick', () => {
 	})
 
 	describe('autoMerge needs the opt-in and the release gate (#142)', () => {
-		const tick = async (
-			optIn: boolean,
-			gated: boolean,
-			extra: Partial<World> = { diffs: { 10: ['src/a.ts'] } }
-		) => {
+		const tick = async (optIn: boolean, gated: boolean, extra: Partial<World> = {}) => {
 			const root = checkout(newTmpDir())
 			fs.outputFileSync(
 				join(root, '.github/workflows/release.yml'),
@@ -577,6 +580,8 @@ describe('runLoopTick', () => {
 					wip: [1],
 					prs: [pr(10, 'ai-1-ready', ['ai-review', 'ai-ok-code', 'ai-ok-sec'])],
 					merge: { 10: 'CLEAN' },
+					diffs: { 10: ['src/a.ts'] },
+					reviews: { 10: PASSED },
 					...extra,
 				}),
 			})
@@ -590,10 +595,53 @@ describe('runLoopTick', () => {
 			])
 		})
 
-		it('release-gated with the opt-in: autoMerge', async () => {
+		it('release-gated with the opt-in: autoMerge, pinned to the reviewed head (#375)', async () => {
 			expect(await tick(true, true)).toEqual([
-				{ pr: 10, issue: 1, title: 'pr-10', notes: false, autoMerge: true },
+				{ pr: 10, issue: 1, title: 'pr-10', notes: false, autoMerge: true, head: 'head' },
 			])
+		})
+
+		describe('never auto-merges a head the reviews never saw (#375)', () => {
+			const unreviewed = [
+				{
+					pr: 10,
+					issue: 1,
+					title: 'pr-10',
+					notes: false,
+					autoMerge: false,
+					unreviewedHead: 'head',
+				},
+			]
+
+			it('verdicts on an earlier commit', async () => {
+				expect(await tick(true, true, { reviewedOn: { 10: 'old' } })).toEqual(unreviewed)
+			})
+
+			it('only one arm on this head', async () => {
+				expect(await tick(true, true, { reviews: { 10: [['code', 'PASS']] } })).toEqual(unreviewed)
+			})
+
+			it('a CHANGES verdict on this head', async () => {
+				const reviews: World['reviews'] = {
+					10: [
+						['code', 'PASS'],
+						['sec', 'CHANGES'],
+					],
+				}
+				expect(await tick(true, true, { reviews })).toEqual(unreviewed)
+			})
+
+			it('a PASS-NOTES verdict still counts as reviewed', async () => {
+				const reviews: World['reviews'] = {
+					10: [
+						['code', 'PASS'],
+						['sec', 'PASS-NOTES'],
+					],
+				}
+				expect(await tick(true, true, { reviews })).toEqual([
+					{ pr: 10, issue: 1, title: 'pr-10', notes: false, autoMerge: true, head: 'head' },
+				])
+			})
 		})
 
 		describe('never auto-merges a PR that changes release config (#370)', () => {
@@ -609,8 +657,19 @@ describe('runLoopTick', () => {
 				'.npmrc',
 				'packages/a/.npmrc',
 				'.changeset/config.json',
+				'.github/actions/publish/action.yml',
 			])('%s', async (f) => {
 				expect(await tick(true, true, { diffs: { 10: ['src/a.ts', f] } })).toEqual(handed([f]))
+			})
+
+			it('a package.json whose semantic-release `release` key changed (#375)', async () => {
+				const contents = {
+					'main:package.json': '{"name":"w","release":{"branches":["main"]}}',
+					'head:package.json': '{"name":"w","release":{"branches":["main"],"plugins":[]}}',
+				}
+				expect(await tick(true, true, { diffs: { 10: ['package.json'] }, contents })).toEqual(
+					handed(['package.json (release)'])
+				)
 			})
 
 			it('a package.json whose publishConfig changed', async () => {
@@ -639,7 +698,7 @@ describe('runLoopTick', () => {
 					'head:package.json': '{"version":"1.1.0","publishConfig":{"access":"public"}}',
 				}
 				expect(await tick(true, true, { diffs: { 10: ['package.json'] }, contents })).toEqual([
-					{ pr: 10, issue: 1, title: 'pr-10', notes: false, autoMerge: true },
+					{ pr: 10, issue: 1, title: 'pr-10', notes: false, autoMerge: true, head: 'head' },
 				])
 			})
 
@@ -647,7 +706,7 @@ describe('runLoopTick', () => {
 				const garbled = { 'main:package.json': '{', 'head:package.json': '{}' }
 				expect(
 					await tick(true, true, { diffs: { 10: ['package.json'] }, contents: garbled })
-				).toEqual(handed(['package.json (publishConfig)']))
+				).toEqual(handed(['package.json (publishConfig)', 'package.json (release)']))
 				expect(await tick(true, true, { diffs: {} })).toEqual(
 					handed(['its changed files (the diff could not be read)'])
 				)
@@ -665,6 +724,27 @@ describe('runLoopTick', () => {
 				{ pr: 10, issue: 1, title: 'pr-10', notes: false, autoMerge: false },
 			])
 		})
+	})
+
+	it('disarms a passed PR armed on a head the reviews never saw (#375)', async () => {
+		const tick = async (w: Partial<World>) =>
+			(
+				await runLoopTick({
+					root: checkout(newTmpDir()),
+					env: {},
+					now: NOW,
+					gh: fakeGh({
+						wip: [1],
+						prs: [pr(10, 'ai-1-ready', ['merge-ready'], { autoMergeRequest: {} })],
+						merge: { 10: 'CLEAN' },
+						reviews: { 10: PASSED },
+						...w,
+					}),
+				})
+			).disarm
+		expect(await tick({})).toEqual([])
+		expect(await tick({ reviewedOn: { 10: 'old' } })).toEqual([10])
+		expect(await tick({ reviews: { 10: [['code', 'PASS']] } })).toEqual([10])
 	})
 
 	it('adopts any unlabelled agentUser PR, header or not (#115)', async () => {
@@ -1503,6 +1583,7 @@ describe('releaseConfigFiles (#370)', () => {
 			'.npmrc',
 			'packages/a/.npmrc',
 			'.changeset/config.json',
+			'.github/actions/publish/action.yml',
 		]
 		const misses = [
 			'docs/release.md',
@@ -1513,6 +1594,7 @@ describe('releaseConfigFiles (#370)', () => {
 			'my.releaserc.json',
 			'.npmrc.example',
 			'docs/npmrc.md',
+			'apps/x/.github/actions/a/action.yml',
 		]
 		expect(releaseConfigFiles([...hits, ...misses])).toEqual(hits)
 	})

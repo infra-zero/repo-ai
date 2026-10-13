@@ -79,6 +79,10 @@ export interface Handoff {
 	blockedChecks?: string[]
 	/** Set when release config alone kept an opted-in PR from auto-merging (#370): what it changes. */
 	releaseConfig?: string[]
+	/** With `autoMerge`: the head both verdicts were posted on, which the merge pins (#375). */
+	head?: string
+	/** Set when an opted-in PR's verdicts aren't both on its current head (#375): that head. */
+	unreviewedHead?: string
 }
 
 export interface SendBack {
@@ -265,11 +269,14 @@ export function isDocsOnly(files: string[]): boolean {
 /**
  * Release config (#370; `.npmrc` can redirect the registry or its auth): a PR that edits it could remove the very gate that let
  * `loop tick` auto-merge, so it is always handed to a human. Same whole-path test
- * as {@link isDocsOnly}; `publishConfig` lives inside `package.json`, so that one
- * is compared by content in the tick.
+ * as {@link isDocsOnly}. Local actions count because a release job may call them (#375).
+ * {@link PACKAGE_RELEASE_KEYS} live inside `package.json`, so those are compared by content in the tick.
  */
 const RELEASE_CONFIG =
-	/^\.github\/workflows\/|(^|\/)(release\.config\.[^/]+|\.releaserc[^/]*|\.npmrc|\.changeset\/config\.json)$/
+	/^\.github\/(workflows|actions)\/|(^|\/)(release\.config\.[^/]+|\.releaserc[^/]*|\.npmrc|\.changeset\/config\.json)$/
+
+/** `package.json` keys that configure the publish: npm's `publishConfig`, semantic-release's `release` (#375). */
+const PACKAGE_RELEASE_KEYS = ['publishConfig', 'release'] as const
 
 export function releaseConfigFiles(files: string[]): string[] {
 	return files.filter((f) => RELEASE_CONFIG.test(f))
@@ -503,14 +510,15 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	}
 	const docsOnly = async (n: number) => isDocsOnly((await diffFiles(n)) ?? [])
 
-	// `publishConfig` at `ref`, as JSON text; `undefined` when absent, `null` when unreadable.
-	const publishConfig = async (file: string, ref: string) => {
+	// Each release key at `ref`, as JSON text; `undefined` when the file is absent, `null` when unreadable.
+	const packageReleaseKeys = async (file: string, ref: string) => {
 		// Path and ref come from the PR: each segment encoded into the API path.
 		const route = `repos/${ownerRepo}/contents/${file.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`
 		const r = await gh(['api', '-H', 'Accept: application/vnd.github.raw+json', route])
 		if (!r.ok) return /HTTP 404/.test(r.stderr) ? undefined : null
 		try {
-			return JSON.stringify((JSON.parse(r.stdout) as { publishConfig?: unknown }).publishConfig)
+			const pkg = JSON.parse(r.stdout) as Record<string, unknown>
+			return PACKAGE_RELEASE_KEYS.map((k) => JSON.stringify(pkg[k]))
 		} catch {
 			return null
 		}
@@ -524,12 +532,24 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		const hits = releaseConfigFiles(files)
 		for (const f of files.filter((f) => /(^|\/)package\.json$/.test(f))) {
 			const [base, head] = await Promise.all([
-				publishConfig(f, pr.baseRefName),
-				publishConfig(f, pr.headRefOid ?? pr.headRefName),
+				packageReleaseKeys(f, pr.baseRefName),
+				packageReleaseKeys(f, pr.headRefOid ?? pr.headRefName),
 			])
-			if (base === null || head === null || base !== head) hits.push(`${f} (publishConfig)`)
+			PACKAGE_RELEASE_KEYS.forEach((k, i) => {
+				if (base === null || head === null || base?.[i] !== head?.[i]) hits.push(`${f} (${k})`)
+			})
 		}
 		return hits
+	}
+
+	// The head both arms passed, or null: `ai-ok-*` labels don't say which commit they passed (#375).
+	const reviewedHead = async (pr: Pr): Promise<string | null> => {
+		if (!pr.headRefOid) return null
+		for (const arm of ARMS) {
+			const v = await runLoopVerdict(pr.number, { dir: root, arm, gh: options.gh })
+			if (v.head !== pr.headRefOid || !v.verdict || v.verdict === 'CHANGES') return null
+		}
+		return pr.headRefOid
 	}
 
 	// A closed issue still wearing ai-wip: its worktree is already gone, so no
@@ -636,7 +656,8 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		}
 
 		const passed = (has('ai-ok-code') && has('ai-ok-sec')) || has('merge-ready')
-		if (pr.autoMergeRequest && !passed) result.disarm.push(pr.number)
+		// Armed on a head the reviews never saw: GitHub keeps auto-merge across a write-access push (#375).
+		if (pr.autoMergeRequest && (!passed || !(await reviewedHead(pr)))) result.disarm.push(pr.number)
 		const claimed = has('ai-reviewing-code') || has('ai-reviewing-sec')
 
 		// A stacked PR whose parent merged: retarget it before anything else reads it (#253).
@@ -744,15 +765,19 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 			const stuck = s === 'BLOCKED' ? await blockedGreen(pr) : null
 			if (s === 'CLEAN') {
 				const notes = has('ai-notes')
-				// Only an otherwise-unattended merge needs the file check.
+				// Only an otherwise-unattended merge needs the file and head checks.
 				const touched = autoMerge && !notes ? await releaseConfig(pr) : []
+				const checkHead = autoMerge && !notes && touched.length === 0
+				const head = checkHead ? await reviewedHead(pr) : null
 				result.handoffs.push({
 					pr: pr.number,
 					issue,
 					title: pr.title,
 					notes,
-					autoMerge: autoMerge && !notes && touched.length === 0,
+					autoMerge: head !== null,
+					...(head ? { head } : {}),
 					...(touched.length > 0 ? { releaseConfig: touched } : {}),
+					...(checkHead && !head ? { unreviewedHead: pr.headRefOid ?? '' } : {}),
 				})
 			} else if (s === 'BEHIND') {
 				result.updateBranches.push({ pr: pr.number, issue })

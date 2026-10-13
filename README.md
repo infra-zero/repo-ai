@@ -44,22 +44,39 @@ One guided run: `.repo-ai.json`, the skills, the loop's allow rules and the stat
 
 ### Installing the skills
 
-Two ways, pick one:
+**Use `setup`.** It runs `fix claude-skills`, which installs the four skills (`ai-loop`, `ai-issue`, `ai-loop-status`, `ai-loop-stop`) and the two Workflow scripts they run by name (`ai-loop-pickup`, `ai-loop-recover`), stamped with the npm version you ran. By default they go to `~/.claude/skills` and `~/.claude/workflows`, for every project on the machine.
 
-- **Claude Code plugin.** In Claude Code, run `/plugin marketplace add infra-zero/repo-ai`, then `/plugin install repo-ai@repo-ai`. The plugin ships the three skills. It is **unversioned**: it has no `version` field and follows `main`, so every update to `main` reaches plugin users with no release step.
-- **`npx @infrazero/repo-ai fix claude-skills`** (also run by `setup`). Copies the skills into `~/.claude/skills`, stamped with the npm version you ran, and installs the Workflow scripts (`workflows/*.js`) into `~/.claude/workflows`.
+**Sharing them with your team?** Install into the repo instead and commit the result:
 
-The plugin carries the skills only. Pass 3 and Pass 4 run their Workflow scripts by name, so plugin users still need those scripts from `fix claude-skills`; without them `ai-loop` falls back to background Agent calls. Either way the skills call the CLI through `npx @infrazero/repo-ai`.
+```bash
+npx @infrazero/repo-ai fix claude-skills --skills-dir .claude/skills
+```
 
-**Optional: `release-guard`.** `/plugin install release-guard@repo-ai` adds a mod that denies an agent's npm publish, version bump, local semantic-release run, git tag, tag push, force push, `git push --tags` or `--follow-tags`, release workflow dispatch, GitHub release, or `package.json` `"version"` edit, and tells it to have you run the command yourself with `! <command>`. It matches command text rather than parsing the shell, so it catches an agent's slip, not an adversary. It deliberately allows `gh pr merge`. Mods are an early-access Claude Code API (2.1.292+), so this stays opt-in. Required checks and the `release` environment remain the real gates.
+The Workflow scripts land next to them in `.claude/workflows`, so everyone who clones the repo runs the same version.
+
+**Prefer a plugin?** In Claude Code, run `/plugin marketplace add infra-zero/repo-ai`, then `/plugin install repo-ai@repo-ai`. You get the same four skills and both Workflow scripts, registered as `repo-ai:ai-loop-pickup` and `repo-ai:ai-loop-recover`, which `ai-loop` finds on its own. The plugin is **unversioned**: it follows `main`, so it can run ahead of the npm release. Pick one way, not both.
+
+Either way, the skills call the CLI through `npx @infrazero/repo-ai`.
+
+**Models and reviewers.** The `ai-loop` skill pins `model: sonnet`, and its quick verification step pins `haiku`. Reviews run as `code-reviewer` and `security-expert` when you have agents with those names in `.claude/agents` or `~/.claude/agents`. Otherwise they run as `general-purpose`, with the reviewer's brief in the prompt. `doctor`'s `Reviewer agents` line tells you which you'll get.
 
 **Moving over from repo-tooling?** Skills installed by `@rtorcato/repo-tooling` carry that package's version stamp, so this installer treats them as local edits and won't overwrite them. Run it once with `--force-skills`.
 
-### loop-watch (experimental)
+### Optional mods
 
-> **Experimental.** `loop-watch` is a Claude Code mod built on the early-access mod API (Claude Code 2.1.292), which may change between Claude Code releases. It is optional: neither `setup` nor `fix` installs it.
+Mods are Claude Code plugins built on its early-access mod API. They need **Claude Code 2.1.292** or later and may break between Claude Code releases. Neither `setup` nor `fix` installs them. Add the marketplace once with `/plugin marketplace add infra-zero/repo-ai`, then install any of these:
 
-A live ai-loop view inside Claude Code: a status line segment (`🤖 <summary> · next 9m · 2 agents · 1 ready to merge`), a `/loop-watch` pane of the open PRs and issues with `ai-*` labels, a toast and chime when a PR passes both reviews, and a dock above the prompt with one tile per running subagent. Install it from the same marketplace with `/plugin install loop-watch@repo-ai`. It reads the same `.claude/ai-loop-status` as the statusline segment and polls `gh` every 2 minutes. It sees only this session's agents; agents in other sessions show up through their labels and the status file.
+| Mod | Install | What it does | Needs |
+|---|---|---|---|
+| `release-guard` | `/plugin install release-guard@repo-ai` | Stops an agent from releasing outside CI: npm publish, version bumps, a local semantic-release run, git tags and tag pushes, force pushes, `git push --tags` or `--follow-tags`, release workflow dispatches, GitHub releases and `package.json` `"version"` edits. It tells the agent to have you run the command yourself with `! <command>`. | Nothing else |
+| `loop-watch` (experimental) | `/plugin install loop-watch@repo-ai` | A live view of the loop: a status line segment (`🤖 <summary> · next 9m · 2 agents · 1 ready to merge`), a `/loop-watch` pane of the open PRs and issues with `ai-*` labels, a toast and chime when a PR passes both reviews, and a dock with one tile per running subagent. | `gh` |
+| `repo-ai-rainbow` | `/plugin install repo-ai-rainbow@repo-ai` | A colourful band above the prompt with the open `ai-*` label counts and the loop status. `/repo-ai` refreshes it. | `gh` |
+
+`release-guard` matches command text rather than parsing the shell, so it catches an agent's slip, not an adversary. It deliberately allows `gh pr merge`. Required checks and the `release` environment remain the real gates.
+
+`loop-watch` reads the same `.claude/ai-loop-status` as the statusline segment and polls `gh` every 2 minutes. It sees only this session's agents; agents in other sessions show up through their labels and the status file.
+
+`release-guard` follows `main`. `loop-watch` and `repo-ai-rainbow` are pinned to a release commit, so a push to `main` never changes what you have installed.
 
 ## Commands
 
