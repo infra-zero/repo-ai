@@ -42,6 +42,8 @@ export interface LoopEnv {
 	budgetTokens: number
 	/** `quietStopMinutes`, else {@link DEFAULT_QUIET_STOP_MINUTES}; `0` disables Pass 5's cutoff (#124). */
 	quietStopMinutes: number
+	/** `checkCommand`: what implementers and fixers run before pushing (#361); empty means CLAUDE.md or AGENTS.md says. */
+	checkCommand: string
 	/** The loop's limits (#158): each the configured value, else today's default (`LIMITS`). */
 	maxInFlight: number
 	maxFixRounds: number
@@ -127,6 +129,7 @@ export async function resolveLoopEnv(options: LoopEnvOptions = {}): Promise<Loop
 		me,
 		budgetTokens,
 		quietStopMinutes,
+		checkCommand: config?.checkCommand ?? '',
 		maxInFlight: limit(config, 'maxInFlight'),
 		maxFixRounds: limit(config, 'maxFixRounds'),
 		maxTasksPerTick: limit(config, 'maxTasksPerTick'),
@@ -147,6 +150,7 @@ const VARS: [string, keyof Omit<LoopEnv, 'warnings'>][] = [
 	['ME', 'me'],
 	['BUDGET_TOKENS', 'budgetTokens'],
 	['QUIET_STOP_MINUTES', 'quietStopMinutes'],
+	['CHECK_COMMAND', 'checkCommand'],
 	['MAX_IN_FLIGHT', 'maxInFlight'],
 	['MAX_FIX_ROUNDS', 'maxFixRounds'],
 	['MAX_TASKS_PER_TICK', 'maxTasksPerTick'],

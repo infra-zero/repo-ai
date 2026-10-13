@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
 import {
+	checkAgentInstructions,
 	checkAutoMerge,
 	checkCiRuns,
 	checkHumanUser,
@@ -48,6 +49,42 @@ describe('runDoctor — loop config location', () => {
 	it('reports loop config missing with neither file', async () => {
 		const results = await runDoctor(newTmpDir(), undefined, machine())
 		expect(results.find((r) => r.check === 'Loop config')?.status).toBe('missing')
+	})
+})
+
+describe('checkAgentInstructions (#361)', () => {
+	it('warns when a repo gives its agents no checks to run', async () => {
+		const r = await checkAgentInstructions(newTmpDir(), undefined)
+		expect(r).toMatchObject({
+			status: 'optional-missing',
+			hint: expect.stringContaining('checkCommand'),
+		})
+	})
+
+	it('never fails doctor (or setup --yes) on a fresh repo with neither file', async () => {
+		const dir = newTmpDir()
+		fs.outputJsonSync(join(dir, '.repo-ai.json'), { agentUser: 'bot' })
+		const results = await runDoctor(dir, undefined, machine())
+		expect(results.find((r) => r.check === 'Agent instructions')?.status).toBe('optional-missing')
+	})
+
+	it('is ok with only a checkCommand', async () => {
+		const r = await checkAgentInstructions(newTmpDir(), 'npm test')
+		expect(r).toMatchObject({
+			status: 'ok',
+			detail: expect.stringContaining('`npm test`'),
+		})
+	})
+
+	it('is ok with CLAUDE.md, .claude/CLAUDE.md or AGENTS.md', async () => {
+		for (const f of ['CLAUDE.md', '.claude/CLAUDE.md', 'AGENTS.md']) {
+			const dir = newTmpDir()
+			fs.outputFileSync(join(dir, f), '# rules\n')
+			expect(await checkAgentInstructions(dir, undefined)).toMatchObject({
+				status: 'ok',
+				detail: f,
+			})
+		}
 	})
 })
 
