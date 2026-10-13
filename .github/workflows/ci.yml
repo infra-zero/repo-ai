@@ -74,13 +74,14 @@ jobs:
       - run: pnpm test --run
       # Mod tests import 'claude-code/testing', which only Claude Code's own runner
       # provides, so vitest never sees them. Pinned because the mod API is early
-      # access. Needs no login. release-guard is a safety mod (#366).
+      # access, at the minimum Claude Code version the README states (#364).
+      # Needs no login. release-guard is a safety mod (#366).
       - name: Test the mods
         env:
           CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: "1"
         run: |
-          for mod in plugins/repo-ai-rainbow mods/release-guard mods/loop-watch; do
-            npx --yes @anthropic-ai/claude-code@2.1.285 plugin test "$mod"
+          for mod in mods/*/; do
+            npx --yes @anthropic-ai/claude-code@2.1.292 plugin test "$mod"
           done
       - run: pnpm run build
       - name: Build the dashboard app

@@ -9,6 +9,8 @@ import {
 	type SkillStatus,
 } from '../cli/generators/claude-skills.js'
 import { installWorkflow, SHIPPED_WORKFLOWS, workflowsDirFor } from '../cli/generators/workflows.js'
+import path from 'node:path'
+import fs from 'fs-extra'
 import type { CheckResult } from './types.js'
 
 /** Any shipped skill installed, by `fix claude-skills` or the Claude Code plugin (#359). */
@@ -215,29 +217,54 @@ export async function checkPluginSkills(home?: string): Promise<CheckResult> {
 	}
 }
 
+/** Some plugin-cached copy of the package carries every shipped workflow. */
+async function pluginShipsWorkflows(home?: string): Promise<boolean> {
+	for (const installPath of await pluginInstallPaths(home)) {
+		const files = SHIPPED_WORKFLOWS.map((n) => path.join(installPath, 'workflows', `${n}.js`))
+		if ((await Promise.all(files.map((f) => fs.pathExists(f)))).every(Boolean)) return true
+	}
+	return false
+}
+
 /**
  * The Workflow scripts the skills run by name (#40): does the installed copy
  * match the one this package ships? Same severity rule as `checkClaudeSkills`
  * — it probes `~/.claude`, not the repo — and the same fork courtesy: a copy
  * `fix` would refuse to overwrite is named, never nagged.
  */
-export async function checkWorkflows(skillsDir?: string): Promise<CheckResult> {
+export async function checkWorkflows(skillsDir?: string, home?: string): Promise<CheckResult> {
 	const check = 'Claude workflows'
 	const hint = `Run \`npx @infrazero/repo-ai fix claude-skills\` to install the ${SHIPPED_WORKFLOWS.join(', ')} workflows`
+	// #364: the plugin ships workflows/ too, registered as `repo-ai:<name>`, so a
+	// plugin install with no `fix claude-skills` copies is not missing them.
+	const fromPlugin = async (): Promise<CheckResult | null> =>
+		(await pluginShipsWorkflows(home))
+			? {
+					check,
+					status: 'ok',
+					detail: `${SHIPPED_WORKFLOWS.map((n) => `repo-ai:${n}`).join(', ')} from the repo-ai plugin`,
+				}
+			: null
 	const { dir } = await resolveSkillsDir(skillsDir)
 	if (!dir) {
-		return {
-			check,
-			status: 'optional-missing',
-			detail: 'no ~/.claude/skills to install beside',
-			hint,
-		}
+		return (
+			(await fromPlugin()) ?? {
+				check,
+				status: 'optional-missing',
+				detail: 'no ~/.claude/skills to install beside',
+				hint,
+			}
+		)
 	}
 	const statuses = []
 	for (const name of SHIPPED_WORKFLOWS) {
 		statuses.push(await installWorkflow(workflowsDirFor(dir), name, { dryRun: true }))
 	}
 	const stale = statuses.filter((s) => s.status === 'installed' || s.status === 'updated')
+	if (stale.length > 0 && stale.every((s) => s.status === 'installed')) {
+		const plugin = await fromPlugin()
+		if (plugin) return plugin
+	}
 	if (stale.length > 0) {
 		const detail = stale
 			.map((s) =>
@@ -265,5 +292,48 @@ export async function checkWorkflows(skillsDir?: string): Promise<CheckResult> {
 		check,
 		status: 'ok',
 		detail: `${SHIPPED_WORKFLOWS.length} workflows match what this package ships`,
+	}
+}
+
+/** The reviewer agent types the loop asks for; `general-purpose` stands in for both when either is missing. */
+export const REVIEWER_AGENTS = ['code-reviewer', 'security-expert']
+
+/** Agent names defined under `dir`: each `.md` file's frontmatter `name:`, else its file name. */
+async function agentNames(dir: string): Promise<Set<string>> {
+	const files = ((await fs.readdir(dir, { recursive: true }).catch(() => [])) as string[]).filter(
+		(f) => f.endsWith('.md')
+	)
+	const names = new Set<string>()
+	for (const file of files) {
+		const text = await fs.readFile(path.join(dir, file), 'utf8').catch(() => '')
+		const name = text.match(/^---\r?\n[\s\S]*?^name:\s*["']?([\w-]+)["']?\s*$/m)?.[1]
+		names.add(name ?? path.basename(file, '.md'))
+	}
+	return names
+}
+
+/**
+ * Which agents the loop's reviews will run as (#364). The skill uses
+ * `code-reviewer` and `security-expert` only when both are agent types in the
+ * session, else `general-purpose` with the same lens in its prompt. Claude Code
+ * loads them from the repo's and the user's `.claude/agents/`; a plugin's agents
+ * are namespaced (`<plugin>:code-reviewer`), so they never match. Informational:
+ * the fallback works, so this never fails doctor.
+ */
+export async function checkReviewerAgents(dir: string, home: string): Promise<CheckResult> {
+	const check = 'Reviewer agents'
+	const found = new Set([
+		...(await agentNames(path.join(dir, '.claude', 'agents'))),
+		...(await agentNames(path.join(home, '.claude', 'agents'))),
+	])
+	const missing = REVIEWER_AGENTS.filter((a) => !found.has(a))
+	if (missing.length === 0) {
+		return { check, status: 'ok', detail: `reviews run as ${REVIEWER_AGENTS.join(' and ')}` }
+	}
+	return {
+		check,
+		status: 'optional-missing',
+		detail: `no ${missing.join(' or ')} agent in .claude/agents or ~/.claude/agents — reviews run as general-purpose, with the reviewer's lens in the prompt`,
+		hint: `Define ${REVIEWER_AGENTS.join(' and ')} subagents (\`.claude/agents/<name>.md\`) to review with dedicated agents`,
 	}
 }

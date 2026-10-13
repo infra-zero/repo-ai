@@ -160,7 +160,7 @@ Combined prompt (`arm: both`) — the same, except: the checklist is both lenses
 Workflow({name: 'ai-loop-recover', args: {reviews: [{label, agentType, prompt, pr, arm: code|sec|both}, …], fixes: [{label, prompt}, …], budgetTokens: <budgetTokens>, maxTasksPerTick: <maxTasksPerTick>}})
 ```
 
-"No workflow by that name" → `npx @infrazero/repo-ai fix claude-skills`, then retry. **No `Workflow` tool?** Spawn the same tasks as background `Agent` calls in one message (fixers `general-purpose`) and report `Workflow tool missing: Pass 3 ran as N background agents, no token cap`. The agents write the labels; the result `{tasks: [{label, result}], outputTokensSpent}` is a report — print one line per task (`code:#58 PASS`), act on nothing, fold the tokens into Pass 5.
+"Workflow … not found" whose `Available:` list has `repo-ai:ai-loop-recover` → the plugin installed it under its namespace (#364): call that name, and `repo-ai:ai-loop-pickup` in Pass 4. Not listed at all → `npx @infrazero/repo-ai fix claude-skills`, then retry. **No `Workflow` tool?** Spawn the same tasks as background `Agent` calls in one message (fixers `general-purpose`) and report `Workflow tool missing: Pass 3 ran as N background agents, no token cap`. The agents write the labels; the result `{tasks: [{label, result}], outputTokensSpent}` is a report — print one line per task (`code:#58 PASS`), act on nothing, fold the tokens into Pass 5.
 
 ## Pass 4 — pick up
 
@@ -179,6 +179,8 @@ After the `🤖 *Automated — triage …*` header, **lead with `## To lift this
 ```
 Workflow({name: 'ai-loop-pickup', args: {repo: <ownerRepo>, agentUser: <agentUser>, humanUser: <humanUser>, namedReviewers, budgetTokens: <budgetTokens>, maxFixRounds: <maxFixRounds>, checkCommand: <checkCommand>, installCommand: <installCommand>, issues: [{number, title, slug, worktree, base, stackedOn}, …]}})
 ```
+
+Not found → the same rule as Pass 3: `repo-ai:ai-loop-pickup` when the plugin installed it, else `fix claude-skills`.
 
 It implements, reviews (a spawned `tier` agent runs `repo-ai loop tier <pr> --json` — the same docs-only test as the tick's `arm: both` — so a docs-only PR gets one combined reviewer, anything else code + security), and runs up to `<maxFixRounds>` fix rounds per issue. `namedReviewers` is `true` only when **both** `code-reviewer` and `security-expert` are Agent types here; pass unset users as `""`. **No `Workflow` tool?** Take the implementer prompt from `workflows/ai-loop-pickup.js`, spawn implementers as background `Agent` calls one at a time (≤ `slots`), then each PR's two reviewers; leave fix rounds to Pass 3 and report `Workflow tool missing: Pass 4 ran as background agents, no token cap`. On completion print one line per issue (`#82 → PR #90, code PASS, sec PASS, 1 fix round`; a review with `posted: false` is `sec:#82 UNPOSTED`, never PASS or CHANGES — its claim was already dropped), plus one naming each label in `.skipped` (agents the token budget skipped, e.g. `security-expert:#82:r1`), and act on nothing.
 

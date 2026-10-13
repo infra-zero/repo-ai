@@ -14,7 +14,7 @@ RUN pnpm run build && mkdir /out && npm pack --ignore-scripts --pack-destination
 
 # ── runtime: node, git, gh, the agent CLIs (Claude Code, Codex, Gemini), repo-ai
 FROM node:24-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
-ARG CLAUDE_CODE_VERSION=2.1.289
+ARG CLAUDE_CODE_VERSION=2.1.292
 ARG CODEX_VERSION=0.160.0
 ARG GEMINI_CLI_VERSION=0.62.0
 ARG GH_KEY_SHA256=6084d5d7bd8e288441e0e94fc6275570895da18e6751f70f057485dc2d1a811b

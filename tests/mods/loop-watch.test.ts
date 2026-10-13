@@ -14,9 +14,7 @@ describe('mods/loop-watch (#326)', () => {
 	it("keeps the rainbow plugin's clean() identical to its own (#337)", () => {
 		const fn = (path: string) => read(path).match(/^export function clean[\s\S]*?^}$/m)?.[0]
 		expect(fn('mods/loop-watch/hooks/parse.ts')).toBeDefined()
-		expect(fn('plugins/repo-ai-rainbow/hooks/register.tsx')).toBe(
-			fn('mods/loop-watch/hooks/parse.ts')
-		)
+		expect(fn('mods/repo-ai-rainbow/hooks/register.tsx')).toBe(fn('mods/loop-watch/hooks/parse.ts'))
 	})
 
 	it('pins the executable plugins to a full commit sha (#337)', () => {

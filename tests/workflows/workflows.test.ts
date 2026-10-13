@@ -584,8 +584,28 @@ describe('checkWorkflows', () => {
 	it('flags missing workflows, then passes once installed', async () => {
 		const skills = join(newTmpDir(), 'skills')
 		fs.ensureDirSync(skills)
-		expect(await checkWorkflows(skills)).toMatchObject({ status: 'optional-missing' })
+		const home = newTmpDir()
+		expect(await checkWorkflows(skills, home)).toMatchObject({ status: 'optional-missing' })
 		for (const name of SHIPPED_WORKFLOWS) await installWorkflow(workflowsDirFor(skills), name)
-		expect(await checkWorkflows(skills)).toMatchObject({ status: 'ok' })
+		expect(await checkWorkflows(skills, home)).toMatchObject({ status: 'ok' })
+	})
+
+	it("counts the plugin's namespaced copies when fix claude-skills installed none (#364)", async () => {
+		const skills = join(newTmpDir(), 'skills')
+		fs.ensureDirSync(skills)
+		const home = newTmpDir()
+		const installPath = join(home, '.claude', 'plugins', 'cache', 'repo-ai', 'repo-ai', 'abc123')
+		fs.outputJsonSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), {
+			version: 2,
+			plugins: { 'repo-ai@repo-ai': [{ scope: 'user', installPath }] },
+		})
+		expect(await checkWorkflows(skills, home)).toMatchObject({ status: 'optional-missing' })
+		for (const name of SHIPPED_WORKFLOWS)
+			fs.outputFileSync(join(installPath, 'workflows', `${name}.js`), source(name))
+		expect(await checkWorkflows(skills, home)).toEqual({
+			check: 'Claude workflows',
+			status: 'ok',
+			detail: 'repo-ai:ai-loop-pickup, repo-ai:ai-loop-recover from the repo-ai plugin',
+		})
 	})
 })
