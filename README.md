@@ -9,7 +9,7 @@
 
 The **ai-loop** pipeline: a label-driven loop that takes an `ai-ready` GitHub issue, implements it in its own git worktree, opens a PR, has two agents review it, and hands it to a human to merge.
 
-issue → loop → PR → two reviews → you merge → [you release](https://docs.infrazero.dev/repo-ai/docs/getting-started#8-merging-and-releasing).
+issue → loop → PR → two reviews → you merge → [you release](https://docs.infrazero.dev/repo-ai/docs/getting-started#6-merging-and-releasing).
 
 This package holds the moving parts: the Claude Code skills, the `loop` commands they call, and a `doctor`/`fix` pair for the loop's setup. It was split out of [`@rtorcato/repo-tooling`](https://github.com/rtorcato/repo-tooling) so the tooling can be used without the loop.
 
@@ -40,7 +40,7 @@ npx @infrazero/repo-ai setup
 
 `setup` shows this notice first and asks `Continue? (y/N)`, once per machine (recorded in `~/.config/repo-ai/acknowledged`) and again if the text changes; `--yes` or `--json` counts as acceptance.
 
-One guided run: the skills, the loop labels, the agent identity, and the statusline segment, asking before each, then `doctor`. Then `/ai-issue`, `/ai-loop`, and when a PR is `merge-ready`, you merge and [you release](https://docs.infrazero.dev/repo-ai/docs/getting-started#8-merging-and-releasing). The skill step installs `ai-loop`, `ai-issue`, `ai-loop-status` and `ai-loop-stop` into `~/.claude/skills` (or `--skills-dir <path>`).
+One guided run: `.repo-ai.json`, the skills, the loop's allow rules and the statusline segment, asking before each, plus the loop labels without asking, then `doctor`. Just want to see it work? The [Minimum path](https://docs.infrazero.dev/repo-ai/docs/minimum-path) is three commands. Then `/ai-issue`, `/ai-loop`, and when a PR is `merge-ready`, you merge and [you release](https://docs.infrazero.dev/repo-ai/docs/getting-started#6-merging-and-releasing). The skill step installs `ai-loop`, `ai-issue`, `ai-loop-status` and `ai-loop-stop` into `~/.claude/skills` (or `--skills-dir <path>`).
 
 ### Installing the skills
 
@@ -67,6 +67,9 @@ A live ai-loop view inside Claude Code: a status line segment (`🤖 <summary> �
 |---|---|
 | `setup [--yes] [--json]` | Onboard a repo: runs `fix config`, `fix claude-skills`, `fix allow-rules` and `fix statusline`, asking before each. With an agent user, it prints the `GH_TOKEN` launch line instead of running the deprecated `fix ai-loop-identity`. It also creates or repairs the loop labels without asking and reports them in one line. Then it runs `doctor`. |
 | `doctor [--json]` | Audit the loop setup: the loop labels against their spec; `.repo-ai.json` present and valid against its schema; `agentUser` matches the `gh` identity; `humanUser` set on an organisation-owned repo; `autoMerge` only with a release gate; **CI runs** — default-branch push runs cancelled or pending with no jobs, or a `ciWorkflow` that does not exist; **Release approval** — a `release` run waiting on approval for over a day; **Release run** — the newest completed default-branch run whose `release` job failed. Both read `release.yml`'s runs (any event) when the repo has one, else the CI workflow's push runs; **Security alerts** — open Dependabot alerts, high/critical named and moderate/low folded into the count, silent on 403/404; installed skills, plugin skills and workflows, and whether they are current; `requiredSkills` installed; the Claude Code `permissions.allow` rules a tick needs; with Claude Code's sandbox on, `gh *` and `npx @infrazero/repo-ai *` in `sandbox.excludedCommands`; whether your statusline shows the loop status; and that agents have checks to run before pushing — a `checkCommand`, or a `CLAUDE.md` or `AGENTS.md`. `requiredSkills`, permissions and the sandbox are checked only when `agentUser` is set. All read-only. Exits 1 only on `drift` / `missing`. |
+| `auth app-token --repo <owner/repo> [--json]` | Print an installation token for the loop's GitHub App, scoped to one repo, from `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY_FILE` (or `GITHUB_APP_PRIVATE_KEY`). `GH_TOKEN=$(npx @infrazero/repo-ai auth app-token --repo o/r)` puts `gh` and `git` on the App's identity for an hour. An installation token cannot call `GET /user`, so set `REPO_AI_GH_LOGIN=<slug>[bot]` (the `--json` `login`) alongside it. |
+| `dashboard [--port 8080] [--data /data] [--repos /repos]` | The Docker `api` service: the one scheduler (tick → apply → queue), the worker queue, and the JSON the dashboard app draws. See [Run in Docker](https://docs.infrazero.dev/repo-ai/docs/docker). |
+| `worker [--url http://dashboard:8080] [--id <hostname>]` | A Docker agent worker: pulls a task from the dashboard, runs it with headless Claude Code, reports back. |
 | `fix config` | Write `$schema`, and every unset key that has a default, into `.repo-ai.json`. With no file, create one, migrating any old `.repo-tooling.json` settings once. |
 | `fix labels` | Repair loop label colours and descriptions with `gh label edit`. |
 | `fix claude-skills` | Install or update the skills, and the Workflow scripts they run by name (`workflows/*.js` → `~/.claude/workflows`). `--force-skills` overwrites a modified or newer copy. |

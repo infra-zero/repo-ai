@@ -2,7 +2,7 @@ import type { SidebarsConfig } from '@docusaurus/plugin-content-docs'
 
 const sidebars: SidebarsConfig = {
 	docs: [
-		{ type: 'category', label: 'Start here', collapsed: false, items: ['intro'] },
+		{ type: 'category', label: 'Start here', collapsed: false, items: ['intro', 'minimum-path'] },
 		{
 			type: 'category',
 			label: 'Guides',
