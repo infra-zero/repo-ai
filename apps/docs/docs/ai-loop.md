@@ -411,10 +411,10 @@ gh api repos/$OWNER_REPO/branches/main/protection \
 ```
 
 Worktrees also want `node_modules` symlinked in, so an agent can typecheck
-without a full install per issue. `fix ai` writes that list — the root plus every
-workspace package — into `.claude/settings.json` as
-`worktree.symlinkDirectories`, and Pass 4 reads it and creates the links itself.
-Without it the loop still works: each worktree gets a real `pnpm install`
+without a full install per issue. `npx @rtorcato/repo-tooling fix ai` writes
+that list — the root plus every workspace package — into `.claude/settings.json`
+as `worktree.symlinkDirectories`, and Pass 4 reads it and creates the links
+itself. It's a repo-tooling command, and optional: without it the loop still works: each worktree gets a real `pnpm install`
 instead, which costs a duplicate `node_modules` per issue.
 
 ### Claude Code permissions

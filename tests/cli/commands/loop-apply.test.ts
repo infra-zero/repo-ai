@@ -3,7 +3,13 @@ import { join } from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
 import type { GhExec } from '../../../src/base/gh.js'
-import { blockedDecision, pickupSlug, runLoopApply } from '../../../src/cli/commands/loop-apply.js'
+import {
+	applySummary,
+	blockedDecision,
+	type LoopApplyResult,
+	pickupSlug,
+	runLoopApply,
+} from '../../../src/cli/commands/loop-apply.js'
 import type { LoopEnv } from '../../../src/cli/commands/loop-env.js'
 import { emptyTick, type LoopTickResult } from '../../../src/cli/commands/loop-tick.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
@@ -686,5 +692,52 @@ describe('green-but-BLOCKED handoff (#362)', () => {
 		expect(blockedDecision('h', ['build'], 'a human')).not.toContain('admin')
 		expect(blockedDecision('h', [], 'a human')).not.toContain('admin')
 		expect(blockedDecision('h', ['a`@x\nb'], 'a human')).toContain('`a@xb`')
+	})
+})
+
+describe('applySummary (#359)', () => {
+	it('projects the fields the skill used to pull out with jq', () => {
+		const result = {
+			applied: [{ pass: 1, transition: 'handoff', number: 7, ok: true }],
+			comments: [
+				{ kind: 'notes', pr: 7, handoff: {} },
+				{ kind: 'blocked', issue: 3, stall: {} },
+			],
+			claimed: {
+				reviews: [{ arm: 'code', pr: 9 }],
+				fixes: [{ pr: 4 }],
+				pickups: [{ number: 5, title: 't', slug: 's', worktree: '/w', needsInstall: false }],
+			},
+			removed: [{ issue: 2 }],
+			rebuild: 'not-requested',
+			halt: null,
+			errors: [],
+			exitCode: 0,
+		} as unknown as LoopApplyResult
+		expect(applySummary(result)).toEqual({
+			applied: ['handoff #7 true'],
+			comments: [
+				{ kind: 'notes', pr: 7, issue: null },
+				{ kind: 'blocked', pr: null, issue: 3 },
+			],
+			claimed: {
+				reviews: ['code:#9'],
+				fixes: [4],
+				pickups: [
+					{
+						number: 5,
+						slug: 's',
+						worktree: '/w',
+						needsInstall: false,
+						base: null,
+						stackedOn: null,
+					},
+				],
+			},
+			removed: [2],
+			rebuild: 'not-requested',
+			halt: null,
+			errors: [],
+		})
 	})
 })
