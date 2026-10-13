@@ -73,12 +73,18 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm test --run
       # Mod tests import 'claude-code/testing', which only Claude Code's own runner
-      # provides. Pinned because the mod API is early access. Needs no login.
-      - name: Test the repo-ai-rainbow mod
+      # provides, so vitest never sees them. Pinned because the mod API is early
+      # access. Needs no login. release-guard is a safety mod (#366).
+      - name: Test the mods
         env:
           CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: "1"
-        run: npx --yes @anthropic-ai/claude-code@2.1.285 plugin test plugins/repo-ai-rainbow
+        run: |
+          for mod in plugins/repo-ai-rainbow mods/release-guard mods/loop-watch; do
+            npx --yes @anthropic-ai/claude-code@2.1.285 plugin test "$mod"
+          done
       - run: pnpm run build
+      - name: Build the dashboard app
+        run: pnpm --filter @infrazero/repo-ai-dashboard build
       # Run the package as npm would ship it, not as it sits in the repo: pack,
       # check the non-code files made it in, install the tarball somewhere
       # clean, and invoke the bin.
@@ -113,17 +119,96 @@ jobs:
             ]
             if (bad.length) { console.error(JSON.stringify(results, null, 2)); for (const b of bad) console.error(`::error::${b}`); process.exit(1) }
           ' <<< "$out"
+      # What a stranger's first run hits (#366): an empty HOME, no terminal, and a
+      # machine without gh. Same packed tarball, run by path so PATH can be cut down.
+      - name: Smoke-test a clean environment
+        run: |
+          set -euo pipefail
+          export GIT_CONFIG_GLOBAL=/dev/null
+          tmp="$(mktemp -d)"
+          npm pack --pack-destination "$tmp" > /dev/null
+          (cd "$tmp" && npm init -y > /dev/null && npm install --no-audit --no-fund "$tmp"/*.tgz > /dev/null)
+          cli="$tmp/node_modules/@infrazero/repo-ai/dist/cli/index.js"
+          fresh() { local d; d="$(mktemp -d)"; git -C "$d" init -q; echo "$d"; }
+
+          echo "::group::setup --yes with an empty HOME and no terminal"
+          # Every step must land on a fresh machine (#358, #367): no failed step, the
+          # skills written into the empty HOME. Exit 1 is accepted only for what this
+          # runner lacks: a gh login and a GitHub remote.
+          home="$(mktemp -d)"
+          out="$(cd "$(fresh)" && HOME="$home" node "$cli" setup --yes --json </dev/null)" || [ $? -eq 1 ]
+          node -e '
+            const fs = require("fs")
+            const { steps, doctor } = JSON.parse(fs.readFileSync(0, "utf8"))
+            const expected = ["gh auth", "GitHub remote"]
+            const bad = [
+              ...steps.filter((s) => s.status === "failed").map((s) => `setup step failed: ${s.target}: ${s.message}`),
+              ...(fs.existsSync(`${process.argv[1]}/.claude/skills/ai-loop/SKILL.md`) ? [] : ["no ai-loop skill in the empty HOME"]),
+              ...doctor.filter((r) => (r.status === "drift" || r.status === "missing") && !expected.includes(r.check)).map((r) => `unexpected failure: ${r.check}: ${r.detail}`),
+            ]
+            if (bad.length) { console.error(JSON.stringify({ steps, doctor }, null, 2)); for (const b of bad) console.error(`::error::${b}`); process.exit(1) }
+          ' "$home" <<< "$out"
+          echo "::endgroup::"
+
+          echo "::group::setup with no terminal and no --yes"
+          # Exits 1 with a hint instead of dying in inquirer with a stack trace (#358).
+          code=0
+          (cd "$(fresh)" && HOME="$(mktemp -d)" node "$cli" setup </dev/null) > "$tmp/out" 2> "$tmp/err" || code=$?
+          cat "$tmp/err"
+          [ "$code" -eq 1 ] || { echo "::error::setup without a terminal exited $code, not 1"; exit 1; }
+          grep -q 're-run with --yes' "$tmp/err" || { echo "::error::no --yes hint"; exit 1; }
+          if grep -Eq '^\s+at |Error:' "$tmp/err"; then echo "::error::setup printed a stack trace"; exit 1; fi
+          echo "::endgroup::"
+
+          echo "::group::doctor with no gh on PATH"
+          # A missing gh is ✗ with an install hint, and every GitHub check says it did
+          # not run: never a skip shown as ✓ (#359). PATH holds only node and git.
+          bin="$(mktemp -d)"
+          ln -s "$(command -v node)" "$bin/node"
+          ln -s "$(command -v git)" "$bin/git"
+          # The empty HOME is made first: PATH=$bin applies to expansions after it.
+          home="$(mktemp -d)"
+          out="$(cd "$(fresh)" && PATH="$bin" HOME="$home" "$bin/node" "$cli" doctor --json </dev/null)" || [ $? -eq 1 ]
+          node -e '
+            const { results } = JSON.parse(require("fs").readFileSync(0, "utf8"))
+            const by = (c) => results.find((r) => r.check === c)
+            const github = ["AI loop labels", "Human user", "CI runs", "Release approval", "Release run", "Security alerts"]
+            const bad = [
+              ...(by("gh")?.status === "missing" && by("gh")?.hint?.includes("cli.github.com") ? [] : ["gh is not missing with an install hint"]),
+              ...github.filter((c) => by(c)?.detail !== "not run because gh is unavailable").map((c) => `${c} did not say it was not run`),
+              ...results.filter((r) => r.status === "ok" && r.detail.startsWith("skipped — could not")).map((r) => `skip shown as ok: ${r.check}`),
+            ]
+            if (bad.length) { console.error(JSON.stringify(results, null, 2)); for (const b of bad) console.error(`::error::${b}`); process.exit(1) }
+          ' <<< "$out"
+          echo "::endgroup::"
+
+  # Both images build (#366). Its own job, beside the test matrix rather than in
+  # it, so the image builds add no wall time to a PR.
+  docker:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    name: docker (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [repo-ai, dashboard]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - env:
+          DOCKERFILE: ${{ matrix.image == 'dashboard' && 'docker/dashboard.Dockerfile' || 'docker/Dockerfile' }}
+        run: docker build --file "$DOCKERFILE" .
 
   # The required status check. Branch protection names only `ci`, so this one
   # job stands for every matrix leg: it fails unless all of them succeeded,
   # including when one was cancelled — and skipped, unless the skip was earned.
   # Passes only when `changes` succeeded AND either it found a docs-only PR
-  # (code == 'false') or `test` succeeded. A failed or cancelled `changes`, or
-  # a cancelled/failed/skipped `test` on a code change, fails `ci`: a
-  # skipped required check counts as passing, so the skip must never be a
-  # side effect of something going wrong.
+  # (code == 'false') or both `test` and `docker` succeeded. A failed or
+  # cancelled `changes`, or a cancelled/failed/skipped `test` or `docker` on a
+  # code change, fails `ci`: a skipped required check counts as passing, so
+  # the skip must never be a side effect of something going wrong.
   ci:
-    needs: [changes, test]
+    needs: [changes, test, docker]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -131,6 +216,7 @@ jobs:
           CHANGES: ${{ needs.changes.result }}
           CODE: ${{ needs.changes.outputs.code }}
           TEST: ${{ needs.test.result }}
+          DOCKER: ${{ needs.docker.result }}
         run: |
-          echo "changes=$CHANGES code=$CODE test=$TEST"
-          test "$CHANGES" = success && { test "$CODE" = false || test "$TEST" = success; }
+          echo "changes=$CHANGES code=$CODE test=$TEST docker=$DOCKER"
+          test "$CHANGES" = success && { test "$CODE" = false || { test "$TEST" = success && test "$DOCKER" = success; }; }
