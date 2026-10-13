@@ -512,18 +512,25 @@ Three details worth knowing because they fail *silently* when got wrong:
 The skill keeps only the judgement; `loop apply --json` makes every edit below,
 reports each in `.applied[]`, and returns the comments still owed in `.comments[]`:
 
-- **Disarm** — `.disarm`: an auto-merge armed before both reviews passed is
-  switched off first, so the merge cannot beat the review.
+- **Disarm** — `.disarm`: an auto-merge armed before both reviews passed, or on
+  a head that doesn't carry both reviewers' verdicts, is switched off first, so
+  the merge cannot beat the review. GitHub keeps auto-merge armed across a push
+  from anyone with write access (#375).
 - **Hand over** — `.handoffs[]`: both `ai-ok-*`, no `ai-changes`, `CLEAN`. Adds
   `merge-ready`, assigns the human, drops `ai-review`, both `ai-ok-*` and the
   agent. `ai-notes` survives to the merge.
 - **The one unattended merge** — a handoff with `.autoMerge`, set only when
   `.repo-ai.json` has `"autoMerge": true`, publishing runs behind an environment
   with required reviewers, the PR has no `ai-notes`, and it changes no release
-  config: `.github/workflows/**`, `release.config.*`, `.releaserc*`, `.npmrc`,
-  `.changeset/config.json`, or `publishConfig` in a `package.json` (#370). Such a
-  PR is handed over with `.releaseConfig` set, and `loop apply` writes the
-  decision comment naming the file. Unreadable answers fail closed.
+  config: `.github/workflows/**`, `.github/actions/**`, `release.config.*`,
+  `.releaserc*`, `.npmrc`, `.changeset/config.json`, or `publishConfig` or
+  `release` in a `package.json` (#370, #375). Such a PR is handed over with
+  `.releaseConfig` set, and `loop apply` writes the decision comment naming the
+  file. Both reviewers' verdicts must also be on the PR's current head. The merge
+  is pinned to that head with `--match-head-commit`, so a push since the tick
+  read the PR fails it. A PR whose verdicts are on an older commit is handed over
+  with `.unreviewedHead` set, and the decision comment names that head (#375).
+  Unreadable answers fail closed.
 - **Reconcile** — `.stripMergeReady`: removes `merge-ready` from a PR no longer
   `CLEAN`, or carrying `ai-changes`.
 - **Update the branch** — `.updateBranches[]`: a passed `BEHIND` PR gets

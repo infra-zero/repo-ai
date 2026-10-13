@@ -9,6 +9,7 @@ import {
 	type LoopApplyResult,
 	pickupSlug,
 	releaseConfigDecision,
+	unreviewedHeadDecision,
 	runLoopApply,
 } from '../../../src/cli/commands/loop-apply.js'
 import type { LoopEnv } from '../../../src/cli/commands/loop-env.js'
@@ -176,13 +177,19 @@ describe('runLoopApply transitions (#147)', () => {
 			comments: [{ kind: 'notes', pr: 10 }],
 		},
 		{
-			name: 'merges only an autoMerge handoff',
-			work: { handoffs: [{ ...handoff, autoMerge: true }] },
+			name: 'merges only an autoMerge handoff, pinned to the reviewed head (#375)',
+			work: { handoffs: [{ ...handoff, autoMerge: true, head: 'abc123' }] },
 			users: false,
 			calls: [
 				['pr', 'edit', '10', '--add-label', 'merge-ready', ...PASS],
-				['pr', 'merge', '10', '--squash', '--auto'],
+				['pr', 'merge', '10', '--squash', '--auto', '--match-head-commit', 'abc123'],
 			],
+		},
+		{
+			name: 'never merges an autoMerge handoff with no reviewed head (#375)',
+			work: { handoffs: [{ ...handoff, autoMerge: true }] },
+			users: false,
+			calls: [['pr', 'edit', '10', '--add-label', 'merge-ready', ...PASS]],
 		},
 		{
 			name: 'never merges when the handoff edit failed',
@@ -716,6 +723,29 @@ describe('release config handoff (#370)', () => {
 	it('keeps a hostile file name inside its code span', () => {
 		const text = releaseConfigDecision('h', ['.github/workflows/a`@x\nb.yml'], 'a human')
 		expect(text).toContain('`.github/workflows/a@xb.yml`')
+	})
+})
+
+describe('unreviewed head handoff (#375)', () => {
+	it('hands over without merging and names the head the reviews never saw', async () => {
+		const fake = fakeGh()
+		const result = await runLoopApply({
+			tick: tick(checkout(newTmpDir()), {
+				handoffs: [{ ...handoff, unreviewedHead: 'def456' }],
+			}),
+			gh: fake.gh,
+			env: {},
+		})
+		expect(fake.calls.some((c) => c[1] === 'merge')).toBe(false)
+		const decision = fake.notes.find((n) => n.body.startsWith('<!-- ai-issue-loop:decision -->'))
+		expect(decision?.body).toContain('Not auto-merged')
+		expect(decision?.body).toContain('`def456`')
+		expect(result.errors).toEqual([])
+	})
+
+	it('keeps a hostile head inside its code span', () => {
+		expect(unreviewedHeadDecision('h', 'a`@x\nb', 'a human')).toContain('`a@xb`')
+		expect(unreviewedHeadDecision('h', '', 'a human')).not.toContain('``')
 	})
 })
 

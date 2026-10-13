@@ -40,7 +40,8 @@ import { runLoopWorktreeAdd } from './loop-worktree.js'
  *   `loop worktree add`; a failed worktree returns the issue to `ai-ready`.
  *   `claimed` lists what the model launches Workflows for.
  *
- * It is the loop's only merge call site: `gh pr merge --squash --auto`, and only
+ * It is the loop's only merge call site: `gh pr merge --squash --auto`, pinned
+ * with `--match-head-commit` to the head both reviews passed (#375), and only
  * for a handoff `loop tick` marked `autoMerge` (the repo's `.repo-ai.json`
  * opt-in *and* a `release` environment with required reviewers, #142).
  *
@@ -183,6 +184,12 @@ export function blockedDecision(
 /** Why an opted-in PR was handed over instead of auto-merged (#370). File names come from the PR: no backtick or newline escapes the code span. */
 export function releaseConfigDecision(header: string, files: string[], human: string): string {
 	return `${header}\nNot auto-merged: this PR changes release config (${files.map((f) => `\`${f.replace(/[`\r\n]/g, '')}\``).join(', ')}). Merging that unattended could remove the release gate that allows auto-merge, so ${human} merges it by hand.`
+}
+
+/** Why an opted-in PR was handed over: its verdicts aren't both on its current head (#375). */
+export function unreviewedHeadDecision(header: string, head: string, human: string): string {
+	const sha = head.replace(/[`\r\n]/g, '').slice(0, 40)
+	return `${header}\nNot auto-merged: both reviews passed, but not both on the current head${sha ? ` (\`${sha}\`)` : ''}, so a push may have landed after them. ${human} merges it by hand.`
 }
 
 /** `+\`a\`, −\`b\`` from an edit's label flags; empty when it changes none. */
@@ -378,9 +385,27 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 			)
 			if ('error' in r) result.errors.push(`decision comment on #${h.pr} failed: ${r.error}`)
 		}
+		if (h.unreviewedHead !== undefined) {
+			const r = await upsertMarked(
+				target,
+				h.pr,
+				DECISION_MARKER,
+				unreviewedHeadDecision(header, h.unreviewedHead, human)
+			)
+			if ('error' in r) result.errors.push(`decision comment on #${h.pr} failed: ${r.error}`)
+		}
 		// The one unattended merge: `loop tick` sets `autoMerge` only with the opt-in and the release gate.
-		if (h.autoMerge)
-			await run(1, 'merge', h.pr, ['pr', 'merge', String(h.pr), '--squash', '--auto'])
+		// Pinned to the reviewed head, so a push since the tick read the PR fails the merge (#375).
+		if (h.autoMerge && h.head)
+			await run(1, 'merge', h.pr, [
+				'pr',
+				'merge',
+				String(h.pr),
+				'--squash',
+				'--auto',
+				'--match-head-commit',
+				h.head,
+			])
 	}
 
 	for (const n of tick.stripMergeReady)
