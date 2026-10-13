@@ -68,7 +68,7 @@ Mods are Claude Code plugins built on its early-access mod API. They need **Clau
 
 | Mod | Install | What it does | Needs |
 |---|---|---|---|
-| `release-guard` | `/plugin install release-guard@repo-ai` | Stops an agent from releasing outside CI: npm publish, version bumps, a local semantic-release run, git tags and tag pushes, force pushes, `git push --tags` or `--follow-tags`, release workflow dispatches (and any dispatch by numeric workflow ID), milestone closes (they fire the release workflow), GitHub releases and `package.json` `"version"` edits. It tells the agent to have you run the command yourself with `! <command>`. | Nothing else |
+| `release-guard` | `/plugin install release-guard@repo-ai` | Stops an agent from releasing outside CI: npm publish, version bumps, a local semantic-release run, git tags and tag pushes, force pushes, `git push --tags` or `--follow-tags`, release workflow dispatches (and any dispatch by a numeric or `$var` workflow ID), milestone closes (they fire the release workflow), GitHub releases and `package.json` `"version"` edits. It tells the agent to have you run the command yourself with `! <command>`. | Nothing else |
 | `loop-watch` (experimental) | `/plugin install loop-watch@repo-ai` | A live view of the loop: a status line segment (`🤖 <summary> · next 9m · 2 agents · 1 ready to merge`), a `/loop-watch` pane of the open PRs and issues with `ai-*` labels, a toast and chime when a PR passes both reviews, and a dock with one tile per running subagent. | `gh` |
 | `repo-ai-rainbow` | `/plugin install repo-ai-rainbow@repo-ai` | A colourful band above the prompt with the open `ai-*` label counts and the loop status. `/repo-ai` refreshes it. | `gh` |
 

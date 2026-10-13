@@ -52,20 +52,20 @@ const RULES: [RegExp, string][] = [
 		rule(String.raw`gh\s+api\b[^\n;&|]*actions/workflows/[^\s/]*release[^\s/]*/dispatches`, 'i'),
 		'dispatching the release workflow',
 	],
-	// A numeric workflow ID can't be resolved offline, so any one might be release.yml.
+	// A numeric workflow ID, or a `$var` holding one, can't be resolved offline, so any one might be release.yml.
 	[
-		rule(RUN + String.raw`["']?\d+["']?(?![^\s;&|)])`),
-		'dispatching a workflow by numeric ID (it may be the release workflow)',
+		rule(RUN + String.raw`["']?(?:\d+["']?(?![^\s;&|)])|\$)`),
+		'dispatching a workflow by numeric ID or variable (it may be the release workflow)',
 	],
 	[
-		rule(String.raw`gh\s+api\b[^\n;&|]*actions/workflows/\d+/dispatches`),
-		'dispatching a workflow by numeric ID (it may be the release workflow)',
+		rule(String.raw`gh\s+api\b[^\n;&|]*actions/workflows/(?:\d+|\$[^\s/]*)/dispatches`),
+		'dispatching a workflow by numeric ID or variable (it may be the release workflow)',
 	],
 	// release.yml also fires on `milestone: closed`. ponytail: `-f`/`-F`/`--field` only; a body sent
 	// with `--input` isn't seen.
 	[
 		rule(
-			String.raw`gh\s+api\b(?=[^\n;&|]*milestones/\d+)[^\n;&|]*(?:\s|--(?:raw-)?field=|-[fF])["']?state=["']?closed\b`
+			String.raw`gh\s+api\b(?=[^\n;&|]*milestones/(?:\d+|\$))[^\n;&|]*(?:\s|--(?:raw-)?field=|-[fF])["']?state=["']?closed\b`
 		),
 		'closing a milestone (it fires the release workflow)',
 	],
