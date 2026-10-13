@@ -5,9 +5,9 @@
  */
 import path from 'node:path'
 import fs from 'fs-extra'
-import { ensureIgnored, SETTINGS_LOCAL } from './ai-loop-identity.js'
+import { assertNotSymlinked, ensureIgnored, SETTINGS_LOCAL } from './ai-loop-identity.js'
 import { FixerAbort } from './fixer-abort.js'
-import { detectPackageManager } from './package-manager.js'
+import { detectPackageManager, type PackageManager } from './package-manager.js'
 import type { CheckResult } from './types.js'
 
 /** The rules every checkout needs; {@link loopAllowRules} adds the package manager's. */
@@ -19,6 +19,35 @@ export async function loopAllowRules(dir: string): Promise<string[]> {
 	return pm
 		? [...LOOP_ALLOW_RULES.slice(0, 2), `Bash(${pm}:*)`, ...LOOP_ALLOW_RULES.slice(2)]
 		: LOOP_ALLOW_RULES
+}
+
+/**
+ * Deny rules written alongside the allow rules (#373). `Bash(git *)` and `Bash(<pm>:*)`
+ * would otherwise grant `git -c alias.x='!<cmd>' x`, `git -c core.sshCommand=<cmd>`,
+ * `pnpm dlx <any package>` and the like, which is arbitrary shell. Deny beats allow.
+ * ponytail: prefix rules, so `git -C <dir> -c …` and `pnpm --filter x exec` still get past.
+ * A `git -C * -c *` rule would also deny every commit whose message has " -c " in it,
+ * because Claude Code's `*` spans spaces.
+ */
+export const LOOP_DENY_RULES = [
+	'Bash(git -c *)',
+	'Bash(git config *)',
+	'Bash(git --config-env*)',
+	'Bash(git --exec-path*)',
+]
+
+/** The subcommands that run a package the lockfile didn't install, or an arbitrary command. */
+const PM_RUNNERS: Record<PackageManager, string[]> = {
+	pnpm: ['dlx', 'exec', 'create'],
+	npm: ['exec', 'x', 'create', 'init'],
+	yarn: ['dlx', 'exec', 'create'],
+	bun: ['x', 'exec', 'create'],
+}
+
+/** {@link LOOP_DENY_RULES} plus the lockfile's package manager's runners, if any. */
+export async function loopDenyRules(dir: string): Promise<string[]> {
+	const pm = await detectPackageManager(dir)
+	return [...LOOP_DENY_RULES, ...(pm ? PM_RUNNERS[pm].map((sub) => `Bash(${pm} ${sub} *)`) : [])]
 }
 
 /** `Bash(gh:*)` and `Bash(gh *)` are the same prefix rule. */
@@ -34,33 +63,47 @@ const settingsFiles = (dir: string, home: string) => [
 	path.join(dir, '.claude', 'settings.local.json'),
 ]
 
-async function allowRules(file: string): Promise<string[]> {
+async function rules(file: string, key: 'allow' | 'deny'): Promise<string[]> {
 	const settings = await fs.readJson(file).catch(() => null)
-	return strings(settings?.permissions?.allow)
+	return strings(settings?.permissions?.[key])
 }
 
-/** The loop's rules no settings file grants yet; null when a bare `Bash` allows everything. */
-async function missingAllowRules(dir: string, home: string): Promise<string[] | null> {
-	const have = new Set(
-		(await Promise.all(settingsFiles(dir, home).map(allowRules))).flat().map(normalise)
+const present = async (dir: string, home: string, key: 'allow' | 'deny') =>
+	new Set(
+		(await Promise.all(settingsFiles(dir, home).map((f) => rules(f, key)))).flat().map(normalise)
 	)
+
+/**
+ * The loop's allow and deny rules no settings file has yet; null when a bare `Bash`
+ * allows everything, since the loop then grants nothing and adds no denies either.
+ */
+async function missingRules(
+	dir: string,
+	home: string
+): Promise<{ allow: string[]; deny: string[] } | null> {
+	const have = await present(dir, home, 'allow')
 	// A bare `Bash` (or `Bash(*)`) allows every command.
 	if (have.has('Bash') || have.has('Bash(*)')) return null
-	return (await loopAllowRules(dir)).filter((r) => !have.has(normalise(r)))
+	const denied = await present(dir, home, 'deny')
+	return {
+		allow: (await loopAllowRules(dir)).filter((r) => !have.has(normalise(r))),
+		deny: (await loopDenyRules(dir)).filter((r) => !denied.has(normalise(r))),
+	}
 }
 
 /**
- * `setup`'s allow-rules step (#371): merge the missing rules into this checkout's
- * gitignored `.claude/settings.local.json`, so the grant covers only this repo and
- * is never committed. Appends only — existing rules and every other key stay put.
- * Logs each rule it adds; returns the files written.
+ * `setup`'s allow-rules step (#371): merge the missing allow and deny rules into this
+ * checkout's gitignored `.claude/settings.local.json`, so the grant covers only this
+ * repo and is never committed. Appends only — existing rules and every other key stay
+ * put. Logs each rule it adds; returns the files written.
  */
 export async function fixAllowRules(dir: string, home: string): Promise<string[]> {
-	const missing = await missingAllowRules(dir, home)
-	if (!missing?.length) {
+	const missing = await missingRules(dir, home)
+	if (!missing || missing.allow.length + missing.deny.length === 0) {
 		console.error("   the loop's allow rules are already present")
 		return []
 	}
+	await assertNotSymlinked(dir)
 	const file = path.join(dir, SETTINGS_LOCAL)
 	let settings: Record<string, unknown> = {}
 	if (await fs.pathExists(file)) {
@@ -70,7 +113,7 @@ export async function fixAllowRules(dir: string, home: string): Promise<string[]
 			throw new FixerAbort(
 				'settings-local-unparseable',
 				`${SETTINGS_LOCAL} is not valid JSON — not overwriting it`,
-				`Fix the file by hand, or add ${missing.map((r) => `"${r}"`).join(', ')} to permissions.allow yourself`
+				`Fix the file by hand, or add ${missing.allow.map((r) => `"${r}"`).join(', ')} to permissions.allow and ${missing.deny.map((r) => `"${r}"`).join(', ')} to permissions.deny yourself`
 			)
 		}
 	}
@@ -79,11 +122,16 @@ export async function fixAllowRules(dir: string, home: string): Promise<string[]
 		file,
 		{
 			...settings,
-			permissions: { ...permissions, allow: [...strings(permissions.allow), ...missing] },
+			permissions: {
+				...permissions,
+				allow: [...strings(permissions.allow), ...missing.allow],
+				deny: [...strings(permissions.deny), ...missing.deny],
+			},
 		},
 		{ spaces: 2 }
 	)
-	for (const rule of missing) console.error(`   allowed ${rule}`)
+	for (const rule of missing.allow) console.error(`   allowed ${rule}`)
+	for (const rule of missing.deny) console.error(`   denied ${rule}`)
 	const written = [SETTINGS_LOCAL]
 	if (await ensureIgnored(dir)) written.push('.gitignore')
 	return written
@@ -92,19 +140,29 @@ export async function fixAllowRules(dir: string, home: string): Promise<string[]
 /** One result per missing rule, or a single `ok` when all are present. */
 export async function checkAllowRules(dir: string, home: string): Promise<CheckResult[]> {
 	const check = 'Claude Code permissions'
-	const missing = await missingAllowRules(dir, home)
+	const missing = await missingRules(dir, home)
 	if (missing === null) {
 		return [{ check, status: 'ok', detail: 'all Bash commands are allowed' }]
 	}
-	if (missing.length === 0) {
-		return [{ check, status: 'ok', detail: "all of the loop's allow rules are present" }]
+	if (missing.allow.length + missing.deny.length === 0) {
+		return [{ check, status: 'ok', detail: "all of the loop's allow and deny rules are present" }]
 	}
-	return missing.map((rule) => ({
-		check,
-		status: 'drift',
-		detail: `no "${rule}" allow rule — the loop's calls will prompt or hit the auto-mode classifier`,
-		hint: `Run \`npx @infrazero/repo-ai fix allow-rules\` to add it to ${SETTINGS_LOCAL}, or add "${rule}" to permissions.allow yourself`,
-	}))
+	const hint = (rule: string, key: string) =>
+		`Run \`npx @infrazero/repo-ai fix allow-rules\` to add it to ${SETTINGS_LOCAL}, or add "${rule}" to permissions.${key} yourself`
+	return [
+		...missing.allow.map((rule) => ({
+			check,
+			status: 'drift' as const,
+			detail: `no "${rule}" allow rule — the loop's calls will prompt or hit the auto-mode classifier`,
+			hint: hint(rule, 'allow'),
+		})),
+		...missing.deny.map((rule) => ({
+			check,
+			status: 'drift' as const,
+			detail: `no "${rule}" deny rule — the loop's broad git/package-manager grant lets that run any command`,
+			hint: hint(rule, 'deny'),
+		})),
+	]
 }
 
 /**

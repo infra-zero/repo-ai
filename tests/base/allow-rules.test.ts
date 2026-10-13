@@ -7,22 +7,24 @@ import {
 	fixAllowRules,
 	fixSandboxExcludes,
 	LOOP_ALLOW_RULES,
+	LOOP_DENY_RULES,
 	LOOP_SANDBOX_EXCLUDES,
 	loopAllowRules,
+	loopDenyRules,
 } from '../../src/base/allow-rules.js'
 import { useTmpDir } from '../helpers/tmp-dir.js'
 
 const newTmpDir = useTmpDir()
 
-const settings = (file: string, allow: string[]) =>
-	fs.outputJsonSync(file, { permissions: { allow } })
+const settings = (file: string, allow: string[], deny: string[] = []) =>
+	fs.outputJsonSync(file, { permissions: { allow, deny } })
 
 describe('checkAllowRules (#152)', () => {
 	it('warns once per missing rule with no settings files', async () => {
 		const results = await checkAllowRules(newTmpDir(), newTmpDir())
-		expect(results).toHaveLength(LOOP_ALLOW_RULES.length)
+		expect(results).toHaveLength(LOOP_ALLOW_RULES.length + LOOP_DENY_RULES.length)
 		expect(results.every((r) => r.status === 'drift')).toBe(true)
-		for (const rule of LOOP_ALLOW_RULES) {
+		for (const rule of [...LOOP_ALLOW_RULES, ...LOOP_DENY_RULES]) {
 			expect(results.some((r) => r.detail.includes(rule))).toBe(true)
 		}
 	})
@@ -32,15 +34,32 @@ describe('checkAllowRules (#152)', () => {
 		const home = newTmpDir()
 		settings(join(home, '.claude', 'settings.json'), ['Bash(gh:*)'])
 		settings(join(dir, '.claude', 'settings.json'), ['Bash(git *)', 'Bash(pnpm *)'])
-		settings(join(dir, '.claude', 'settings.local.json'), ['Bash(npx @infrazero/repo-ai:*)'])
+		settings(
+			join(dir, '.claude', 'settings.local.json'),
+			['Bash(npx @infrazero/repo-ai:*)'],
+			LOOP_DENY_RULES
+		)
 		expect(await checkAllowRules(dir, home)).toEqual([expect.objectContaining({ status: 'ok' })])
+	})
+
+	it('drifts on a missing deny rule even when every allow rule is there (#373)', async () => {
+		const home = newTmpDir()
+		settings(join(home, '.claude', 'settings.json'), LOOP_ALLOW_RULES, ['Bash(git -c *)'])
+		const results = await checkAllowRules(newTmpDir(), home)
+		expect(results.map((r) => r.detail)).toEqual(
+			LOOP_DENY_RULES.filter((r) => r !== 'Bash(git -c *)').map((r) =>
+				expect.stringContaining(`no "${r}" deny rule`)
+			)
+		)
 	})
 
 	it('warns only for the rules still missing', async () => {
 		const dir = newTmpDir()
 		fs.outputFileSync(join(dir, 'pnpm-lock.yaml'), '')
 		settings(join(dir, '.claude', 'settings.json'), ['Bash(gh:*)', 'Bash(git *)'])
-		const results = await checkAllowRules(dir, newTmpDir())
+		const results = (await checkAllowRules(dir, newTmpDir())).filter((r) =>
+			r.detail.includes('allow rule')
+		)
 		expect(results.map((r) => r.status)).toEqual(['drift', 'drift'])
 		expect(results[0].detail).toContain('Bash(pnpm:*)')
 		expect(results[1].detail).toContain('Bash(npx @infrazero/repo-ai *)')
@@ -61,6 +80,18 @@ describe('checkAllowRules (#152)', () => {
 		expect(details).not.toContain('pnpm')
 	})
 
+	it("denies the lockfile's package manager's runners, and none without a lockfile (#373)", async () => {
+		const dir = newTmpDir()
+		expect(await loopDenyRules(dir)).toEqual(LOOP_DENY_RULES)
+		fs.outputFileSync(join(dir, 'pnpm-lock.yaml'), '')
+		expect(await loopDenyRules(dir)).toEqual([
+			...LOOP_DENY_RULES,
+			'Bash(pnpm dlx *)',
+			'Bash(pnpm exec *)',
+			'Bash(pnpm create *)',
+		])
+	})
+
 	it('treats a bare Bash rule as allowing everything', async () => {
 		const home = newTmpDir()
 		settings(join(home, '.claude', 'settings.json'), ['Bash'])
@@ -70,7 +101,9 @@ describe('checkAllowRules (#152)', () => {
 	it('ignores an unparseable settings file', async () => {
 		const dir = newTmpDir()
 		fs.outputFileSync(join(dir, '.claude', 'settings.json'), '{ nope')
-		expect(await checkAllowRules(dir, newTmpDir())).toHaveLength(LOOP_ALLOW_RULES.length)
+		expect(await checkAllowRules(dir, newTmpDir())).toHaveLength(
+			LOOP_ALLOW_RULES.length + LOOP_DENY_RULES.length
+		)
 	})
 })
 
@@ -136,7 +169,10 @@ describe('fixAllowRules (#371)', () => {
 		const home = newTmpDir()
 		const dir = newTmpDir()
 		expect(await fixAllowRules(dir, home)).toEqual(['.claude/settings.local.json', '.gitignore'])
-		expect(fs.readJsonSync(local(dir)).permissions.allow).toEqual(LOOP_ALLOW_RULES)
+		expect(fs.readJsonSync(local(dir)).permissions).toEqual({
+			allow: LOOP_ALLOW_RULES,
+			deny: LOOP_DENY_RULES,
+		})
 		expect(fs.readFileSync(join(dir, '.gitignore'), 'utf8')).toContain(
 			'.claude/settings.local.json'
 		)
@@ -164,14 +200,14 @@ describe('fixAllowRules (#371)', () => {
 			env: { GH_CONFIG_DIR: '/x' },
 			permissions: {
 				allow: ['Read', 'Bash(gh *)', ...LOOP_ALLOW_RULES.filter((r) => r !== 'Bash(gh:*)')],
-				deny: ['Bash(rm:*)'],
+				deny: ['Bash(rm:*)', ...LOOP_DENY_RULES],
 			},
 		})
 	})
 
 	it('writes nothing when another settings file already grants them, or a bare Bash does', async () => {
 		const home = newTmpDir()
-		settings(join(home, '.claude', 'settings.json'), [...LOOP_ALLOW_RULES])
+		settings(join(home, '.claude', 'settings.json'), LOOP_ALLOW_RULES, LOOP_DENY_RULES)
 		const dir = newTmpDir()
 		expect(await fixAllowRules(dir, home)).toEqual([])
 		const bare = newTmpDir()
@@ -185,5 +221,22 @@ describe('fixAllowRules (#371)', () => {
 		fs.outputFileSync(local(dir), '{ not json')
 		await expect(fixAllowRules(dir, newTmpDir())).rejects.toThrow('not valid JSON')
 		expect(fs.readFileSync(local(dir), 'utf8')).toBe('{ not json')
+	})
+
+	it('refuses to write through a symlinked .claude or settings.local.json (#373)', async () => {
+		const elsewhere = newTmpDir()
+		const linkedDir = newTmpDir()
+		fs.symlinkSync(elsewhere, join(linkedDir, '.claude'))
+		await expect(fixAllowRules(linkedDir, newTmpDir())).rejects.toThrow('.claude is a symlink')
+		const linkedFile = newTmpDir()
+		const target = join(elsewhere, 'target.json')
+		fs.outputJsonSync(target, {})
+		fs.mkdirSync(join(linkedFile, '.claude'))
+		fs.symlinkSync(target, local(linkedFile))
+		await expect(fixAllowRules(linkedFile, newTmpDir())).rejects.toThrow(
+			'.claude/settings.local.json is a symlink'
+		)
+		expect(fs.readdirSync(elsewhere)).toEqual(['target.json'])
+		expect(fs.readJsonSync(target)).toEqual({})
 	})
 })
