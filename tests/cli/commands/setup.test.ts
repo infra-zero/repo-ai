@@ -6,6 +6,7 @@ import { NOTICE, NOTICE_HASH } from '../../../src/base/notice.js'
 import {
 	acknowledgeNotice,
 	asSetupNotes,
+	quietSummary,
 	runSetup,
 	setupCommand,
 	setupSkills,
@@ -80,11 +81,27 @@ describe('setup', () => {
 	it('skips a step the user declines', async () => {
 		const { ran, steps } = recorder()
 		// Declining allow-rules (#371) leaves them as setup notes, nothing written.
-		const confirm = async (t: string) => t !== 'labels' && t !== 'allow-rules'
+		const confirm = async (t: string) => t !== 'allow-rules'
 		const results = await runSetup(repo(), { dir: '.' }, { steps, confirm })
-		expect(ran).toEqual(['config', 'claude-skills', 'statusline'])
-		expect(results.find((r) => r.target === 'labels')?.status).toBe('skipped')
+		expect(ran).toEqual(['config', 'claude-skills', 'labels', 'statusline'])
 		expect(results.find((r) => r.target === 'allow-rules')?.status).toBe('skipped')
+	})
+
+	it('creates the labels without asking (#365)', async () => {
+		const { ran, steps } = recorder()
+		const confirm = vi.fn(async () => false)
+		await runSetup(repo(), { dir: '.' }, { steps, confirm })
+		expect(ran).toEqual(['labels'])
+		expect(confirm.mock.calls.map(([t]) => t)).not.toContain('labels')
+	})
+
+	it('sums the label changes into one line (#365)', () => {
+		const applied = [
+			...['ai-ready', 'ai-wip', 'ai-review'].map((l) => `created label "${l}"`),
+			'repaired label "ai-blocked"',
+		]
+		expect(quietSummary(applied)).toBe('created 3, repaired 1 ai-loop labels')
+		expect(quietSummary(['created label "ai-ready"'])).toBe('created 1 ai-loop labels')
 	})
 
 	it('keeps going after a fixer aborts, and reports why', async () => {

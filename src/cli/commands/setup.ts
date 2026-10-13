@@ -4,7 +4,7 @@ import chalk from 'chalk'
 import fs from 'fs-extra'
 import inquirer from 'inquirer'
 import { SETTINGS_LOCAL } from '../../base/ai-loop-identity.js'
-import { fixAllowRules, loopAllowRules } from '../../base/allow-rules.js'
+import { loopAllowRules } from '../../base/allow-rules.js'
 import { FixerAbort } from '../../base/fixer-abort.js'
 import { applyLoopLabels } from '../../base/labels.js'
 import {
@@ -65,10 +65,25 @@ export async function setupSkills(
 const STEPS: Record<string, StepRun> = {
 	config: FIXERS.config.run,
 	'claude-skills': (dir, o) => setupSkills(dir, o),
-	'allow-rules': (dir) => fixAllowRules(dir, os.homedir()),
+	'allow-rules': FIXERS['allow-rules'].run,
 	labels: (dir) => applyLoopLabels(dir, undefined, { bootstrap: true }),
 	'ai-loop-identity': FIXERS['ai-loop-identity'].run,
 	statusline: FIXERS.statusline.run,
+}
+
+/**
+ * Steps that run without a prompt and report in one line (#365): `setup` is the
+ * opt-in to the loop, so its labels come with it rather than as fifteen names
+ * to learn up front.
+ */
+const QUIET_STEPS = new Set(['labels'])
+
+/** `created label "a"`, `repaired label "b"`, … → `created 14, repaired 1 ai-loop labels`. */
+export function quietSummary(applied: string[]): string {
+	const counts = ['created', 'repaired']
+		.map((verb) => [verb, applied.filter((a) => a.startsWith(`${verb} `)).length] as const)
+		.filter(([, n]) => n > 0)
+	return `${counts.map(([verb, n]) => `${verb} ${n}`).join(', ')} ai-loop labels`
 }
 
 /** The steps, in order. The identity step only means something with an agent user. */
@@ -96,7 +111,7 @@ export async function runSetup(
 	const confirm = deps.confirm ?? askToRun
 	const results: StepResult[] = []
 	for (const target of setupSteps(await configuredAgentUser(dir))) {
-		if (!assumeYes && !(await confirm(target, dir))) {
+		if (!assumeYes && !QUIET_STEPS.has(target) && !(await confirm(target, dir))) {
 			results.push({ target, status: 'skipped' })
 			continue
 		}
@@ -121,16 +136,11 @@ export async function runSetup(
 	return results
 }
 
-// `fix labels` only repairs; here the step also creates the set.
-const PROMPTS: Record<string, string> = {
-	labels: 'Create or repair the ai-loop labels on GitHub via `gh label`',
-}
-
 async function askToRun(target: string, dir: string): Promise<boolean> {
 	const prompt =
 		target === 'allow-rules'
 			? `Allow the loop's own shell calls in this checkout's ${SETTINGS_LOCAL} (gitignored, this repo only), so an unattended tick doesn't stall on permission prompts:\n  ${(await loopAllowRules(dir)).join('\n  ')}\n Add them`
-			: PROMPTS[target]
+			: undefined
 	const { run } = await inquirer.prompt([
 		{
 			type: 'confirm',
@@ -212,7 +222,9 @@ export async function setupCommand(options: FixOptions): Promise<void> {
 		console.log(JSON.stringify({ directory, acknowledged: true, steps, doctor }, null, 2))
 	} else {
 		for (const s of steps) {
-			if (s.status === 'applied')
+			if (s.status === 'applied' && QUIET_STEPS.has(s.target) && s.filesWritten?.length)
+				console.log(chalk.green(`✓ ${s.target}: ${quietSummary(s.filesWritten)}`))
+			else if (s.status === 'applied')
 				for (const f of s.filesWritten ?? []) console.log(chalk.green(`✓ ${s.target}: ${f}`))
 			if (s.status === 'skipped') console.log(chalk.gray(`○ ${s.target}: skipped`))
 			if (s.status === 'failed') {
