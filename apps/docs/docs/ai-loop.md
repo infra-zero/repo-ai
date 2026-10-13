@@ -424,10 +424,26 @@ classifier, which can block the tick. Add these to `permissions.allow` in
       "Bash(git *)",
       "Bash(pnpm:*)",
       "Bash(npx @infrazero/repo-ai *)"
+    ],
+    "deny": [
+      "Bash(git -c *)",
+      "Bash(git config *)",
+      "Bash(git --config-env*)",
+      "Bash(git --exec-path*)",
+      "Bash(pnpm dlx *)",
+      "Bash(pnpm exec *)",
+      "Bash(pnpm create *)"
     ]
   }
 }
 ```
+
+The deny rules matter because `Bash(git *)` and `Bash(pnpm:*)` would otherwise
+allow `git -c alias.x='!<cmd>' x`, `git -c core.sshCommand=<cmd> fetch` and
+`pnpm dlx <any package>`, which run arbitrary commands without a prompt. Deny
+beats allow, and no tick runs any of these. They are prefix rules, so
+`git -C <dir> -c …` still gets past. `fix allow-rules` writes the right runners
+for your package manager.
 
 `Bash(pnpm:*)` stands for the package manager that `loop tick` reads off the
 lockfile: `pnpm-lock.yaml`, `bun.lock`/`bun.lockb`, `yarn.lock`, or
