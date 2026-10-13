@@ -165,6 +165,15 @@ describe('resolveLoopEnv', () => {
 		)
 	})
 
+	it("carries the lockfile's installCommand, empty with no lockfile (#360)", async () => {
+		const root = checkout(newTmpDir())
+		expect((await resolveLoopEnv({ dir: root, gh: fakeGh().gh, env: {} })).installCommand).toBe('')
+		fs.writeFileSync(join(root, 'package-lock.json'), '{}')
+		expect((await resolveLoopEnv({ dir: root, gh: fakeGh().gh, env: {} })).installCommand).toBe(
+			"npm --prefix '<worktree>' install"
+		)
+	})
+
 	it('leaves HUMAN_USER empty for an organisation repo', async () => {
 		const root = checkout(newTmpDir())
 		const env = await resolveLoopEnv({
@@ -238,6 +247,7 @@ describe('toShell', () => {
 			budgetTokens: 400_000,
 			quietStopMinutes: 120,
 			checkCommand: "npm test; echo '$HOME'",
+			installCommand: "npm --prefix '<worktree>' install",
 			maxInFlight: 6,
 			maxFixRounds: 2,
 			maxTasksPerTick: 8,
@@ -253,6 +263,7 @@ describe('toShell', () => {
 		expect(out).toContain(`BUDGET_TOKENS='400000'`)
 		expect(out).toContain(`QUIET_STOP_MINUTES='120'`)
 		expect(out).toContain(`CHECK_COMMAND='npm test; echo '\\''$HOME'\\'''`)
+		expect(out).toContain(`INSTALL_COMMAND='npm --prefix '\\''<worktree>'\\'' install'`)
 		expect(out).toContain(`MAX_FIX_ROUNDS='2'`)
 		expect(out).toContain(`IDLE_MINUTES='30'`)
 	})

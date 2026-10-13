@@ -363,6 +363,22 @@ describe('ai-loop-pickup', () => {
 		expect(unset.prompts.join('\n')).not.toContain('undefined')
 	})
 
+	it("names the tick's installCommand for the worktree, generic when absent (#360)", async () => {
+		const reply = (label: string) =>
+			label === 'impl:#1'
+				? { pr: 10 }
+				: label.startsWith('fix')
+					? { pushed: true }
+					: { passed: label !== 'code-reviewer:#1' }
+		const npm = "npm --prefix '<worktree>' install"
+		const set = await run('ai-loop-pickup', { ...one, installCommand: npm }, reply)
+		expect(set.prompts[0]).toContain("Never run `npm --prefix '/w' install` there")
+		expect(set.prompts[4]).toContain("Do not run `npm --prefix '/w' install`")
+		const unset = await run('ai-loop-pickup', one, reply)
+		expect(unset.prompts[0]).toContain('Never run a dependency install there')
+		expect(unset.prompts.join('\n')).not.toContain('pnpm')
+	})
+
 	it('reports an unposted review as unposted, and runs no fixer on its say-so (#235)', async () => {
 		const { value, spawned, prompts } = await run(
 			'ai-loop-pickup',

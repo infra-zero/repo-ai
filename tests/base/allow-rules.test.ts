@@ -8,6 +8,7 @@ import {
 	fixSandboxExcludes,
 	LOOP_ALLOW_RULES,
 	LOOP_SANDBOX_EXCLUDES,
+	loopAllowRules,
 } from '../../src/base/allow-rules.js'
 import { useTmpDir } from '../helpers/tmp-dir.js'
 
@@ -37,11 +38,27 @@ describe('checkAllowRules (#152)', () => {
 
 	it('warns only for the rules still missing', async () => {
 		const dir = newTmpDir()
+		fs.outputFileSync(join(dir, 'pnpm-lock.yaml'), '')
 		settings(join(dir, '.claude', 'settings.json'), ['Bash(gh:*)', 'Bash(git *)'])
 		const results = await checkAllowRules(dir, newTmpDir())
 		expect(results.map((r) => r.status)).toEqual(['drift', 'drift'])
 		expect(results[0].detail).toContain('Bash(pnpm:*)')
 		expect(results[1].detail).toContain('Bash(npx @infrazero/repo-ai *)')
+	})
+
+	it("requires the lockfile's package manager, and none without a lockfile (#360)", async () => {
+		const dir = newTmpDir()
+		expect(await loopAllowRules(dir)).toEqual(LOOP_ALLOW_RULES)
+		fs.outputFileSync(join(dir, 'package-lock.json'), '{}')
+		expect(await loopAllowRules(dir)).toEqual([
+			'Bash(gh:*)',
+			'Bash(git *)',
+			'Bash(npm:*)',
+			'Bash(npx @infrazero/repo-ai *)',
+		])
+		const details = (await checkAllowRules(dir, newTmpDir())).map((r) => r.detail).join('\n')
+		expect(details).toContain('Bash(npm:*)')
+		expect(details).not.toContain('pnpm')
 	})
 
 	it('treats a bare Bash rule as allowing everything', async () => {
