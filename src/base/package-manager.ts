@@ -31,11 +31,13 @@ export async function detectPackageManager(dir: string): Promise<PackageManager 
  * commands start with a plain executable (#150) — never `cd … &&`.
  *
  * None runs dependency lifecycle scripts (#382): a stacked pickup installs an
- * unmerged agent branch's lockfile on the loop host. pnpm ≥ 10 and bun skip
- * them by default; npm and yarn need the flag.
+ * unmerged agent branch's lockfile on the loop host. bun skips them by default;
+ * npm and yarn need the flag. pnpm needs it too, since the branch's
+ * `allowBuilds`/`onlyBuiltDependencies` re-enable them, plus `--ignore-pnpmfile`,
+ * or it runs the branch's `.pnpmfile.cjs` (#395).
  */
 export const INSTALL_COMMANDS: Record<PackageManager, string> = {
-	pnpm: "pnpm -C '<worktree>' install",
+	pnpm: "pnpm -C '<worktree>' install --ignore-scripts --ignore-pnpmfile",
 	npm: "npm --prefix '<worktree>' install --ignore-scripts",
 	yarn: "yarn --cwd '<worktree>' install --ignore-scripts",
 	bun: "bun install --cwd '<worktree>'",
