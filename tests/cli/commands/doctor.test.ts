@@ -43,13 +43,16 @@ describe('runDoctor — loop config location', () => {
 describe('checkAgentInstructions (#361)', () => {
 	it('warns when a repo gives its agents no checks to run', async () => {
 		const r = await checkAgentInstructions(newTmpDir(), undefined)
-		expect(r).toMatchObject({ status: 'drift', hint: expect.stringContaining('checkCommand') })
-	})
-
-	it('is informational with only a checkCommand', async () => {
-		const r = await checkAgentInstructions(newTmpDir(), 'npm test')
 		expect(r).toMatchObject({
 			status: 'optional-missing',
+			hint: expect.stringContaining('checkCommand'),
+		})
+	})
+
+	it('is ok with only a checkCommand', async () => {
+		const r = await checkAgentInstructions(newTmpDir(), 'npm test')
+		expect(r).toMatchObject({
+			status: 'ok',
 			detail: expect.stringContaining('`npm test`'),
 		})
 	})

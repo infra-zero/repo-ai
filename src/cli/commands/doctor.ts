@@ -93,14 +93,14 @@ export async function checkAgentInstructions(
 	if (checkCommand) {
 		return {
 			check,
-			status: 'optional-missing',
+			status: 'ok',
 			detail: `no CLAUDE.md or AGENTS.md; agents run \`${checkCommand}\` before pushing`,
-			hint: 'Add an AGENTS.md for any other rule agents should follow',
 		}
 	}
+	// A warning, not drift: a fresh repo has neither file, and doctor must pass there.
 	return {
 		check,
-		status: 'drift',
+		status: 'optional-missing',
 		detail:
 			'no CLAUDE.md or AGENTS.md, and no checkCommand: agents push without running any checks',
 		hint: `Set "checkCommand" in ${CONFIG_FILE} (e.g. "npm test"), or add an AGENTS.md naming the checks to run before pushing`,
