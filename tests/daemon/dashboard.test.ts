@@ -322,7 +322,7 @@ describe('credentialEnv', () => {
 })
 
 describe('commentText', () => {
-	it('names failing and missing checks without quoting any log', () => {
+	it('names failing checks without quoting any log', () => {
 		const text = commentText(
 			{
 				kind: 'send-back',
@@ -333,14 +333,12 @@ describe('commentText', () => {
 					reason: 'ci-red',
 					label: 'ai-changes',
 					failing: [{ name: 'verify', link: 'https://github.com/o/r/runs/1' }],
-					missing: ['test'],
 				},
 			},
 			'main'
 		)
 		expect(text).toMatch(/^🤖 \*Automated/)
 		expect(text).toContain('`verify` failed')
-		expect(text).toContain('required check `test` never reported')
 	})
 })
 

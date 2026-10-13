@@ -59,6 +59,7 @@ export interface Applied {
 	transition:
 		| 'disarm'
 		| 'handoff'
+		| 'blocked-handoff'
 		| 'merge'
 		| 'strip-merge-ready'
 		| 'update-branch'
@@ -158,6 +159,27 @@ export function agentHeader(env: NodeJS.ProcessEnv): string {
 	return `🤖 *Automated — \`@${name}\`${tag ? ` ${tag}` : ''} via ai-loop.*`
 }
 
+/**
+ * Why a green PR GitHub calls BLOCKED went to a human, not a fixer (#362). Check
+ * names come from the repo's protection; no backtick or newline escapes a code span.
+ */
+export function blockedDecision(
+	header: string,
+	checks: string[],
+	human: string,
+	notes = false
+): string {
+	const why =
+		checks.length > 0
+			? `Branch protection requires ${checks.map((c) => `\`${c.replace(/[`\r\n]/g, '')}\``).join(', ')}, which never ran on this PR: a CI job that was renamed, removed or never added. No fix round can change that, so ${human} takes it: rename the job to match, update the required checks (Settings → Branches, or the ruleset).`
+			: `Every required check reported, so protection wants something that isn't a check, most often a required review, which the loop can never give its own PR. ${human} takes it: drop required reviews (\`npx @infrazero/repo-ai fix repo-settings\`).`
+	return `${header}\nNot merged: GitHub reports this PR BLOCKED although every check on it passed. ${why}${
+		notes
+			? "\n\nBoth reviews passed with notes: read the reviewer's `### Before merging` above."
+			: ''
+	}`
+}
+
 /** Why an opted-in PR was handed over instead of auto-merged (#370). File names come from the PR: no backtick or newline escapes the code span. */
 export function releaseConfigDecision(header: string, files: string[], human: string): string {
 	return `${header}\nNot auto-merged: this PR changes release config (${files.map((f) => `\`${f.replace(/[`\r\n]/g, '')}\``).join(', ')}). Merging that unattended could remove the release gate that allows auto-merge, so ${human} merges it by hand.`
@@ -203,6 +225,8 @@ function handoffLine(t: Applied['transition'], args: string[], human: string): s
 	switch (t) {
 		case 'handoff':
 			return `Ready to merge, handing off to ${human}.`
+		case 'blocked-handoff':
+			return `Blocked, needs ${human}: the why is in the loop decision comment.`
 		case 'strip-merge-ready':
 			return 'No longer ready to merge; back with the loop.'
 		case 'send-back':
@@ -318,19 +342,32 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 		await run(1, 'disarm', n, ['pr', 'merge', String(n), '--disable-auto'])
 
 	for (const h of tick.handoffs) {
-		// `ai-notes` is never stripped here: it must survive to the merge.
-		const ok = await run(1, 'handoff', h.pr, [
+		// `ai-notes` is never stripped here: it must survive to the merge. A green-but-BLOCKED
+		// PR is not ready to merge (#362): `ai-blocked`, never `merge-ready`, so no tick re-reads it.
+		const blocked = h.blockedChecks !== undefined
+		const ok = await run(1, blocked ? 'blocked-handoff' : 'handoff', h.pr, [
 			'pr',
 			'edit',
 			String(h.pr),
 			...flag('--add-assignee', humanUser),
 			'--add-label',
-			'merge-ready',
+			blocked ? 'ai-blocked' : 'merge-ready',
 			...PASS_LABELS,
+			...(blocked ? ['--remove-label', 'merge-ready'] : []),
 			...flag('--remove-assignee', agentUser),
 		])
 		if (!ok) continue
-		if (h.notes) result.comments.push({ kind: 'notes', pr: h.pr, handoff: h })
+		if (h.blockedChecks) {
+			// #362: the one decision comment says why; it carries the notes pointer too, since a
+			// skill-written `notes` comment would upsert over it.
+			const r = await upsertMarked(
+				target,
+				h.pr,
+				DECISION_MARKER,
+				blockedDecision(header, h.blockedChecks, human, h.notes)
+			)
+			if ('error' in r) result.errors.push(`decision comment on #${h.pr} failed: ${r.error}`)
+		} else if (h.notes) result.comments.push({ kind: 'notes', pr: h.pr, handoff: h })
 		// #370: the loop declined an opted-in merge, so the decision comment says which file did it.
 		if (h.releaseConfig?.length) {
 			const r = await upsertMarked(

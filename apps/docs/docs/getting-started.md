@@ -118,13 +118,24 @@ guessing at rules.
 ## 4. Meet the repo prerequisites
 
 ```bash
-npx @rtorcato/repo-tooling fix github-settings --yes
+npx @infrazero/repo-ai fix repo-settings
 ```
 
-This sets squash as the *only* merge method, auto-merge, delete-branch-on-merge,
-and `required_pull_request_reviews: null` — required review deadlocks
-auto-merge. You also need **at least one required status check**: that's the
-gate doing the real work once merges aren't reviewed by GitHub itself. Verify:
+It shows a plan and asks before changing anything; `--yes` applies it. It sets
+only what the loop needs: squash as the *only* merge method, auto-merge allowed,
+delete-branch-on-merge, and no required pull request reviews. A required review
+deadlocks the loop, because its one identity can't approve its own PRs. It
+never adds a ruleset or CodeQL, and it keeps every required status check you
+already have.
+
+You also need **at least one required status check**: that's the gate doing the
+real work once merges aren't reviewed by GitHub itself. When the default branch
+has none, `fix repo-settings` lists the checks from its last CI run and asks
+which to require. Pick the job that gates your CI. Under `--yes` it requires none
+and says so, rather than guess. A required check that never runs on a PR (a
+renamed job, say) leaves it `BLOCKED` with every check green; the loop hands such
+a PR to you with a comment naming the check, rather than sending it to a fixer.
+Verify:
 
 ```bash
 gh api repos/$OWNER_REPO --jq '{allow_squash_merge, allow_merge_commit, allow_rebase_merge, allow_auto_merge, delete_branch_on_merge}'

@@ -71,6 +71,12 @@ export interface Handoff {
 	notes: boolean
 	/** The gated-repo arm: both reviews passed, no `ai-notes`, CLEAN, no release config touched, and `release` gates the publish. */
 	autoMerge: boolean
+	/**
+	 * Set when GitHub says BLOCKED though every check is green (#362): the required
+	 * checks that never ran on the head, or empty when protection wants something
+	 * that isn't a check (a review). No agent can fix either, so a human gets it.
+	 */
+	blockedChecks?: string[]
 	/** Set when release config alone kept an opted-in PR from auto-merging (#370): what it changes. */
 	releaseConfig?: string[]
 }
@@ -84,7 +90,7 @@ export interface SendBack {
 	label: 'ai-changes' | 'ai-conflicts'
 	/** Failing required checks, for the comment. */
 	failing: { name: string; link: string }[]
-	/** Required contexts that never reported on the head, e.g. a job the diff removed or renamed (#268). Absent when none. */
+	/** Required contexts that never reported on a head whose diff touches CI, e.g. a job it removed or renamed (#268). Absent when none. */
 	missing?: string[]
 }
 
@@ -457,11 +463,45 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 		return null
 	}
 
-	// From the diff's file list, never the title, labels or body.
-	const docsOnly = async (n: number) => {
-		const r = await gh(['pr', 'diff', String(n), '--name-only'])
-		return r.ok && isDocsOnly(r.stdout.split('\n').filter(Boolean))
+	/**
+	 * Null unless the head has checks and all are green (#362). Then the base's
+	 * required contexts — branch protection and rulesets — the head never reported:
+	 * a job renamed, removed or never in CI. The bot can read the branch endpoint;
+	 * `/protection` 404s for it.
+	 */
+	const blockedGreen = async (p: Pr): Promise<string[] | null> => {
+		const rollup = p.statusCheckRollup ?? []
+		const green =
+			rollup.length > 0 &&
+			rollup.every((c) => ['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(c.conclusion ?? ''))
+		if (!green) return null
+		const base = await json<{
+			protection?: { required_status_checks?: { contexts?: string[] } }
+		}>(['api', `repos/${ownerRepo}/branches/${p.baseRefName}`])
+		// Rulesets carry required checks too; a repo without any answers `[]`, an old GHES 404s.
+		const rules = await gh(['api', `repos/${ownerRepo}/rules/branches/${p.baseRefName}`])
+		let ruled: string[] = []
+		try {
+			ruled = (
+				JSON.parse(rules.ok ? rules.stdout : '[]') as {
+					type: string
+					parameters?: { required_status_checks?: { context: string }[] }
+				}[]
+			)
+				.filter((r) => r.type === 'required_status_checks')
+				.flatMap((r) => r.parameters?.required_status_checks?.map((c) => c.context) ?? [])
+		} catch {}
+		const seen = new Set(rollup.map((c) => c.name ?? c.context).filter(Boolean))
+		const required = [...(base?.protection?.required_status_checks?.contexts ?? []), ...ruled]
+		return [...new Set(required)].filter((c) => !seen.has(c))
 	}
+
+	// From the diff's file list, never the title, labels or body.
+	const diffFiles = async (n: number) => {
+		const r = await gh(['pr', 'diff', String(n), '--name-only'])
+		return r.ok ? r.stdout.split('\n').filter(Boolean) : null
+	}
+	const docsOnly = async (n: number) => isDocsOnly((await diffFiles(n)) ?? [])
 
 	// `publishConfig` at `ref`, as JSON text; `undefined` when absent, `null` when unreadable.
 	const publishConfig = async (file: string, ref: string) => {
@@ -701,6 +741,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 				'mergeStateStatus',
 			])
 			const s = view?.mergeStateStatus ?? 'UNKNOWN'
+			const stuck = s === 'BLOCKED' ? await blockedGreen(pr) : null
 			if (s === 'CLEAN') {
 				const notes = has('ai-notes')
 				// Only an otherwise-unattended merge needs the file check.
@@ -715,27 +756,38 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 				})
 			} else if (s === 'BEHIND') {
 				result.updateBranches.push({ pr: pr.number, issue })
+			} else if (
+				stuck?.length &&
+				((await diffFiles(pr.number)) ?? ['.github/workflows/']).some((f) =>
+					f.startsWith('.github/workflows/')
+				)
+			) {
+				// The diff touches CI, so it may have removed or renamed the missing job: the fixer's (#268).
+				// An unreadable diff fails toward the send-back, never toward a human's admin merge.
+				result.sendBacks.push({
+					pr: pr.number,
+					issue,
+					reason: 'BLOCKED',
+					label: 'ai-changes',
+					failing: [],
+					missing: stuck,
+				})
+			} else if (stuck !== null) {
+				// Green but BLOCKED: a fix round can't change branch protection (#362). Before the
+				// `pending` wait too: a required check that never runs reads as "none reported yet".
+				result.handoffs.push({
+					pr: pr.number,
+					issue,
+					title: pr.title,
+					notes: has('ai-notes'),
+					autoMerge: false,
+					blockedChecks: stuck,
+				})
 			} else if (s === 'BLOCKED' && pending) {
 				// Required checks still running: the next tick sees them land.
 			} else if (isDep && SEND_BACK_STATES.has(s)) {
 				recreate()
 			} else if (SEND_BACK_STATES.has(s)) {
-				// A required check that never runs leaves a green PR BLOCKED with no reason given (#268).
-				// The bot can read this branch endpoint; `/protection` 404s for it.
-				const missing: string[] = []
-				const rollup = pr.statusCheckRollup ?? []
-				// A pending or failing check is its own reason; only an all-green head names a missing one.
-				const allGreen = rollup.every((c) =>
-					['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(c.conclusion ?? '')
-				)
-				if (s === 'BLOCKED' && allGreen) {
-					const base = await json<{
-						protection?: { required_status_checks?: { contexts?: string[] } }
-					}>(['api', `repos/${ownerRepo}/branches/${pr.baseRefName}`])
-					const seen = new Set(rollup.map((c) => c.name ?? c.context).filter(Boolean))
-					for (const c of base?.protection?.required_status_checks?.contexts ?? [])
-						if (!seen.has(c)) missing.push(c)
-				}
 				result.sendBacks.push({
 					pr: pr.number,
 					issue,
@@ -743,7 +795,6 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 					// DIRTY wants the default branch merged in, not a fix — it costs no review round (#176).
 					label: s === 'DIRTY' ? 'ai-conflicts' : 'ai-changes',
 					failing: [],
-					...(missing.length > 0 && { missing }),
 				})
 			} else if (s !== 'UNKNOWN' && has('merge-ready')) {
 				result.stripMergeReady.push(pr.number)
@@ -1031,13 +1082,14 @@ export function summarize(r: LoopTickResult, t: Turns): string {
 	if (r.idle) return 'idle'
 	const blocked =
 		r.stalled.filter((s) => s.action === 'block').length +
-		r.fixRounds.filter((f) => f.action === 'block').length
+		r.fixRounds.filter((f) => f.action === 'block').length +
+		r.handoffs.filter((h) => h.blockedChecks).length
 	const ciRed =
 		r.sendBacks.filter((s) => s.reason === 'ci-red').length +
 		r.dependabotCiRed.length +
 		r.dependabotRecreate.length
 	const stalled = r.dependabotStalled.length
-	const merge = r.handoffs.length
+	const merge = r.handoffs.filter((h) => !h.blockedChecks).length
 	const saved = r.reviewsToSpawn.filter((s) => s.arm === 'both').length
 	const segments: [number | boolean, string][] = [
 		[r.errors.length > 0, '⚠error'],

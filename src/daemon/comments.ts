@@ -20,7 +20,7 @@ Merge \`${defaultBranch}\` into this branch and push — never rebase or force-p
 			for (const f of s.failing) lines.push(`- \`${f.name}\` failed: ${f.link}`)
 			for (const m of s.missing ?? [])
 				lines.push(
-					`- required check \`${m}\` never reported — the PR may have removed or renamed that job (the fix may be branch protection, not code)`
+					`- required check \`${m}\` never reported, and this PR changes \`.github/workflows/\`: it may have removed or renamed that job`
 				)
 			if (s.failing.length)
 				lines.push(
