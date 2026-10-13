@@ -40,11 +40,24 @@ export interface RepoAiConfig {
 	maxAgents?: number
 	/** The CI workflow file the `main` run probes watch (#201); unset means `ci.yml`. */
 	ciWorkflow?: string
+	/** The command implementers and fixers run before pushing (#361); unset means the repo's CLAUDE.md or AGENTS.md says. */
+	checkCommand?: string
 	source: ConfigSource
 }
 
 export function asLogin(value: unknown): string | undefined {
 	return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined
+}
+
+/**
+ * One line, at most 200 characters, no backtick: it is quoted inside an agent
+ * prompt's code span (#361). Anything else is ignored, so the prompts fall back
+ * to CLAUDE.md, and `doctor`'s schema check names the bad value.
+ */
+function asCommand(value: unknown): string | undefined {
+	return typeof value === 'string' && /^[^`\r\n]{1,200}$/.test(value.trim())
+		? value.trim()
+		: undefined
 }
 
 export const DEFAULT_POLL_SECONDS = 180
@@ -107,6 +120,7 @@ export async function readConfig(dir: string): Promise<RepoAiConfig> {
 			autoMerge: own.autoMerge === true,
 			maxAgents: asAtLeast(own.maxAgents, 1),
 			ciWorkflow: asLogin(own.ciWorkflow),
+			checkCommand: asCommand(own.checkCommand),
 			...Object.fromEntries(
 				Object.entries(LIMITS).map(([k, { min }]) => [k, asAtLeast(own[k], min)])
 			),

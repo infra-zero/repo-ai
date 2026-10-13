@@ -345,6 +345,24 @@ describe('ai-loop-pickup', () => {
 		expect(value).toMatchObject({ issues: [{ issue: 1, pr: 10, fixRounds: 1 }] })
 	})
 
+	it('tells implementer and fixer to run checkCommand when set, else CLAUDE.md or AGENTS.md (#361)', async () => {
+		const reply = (label: string) =>
+			label === 'impl:#1'
+				? { pr: 10 }
+				: label.startsWith('fix')
+					? { pushed: true }
+					: { passed: label !== 'code-reviewer:#1' }
+		const set = await run('ai-loop-pickup', { ...one, checkCommand: 'pnpm verify' }, reply)
+		expect(set.prompts[0]).toContain('Before pushing, run `pnpm verify` and fix until it passes')
+		expect(set.prompts[4]).toContain('Fix, run `pnpm verify` and fix until it passes,')
+		const unset = await run('ai-loop-pickup', one, reply)
+		expect(unset.prompts[0]).toContain(
+			'CLAUDE.md or AGENTS.md and obey it — especially any pre-commit step'
+		)
+		expect(unset.prompts[4]).toContain('pre-commit checks from its `CLAUDE.md` or `AGENTS.md`')
+		expect(unset.prompts.join('\n')).not.toContain('undefined')
+	})
+
 	it('reports an unposted review as unposted, and runs no fixer on its say-so (#235)', async () => {
 		const { value, spawned, prompts } = await run(
 			'ai-loop-pickup',

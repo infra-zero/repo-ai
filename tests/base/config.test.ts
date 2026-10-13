@@ -77,6 +77,20 @@ describe('readConfig', () => {
 		expect((await readConfig(dir)).ciWorkflow).toBeUndefined()
 	})
 
+	it('reads checkCommand, trimmed, and ignores one a prompt cannot quote (#361)', async () => {
+		const dir = newTmpDir()
+		const read = async (checkCommand: unknown) => {
+			fs.outputJsonSync(join(dir, '.repo-ai.json'), { checkCommand })
+			return (await readConfig(dir)).checkCommand
+		}
+		expect(await read(' pnpm verify ')).toBe('pnpm verify')
+		expect(await read('  ')).toBeUndefined()
+		expect(await read('npm test\nrm -rf /')).toBeUndefined()
+		expect(await read('echo `id`')).toBeUndefined()
+		expect(await read('x'.repeat(201))).toBeUndefined()
+		expect(await read(42)).toBeUndefined()
+	})
+
 	it('reads humanUser, trimmed, and ignores a blank one (#162)', async () => {
 		const dir = newTmpDir()
 		fs.outputJsonSync(join(dir, '.repo-ai.json'), { humanUser: ' acme-owner ' })
