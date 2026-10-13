@@ -67,7 +67,6 @@ const STEPS: Record<string, StepRun> = {
 	'claude-skills': (dir, o) => setupSkills(dir, o),
 	'allow-rules': FIXERS['allow-rules'].run,
 	labels: (dir) => applyLoopLabels(dir, undefined, { bootstrap: true }),
-	'ai-loop-identity': FIXERS['ai-loop-identity'].run,
 	statusline: FIXERS.statusline.run,
 }
 
@@ -86,16 +85,16 @@ export function quietSummary(applied: string[]): string {
 	return `${counts.map(([verb, n]) => `${verb} ${n}`).join(', ')} ai-loop labels`
 }
 
-/** The steps, in order. The identity step only means something with an agent user. */
-export function setupSteps(agentUser: string | null | undefined): string[] {
-	return [
-		'config',
-		'claude-skills',
-		'allow-rules',
-		'labels',
-		...(agentUser ? ['ai-loop-identity'] : []),
-		'statusline',
-	]
+/** The steps, in order. */
+export const SETUP_STEPS = ['config', 'claude-skills', 'allow-rules', 'labels', 'statusline']
+
+/**
+ * With an agent user, how to run the loop as it (#365). `GH_TOKEN` is the one
+ * documented path; setup no longer runs the deprecated `fix ai-loop-identity`.
+ */
+export function identityHint(agentUser: string | null | undefined): string | undefined {
+	if (!agentUser) return undefined
+	return `agentUser is ${agentUser}: launch the loop's Claude session as it with \`GH_TOKEN=$(gh auth token --user ${agentUser}) claude\``
 }
 
 export async function runSetup(
@@ -110,7 +109,7 @@ export async function runSetup(
 	const assumeYes = Boolean(options.yes || options.json)
 	const confirm = deps.confirm ?? askToRun
 	const results: StepResult[] = []
-	for (const target of setupSteps(await configuredAgentUser(dir))) {
+	for (const target of SETUP_STEPS) {
 		if (!assumeYes && !QUIET_STEPS.has(target) && !(await confirm(target, dir))) {
 			results.push({ target, status: 'skipped' })
 			continue
@@ -214,12 +213,19 @@ export async function setupCommand(options: FixOptions): Promise<void> {
 		return
 	}
 	const steps = await runSetup(directory, options)
+	const hint = identityHint(await configuredAgentUser(directory))
 	const doctor = asSetupNotes(await runDoctor(directory, options.skillsDir))
 	const failed =
 		steps.some((s) => s.status === 'failed') ||
 		doctor.some((r) => r.status === 'drift' || r.status === 'missing')
 	if (options.json) {
-		console.log(JSON.stringify({ directory, acknowledged: true, steps, doctor }, null, 2))
+		console.log(
+			JSON.stringify(
+				{ directory, acknowledged: true, steps, ...(hint && { identityHint: hint }), doctor },
+				null,
+				2
+			)
+		)
 	} else {
 		for (const s of steps) {
 			if (s.status === 'applied' && QUIET_STEPS.has(s.target) && s.filesWritten?.length)
@@ -232,6 +238,7 @@ export async function setupCommand(options: FixOptions): Promise<void> {
 				if (s.hint) console.log(chalk.dim(`   ${s.hint}`))
 			}
 		}
+		if (hint) console.log(chalk.cyan(`→ ${hint}`))
 		console.log(chalk.bold('\ndoctor'))
 		printResults(doctor)
 	}

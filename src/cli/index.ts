@@ -32,13 +32,12 @@ program
 program
 	.command('setup')
 	.description(
-		'🚀 Onboard a repo: claude-skills, labels, ai-loop-identity, statusline — asking before each — then doctor'
+		'🚀 Onboard a repo: claude-skills, allow-rules, labels, statusline — asking before each — then doctor'
 	)
 	.option('-d, --dir <path>', 'Repository to set up', process.cwd())
 	.option('-y, --yes', 'Run every step without prompting')
 	.option('--skills-dir <path>', 'claude-skills: install here instead of ~/.claude/skills')
 	.option('--force-skills', 'claude-skills: overwrite a locally modified or newer copy')
-	.option('--gh-config-dir <path>', 'ai-loop-identity: the agent gh profile directory')
 	.option('--json', 'Emit machine-readable JSON output (implies --yes)')
 	.action(setupCommand)
 

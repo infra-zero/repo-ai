@@ -9,8 +9,9 @@ import {
 	quietSummary,
 	runSetup,
 	setupCommand,
+	identityHint,
+	SETUP_STEPS,
 	setupSkills,
-	setupSteps,
 	type StepRun,
 } from '../../../src/cli/commands/setup.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
@@ -33,11 +34,7 @@ function recorder(fail: Record<string, FixerAbort> = {}) {
 			if (fail[name]) throw fail[name]
 			return [`${name}-file`]
 		}
-	const steps = Object.fromEntries(
-		['config', 'claude-skills', 'allow-rules', 'labels', 'ai-loop-identity', 'statusline'].map(
-			(n) => [n, step(n)]
-		)
-	)
+	const steps = Object.fromEntries(SETUP_STEPS.map((n) => [n, step(n)]))
 	return { ran, steps }
 }
 
@@ -46,35 +43,10 @@ describe('setup', () => {
 		vi.spyOn(console, 'error').mockImplementation(() => {})
 	})
 
-	it('orders the steps and adds the identity step only with an agent user', () => {
-		expect(setupSteps(undefined)).toEqual([
-			'config',
-			'claude-skills',
-			'allow-rules',
-			'labels',
-			'statusline',
-		])
-		expect(setupSteps('bot')).toEqual([
-			'config',
-			'claude-skills',
-			'allow-rules',
-			'labels',
-			'ai-loop-identity',
-			'statusline',
-		])
-	})
-
-	it('runs every step under --yes, in order', async () => {
+	it('runs every step under --yes, in order, with no identity step even with an agent user', async () => {
 		const { ran, steps } = recorder()
 		const results = await runSetup(repo('bot'), { dir: '.', yes: true }, { steps })
-		expect(ran).toEqual([
-			'config',
-			'claude-skills',
-			'allow-rules',
-			'labels',
-			'ai-loop-identity',
-			'statusline',
-		])
+		expect(ran).toEqual(['config', 'claude-skills', 'allow-rules', 'labels', 'statusline'])
 		expect(results.every((r) => r.status === 'applied')).toBe(true)
 	})
 
@@ -95,6 +67,12 @@ describe('setup', () => {
 		expect(confirm.mock.calls.map(([t]) => t)).not.toContain('labels')
 	})
 
+	it('hints GH_TOKEN, not the deprecated fixer, only with an agent user (#365)', () => {
+		expect(identityHint(undefined)).toBeUndefined()
+		expect(identityHint('bot')).toContain('GH_TOKEN=$(gh auth token --user bot) claude')
+		expect(identityHint('bot')).not.toContain('ai-loop-identity')
+	})
+
 	it('sums the label changes into one line (#365)', () => {
 		const applied = [
 			...['ai-ready', 'ai-wip', 'ai-review'].map((l) => `created label "${l}"`),
@@ -106,11 +84,11 @@ describe('setup', () => {
 
 	it('keeps going after a fixer aborts, and reports why', async () => {
 		const abort = new FixerAbort('agent-identity-unavailable', 'not signed in', 'gh auth login')
-		const { ran, steps } = recorder({ 'ai-loop-identity': abort })
+		const { ran, steps } = recorder({ 'allow-rules': abort })
 		const results = await runSetup(repo('bot'), { dir: '.', json: true }, { steps })
 		expect(ran).toContain('statusline')
-		expect(results.find((r) => r.target === 'ai-loop-identity')).toEqual({
-			target: 'ai-loop-identity',
+		expect(results.find((r) => r.target === 'allow-rules')).toEqual({
+			target: 'allow-rules',
 			status: 'failed',
 			error: 'agent-identity-unavailable',
 			message: 'not signed in',
