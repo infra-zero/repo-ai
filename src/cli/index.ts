@@ -15,7 +15,7 @@ import { loopCommentCommand, loopVerdictCommand } from './commands/loop-marker.j
 import { loopReapCommand } from './commands/loop-reap.js'
 import { loopTickCommand, loopTierCommand } from './commands/loop-tick.js'
 import { loopWatchCommand } from './commands/loop-watch.js'
-import { loopWorktreeAddCommand } from './commands/loop-worktree.js'
+import { loopWorktreeAddCommand, loopWorktreeInstallCommand } from './commands/loop-worktree.js'
 import { setupCommand } from './commands/setup.js'
 import { getToolVersion } from './utils/version.js'
 
@@ -162,9 +162,9 @@ loop
 	)
 	.action(loopCleanupCommand)
 
-loop
-	.command('worktree')
-	.description('🌳 Loop worktree mechanics')
+const worktree = loop.command('worktree').description('🌳 Loop worktree mechanics')
+
+worktree
 	.command('add <slug>')
 	.description(
 		"🌱 Create ai-<issue>-<slug> off the repo's default branch, link its deps, assert none are missing"
@@ -179,6 +179,18 @@ loop
 			'unlinked — do not spawn an implementer. needsInstall means no list was declared.\n'
 	)
 	.action(loopWorktreeAddCommand)
+
+worktree
+	.command('install <worktree>')
+	.description('📦 Run the Yarn 2+ install with the worktree as its working directory')
+	.option('--root <path>', 'Main checkout the worktree belongs to', ROOT)
+	.option('--worktree-root <path>', 'Where ai-* worktrees live (default: <root>-worktrees)')
+	.addHelpText(
+		'after',
+		'\nYarn 3 rejects a leading --cwd and Yarn 4 a trailing one, so the tick runs this\n' +
+			"instead. Exits with yarn's code, or 1 outside the worktree root or on a non-Yarn 2+ checkout.\n"
+	)
+	.action(loopWorktreeInstallCommand)
 
 loop
 	.command('reap')

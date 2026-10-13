@@ -174,7 +174,7 @@ gh issue view <N> --json comments --jq '[.comments[] | select(.author.login == "
 
 After the `🤖 *Automated — triage …*` header, **lead with `## To lift this hold`**: a table of two to four options with what an agent would do under each, the label move stated ("say which in a comment, then swap `holding` for `ai-ready`"), and a ⏳ line for anything time-sensitive. **Then a `<details>` block**: why an agent cannot finish it, concretely; what would make it automatable; whether it is terminal.
 
-`loop apply` then claims and creates worktrees; `.claimed.pickups[]` lists them. `needsInstall: true` means `<installCommand>`, its `<worktree>` filled in, is safe; skip it when `installCommand` is empty. **Never install in a symlinked worktree** — it purges the main checkout's modules. Launch every pickup in **one** call and **do not wait**:
+`loop apply` then claims and creates worktrees; `.claimed.pickups[]` lists them. `needsInstall: true` means `<installCommand>`, its `<worktree>` filled in, is safe; skip it when `installCommand` is empty. On Yarn 2+ it is `npx @infrazero/repo-ai loop worktree install '<worktree>'`, which runs yarn with the worktree as its working directory (#394) — run it as given, never as `cd … &&`. **Never install in a symlinked worktree** — it purges the main checkout's modules. Launch every pickup in **one** call and **do not wait**:
 
 ```
 Workflow({name: 'ai-loop-pickup', args: {repo: <ownerRepo>, agentUser: <agentUser>, humanUser: <humanUser>, namedReviewers, budgetTokens: <budgetTokens>, maxFixRounds: <maxFixRounds>, checkCommand: <checkCommand>, installCommand: <installCommand>, issues: [{number, title, slug, worktree, base, stackedOn}, …]}})

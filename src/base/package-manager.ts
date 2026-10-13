@@ -44,10 +44,17 @@ export const INSTALL_COMMANDS: Record<PackageManager, string> = {
 }
 
 /** Yarn 2+ shares `yarn.lock` but rejects `--ignore-scripts`; `--mode=skip-build` is its equivalent. */
-export const YARN_BERRY_INSTALL = "yarn --cwd '<worktree>' install --mode=skip-build"
+export const YARN_BERRY_ARGS = ['install', '--mode=skip-build']
+
+/**
+ * Yarn 3 rejects `--cwd` before the command and Yarn 4 rejects it after (#394), so
+ * no flag covers Yarn 2+. `loop worktree install` runs it with the worktree as its
+ * working directory instead, under the loop's `npx @infrazero/repo-ai` allow rule.
+ */
+export const YARN_BERRY_INSTALL = "npx @infrazero/repo-ai loop worktree install '<worktree>'"
 
 /** Yarn 2+: a `.yarnrc.yml`, or `packageManager` pinning `yarn@2` or later. */
-async function isYarnBerry(dir: string): Promise<boolean> {
+export async function isYarnBerry(dir: string): Promise<boolean> {
 	if (await fs.pathExists(path.join(dir, '.yarnrc.yml'))) return true
 	const pkg = await fs.readJson(path.join(dir, 'package.json')).catch(() => null)
 	return /^yarn@(?:[2-9]|\d{2,})/.test(String(pkg?.packageManager ?? ''))
