@@ -1,21 +1,25 @@
 /**
  * The Claude Code allow rules the loop's shell-outs need (#152). Without them
- * every `gh`/`git`/`pnpm`/`npx` call on a tick prompts or goes to the auto-mode
+ * every `gh`/`git`/package-manager/`npx` call on a tick prompts or goes to the auto-mode
  * classifier, which can block the tick.
  */
 import path from 'node:path'
 import fs from 'fs-extra'
 import { ensureIgnored, SETTINGS_LOCAL } from './ai-loop-identity.js'
 import { FixerAbort } from './fixer-abort.js'
+import { detectPackageManager } from './package-manager.js'
 import type { CheckResult } from './types.js'
 
-// ponytail: `pnpm:*` is hard-wired like the loop's package manager; follow the detected one once #360 lands.
-export const LOOP_ALLOW_RULES = [
-	'Bash(gh:*)',
-	'Bash(git *)',
-	'Bash(pnpm:*)',
-	'Bash(npx @infrazero/repo-ai *)',
-]
+/** The rules every checkout needs; {@link loopAllowRules} adds the package manager's. */
+export const LOOP_ALLOW_RULES = ['Bash(gh:*)', 'Bash(git *)', 'Bash(npx @infrazero/repo-ai *)']
+
+/** {@link LOOP_ALLOW_RULES} plus `Bash(<pm>:*)` for the lockfile's package manager (#360), if any. */
+export async function loopAllowRules(dir: string): Promise<string[]> {
+	const pm = await detectPackageManager(dir)
+	return pm
+		? [...LOOP_ALLOW_RULES.slice(0, 2), `Bash(${pm}:*)`, ...LOOP_ALLOW_RULES.slice(2)]
+		: LOOP_ALLOW_RULES
+}
 
 /** `Bash(gh:*)` and `Bash(gh *)` are the same prefix rule. */
 const normalise = (rule: string): string => rule.trim().replace(/:\*\)$/, ' *)')
@@ -42,7 +46,7 @@ async function missingAllowRules(dir: string, home: string): Promise<string[] | 
 	)
 	// A bare `Bash` (or `Bash(*)`) allows every command.
 	if (have.has('Bash') || have.has('Bash(*)')) return null
-	return LOOP_ALLOW_RULES.filter((r) => !have.has(normalise(r)))
+	return (await loopAllowRules(dir)).filter((r) => !have.has(normalise(r)))
 }
 
 /**

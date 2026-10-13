@@ -4,7 +4,7 @@ import chalk from 'chalk'
 import fs from 'fs-extra'
 import inquirer from 'inquirer'
 import { SETTINGS_LOCAL } from '../../base/ai-loop-identity.js'
-import { fixAllowRules, LOOP_ALLOW_RULES } from '../../base/allow-rules.js'
+import { fixAllowRules, loopAllowRules } from '../../base/allow-rules.js'
 import { FixerAbort } from '../../base/fixer-abort.js'
 import { applyLoopLabels } from '../../base/labels.js'
 import {
@@ -87,7 +87,7 @@ export async function runSetup(
 	dir: string,
 	options: FixOptions,
 	deps: {
-		confirm?: (target: string) => Promise<boolean>
+		confirm?: (target: string, dir: string) => Promise<boolean>
 		steps?: Record<string, StepRun>
 	} = {}
 ): Promise<StepResult[]> {
@@ -96,7 +96,7 @@ export async function runSetup(
 	const confirm = deps.confirm ?? askToRun
 	const results: StepResult[] = []
 	for (const target of setupSteps(await configuredAgentUser(dir))) {
-		if (!assumeYes && !(await confirm(target))) {
+		if (!assumeYes && !(await confirm(target, dir))) {
 			results.push({ target, status: 'skipped' })
 			continue
 		}
@@ -123,16 +123,19 @@ export async function runSetup(
 
 // `fix labels` only repairs; here the step also creates the set.
 const PROMPTS: Record<string, string> = {
-	'allow-rules': `Allow the loop's own shell calls in this checkout's ${SETTINGS_LOCAL} (gitignored, this repo only), so an unattended tick doesn't stall on permission prompts:\n  ${LOOP_ALLOW_RULES.join('\n  ')}\n Add them`,
 	labels: 'Create or repair the ai-loop labels on GitHub via `gh label`',
 }
 
-async function askToRun(target: string): Promise<boolean> {
+async function askToRun(target: string, dir: string): Promise<boolean> {
+	const prompt =
+		target === 'allow-rules'
+			? `Allow the loop's own shell calls in this checkout's ${SETTINGS_LOCAL} (gitignored, this repo only), so an unattended tick doesn't stall on permission prompts:\n  ${(await loopAllowRules(dir)).join('\n  ')}\n Add them`
+			: PROMPTS[target]
 	const { run } = await inquirer.prompt([
 		{
 			type: 'confirm',
 			name: 'run',
-			message: `${PROMPTS[target] ?? (FIXERS as Record<string, { description: string }>)[target]?.description ?? target}?`,
+			message: `${prompt ?? (FIXERS as Record<string, { description: string }>)[target]?.description ?? target}?`,
 			default: true,
 		},
 	])

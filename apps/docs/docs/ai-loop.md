@@ -415,13 +415,13 @@ Worktrees also want `node_modules` symlinked in, so an agent can typecheck
 without a full install per issue. `npx @rtorcato/repo-tooling fix ai` writes
 that list — the root plus every workspace package — into `.claude/settings.json`
 as `worktree.symlinkDirectories`, and Pass 4 reads it and creates the links
-itself. It's a repo-tooling command, and optional: without it the loop still works: each worktree gets a real `pnpm install`
-instead, which costs a duplicate `node_modules` per issue.
+itself. It's a repo-tooling command, and optional: without it the loop still works: each worktree gets a real install with the
+repo's package manager (read off its lockfile) instead, which costs a duplicate `node_modules` per issue.
 
 ### Claude Code permissions
 
-Every tick shells out to `gh`, `git`, `pnpm` and `npx @infrazero/repo-ai`.
-Without allow rules for them, each call prompts, or goes to the auto-mode
+Every tick shells out to `gh`, `git`, the repo's package manager and
+`npx @infrazero/repo-ai`. Without allow rules for them, each call prompts, or goes to the auto-mode
 classifier, which can block the tick. Add these to `permissions.allow` in
 `.claude/settings.json` (or `~/.claude/settings.json`, or
 `.claude/settings.local.json`):
@@ -438,6 +438,12 @@ classifier, which can block the tick. Add these to `permissions.allow` in
   }
 }
 ```
+
+`Bash(pnpm:*)` stands for the package manager that `loop tick` reads off the
+lockfile: `pnpm-lock.yaml`, `bun.lock`/`bun.lockb`, `yarn.lock`, or
+`package-lock.json`/`npm-shrinkwrap.json`, first match wins. Use `Bash(npm:*)`,
+`Bash(yarn:*)` or `Bash(bun:*)` to match yours. A repo with no lockfile needs
+none of them.
 
 `npx @infrazero/repo-ai setup` offers to add the loop's rules to
 `.claude/settings.local.json` for you. That grant covers only this checkout,
