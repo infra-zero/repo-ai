@@ -100,7 +100,7 @@ const PILLARS: { title: string; desc: string; icon: IconKey }[] = [
 const EXAMPLES: { label: string; file: string; code: string }[] = [
 	{
 		label: 'install',
-		file: 'Skills, labels, agent identity and statusline — asking before each',
+		file: 'Config, skills, allow rules, labels and statusline, then doctor',
 		code: `npx @infrazero/repo-ai setup`,
 	},
 	{
@@ -136,7 +136,7 @@ const PARTS: { name: string; desc: string; chips: string[]; href: string }[] = [
 	},
 	{
 		name: 'Claude Code skills',
-		desc: 'The loop, the issue on-ramp, and a read-only status view — installed into ~/.claude/skills.',
+		desc: 'The loop, the issue on-ramp, a read-only status view and a stop switch, plus the Workflow scripts they run.',
 		chips: ['ai-loop', 'ai-issue', 'ai-loop-status', 'ai-loop-stop'],
 		href: '/docs/commands',
 	},

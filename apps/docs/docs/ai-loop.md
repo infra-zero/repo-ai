@@ -61,13 +61,6 @@ Four things follow from that:
   `--yes` deliberately does *not* imply it: unattended runs pass `--yes`, and
   this is the one overwrite that destroys work living outside the repo.
 
-Any agent that reads the [`skills`](https://www.npmjs.com/package/skills) CLI
-format can also take it straight from GitHub:
-
-```bash
-npx skills add https://github.com/infra-zero/repo-ai --skill ai-loop
-```
-
 ## Configuration
 
 Per-repo settings live in `.repo-ai.json` at the repo root. Every key is
