@@ -1,7 +1,11 @@
 import { join } from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
-import { detectPackageManager, installCommand } from '../../src/base/package-manager.js'
+import {
+	detectPackageManager,
+	installCommand,
+	YARN_BERRY_INSTALL,
+} from '../../src/base/package-manager.js'
 import { useTmpDir } from '../helpers/tmp-dir.js'
 
 const newTmpDir = useTmpDir()
@@ -44,11 +48,9 @@ describe('installCommand', () => {
 			{ 'yarn.lock': '', 'package.json': '{"packageManager":"yarn@1.22.22"}' },
 			"yarn --cwd '<worktree>' install --ignore-scripts",
 		],
-		[{ 'yarn.lock': '', '.yarnrc.yml': '' }, "yarn --cwd '<worktree>' install --mode=skip-build"],
-		[
-			{ 'yarn.lock': '', 'package.json': '{"packageManager":"yarn@4.5.0"}' },
-			"yarn --cwd '<worktree>' install --mode=skip-build",
-		],
+		// #394: Yarn 2+ takes no directory flag that both 3 and 4 accept.
+		[{ 'yarn.lock': '', '.yarnrc.yml': '' }, YARN_BERRY_INSTALL],
+		[{ 'yarn.lock': '', 'package.json': '{"packageManager":"yarn@4.5.0"}' }, YARN_BERRY_INSTALL],
 		[{}, ''],
 	])('%o → %s', async (files, command) => {
 		const dir = newTmpDir()

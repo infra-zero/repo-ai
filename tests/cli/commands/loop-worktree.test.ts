@@ -2,7 +2,10 @@ import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
-import { runLoopWorktreeAdd } from '../../../src/cli/commands/loop-worktree.js'
+import {
+	runLoopWorktreeAdd,
+	runLoopWorktreeInstall,
+} from '../../../src/cli/commands/loop-worktree.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
 
 const newTmpDir = useTmpDir()
@@ -122,5 +125,47 @@ describe('runLoopWorktreeAdd', () => {
 		})
 		expect(r.exitCode).toBe(1)
 		expect(r.messages[0]).toMatch(/could not resolve the default branch/)
+	})
+})
+
+describe('runLoopWorktreeInstall (#394)', () => {
+	function setup(files: Record<string, string>) {
+		const root = join(fs.realpathSync(newTmpDir()), 'repo')
+		const worktree = join(`${root}-worktrees`, 'ai-1-x')
+		for (const [file, body] of Object.entries(files)) {
+			fs.outputFileSync(join(root, file), body)
+			fs.outputFileSync(join(worktree, file), body)
+		}
+		const calls: [string[], string][] = []
+		const run = (args: string[], cwd: string) => {
+			calls.push([args, cwd])
+			return 0
+		}
+		return { root, worktree, calls, run }
+	}
+
+	it('runs the Yarn 2+ install with the worktree as its working directory', async () => {
+		const { root, worktree, calls, run } = setup({ 'yarn.lock': '', '.yarnrc.yml': '' })
+		expect((await runLoopWorktreeInstall(worktree, { root, run })).exitCode).toBe(0)
+		expect(calls).toEqual([[['install', '--mode=skip-build'], worktree]])
+	})
+
+	it("passes yarn's exit code through", async () => {
+		const { root, worktree } = setup({ 'yarn.lock': '', '.yarnrc.yml': '' })
+		expect((await runLoopWorktreeInstall(worktree, { root, run: () => 2 })).exitCode).toBe(2)
+	})
+
+	it('refuses the main checkout, the worktree root and a path outside it', async () => {
+		const { root, worktree, calls, run } = setup({ 'yarn.lock': '', '.yarnrc.yml': '' })
+		for (const dir of [root, `${root}-worktrees`, join(worktree, '..', '..', 'repo'), newTmpDir()])
+			expect((await runLoopWorktreeInstall(dir, { root, run })).exitCode).toBe(1)
+		expect(calls).toEqual([])
+	})
+
+	it('refuses a Yarn 1 checkout and a missing worktree', async () => {
+		const { root, worktree, calls, run } = setup({ 'yarn.lock': '' })
+		expect((await runLoopWorktreeInstall(worktree, { root, run })).exitCode).toBe(1)
+		expect((await runLoopWorktreeInstall(`${worktree}-gone`, { root, run })).exitCode).toBe(1)
+		expect(calls).toEqual([])
 	})
 })

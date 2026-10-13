@@ -449,7 +449,10 @@ for your package manager.
 lockfile: `pnpm-lock.yaml`, `bun.lock`/`bun.lockb`, `yarn.lock`, or
 `package-lock.json`/`npm-shrinkwrap.json`, first match wins. Use `Bash(npm:*)`,
 `Bash(yarn:*)` or `Bash(bun:*)` to match yours. A repo with no lockfile needs
-none of them.
+none of them. On Yarn 2+ the worktree install runs through
+`npx @infrazero/repo-ai loop worktree install`, which starts yarn with the
+worktree as its working directory: Yarn 3 rejects `--cwd` before the command
+and Yarn 4 rejects it after.
 
 `npx @infrazero/repo-ai setup` offers to add the loop's rules to
 `.claude/settings.local.json` for you. That grant covers only this checkout,

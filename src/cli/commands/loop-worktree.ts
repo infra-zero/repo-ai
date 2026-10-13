@@ -1,9 +1,11 @@
+import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import chalk from 'chalk'
 import fs from 'fs-extra'
 import { resolveDefaultBranch } from '../../base/default-branch.js'
 import { type GhExec, realGhExec } from '../../base/gh.js'
 import { type GitExec, realGitExec } from '../../base/git.js'
+import { isYarnBerry, YARN_BERRY_ARGS } from '../../base/package-manager.js'
 import { defaultWorktreeRoot } from './loop-guard.js'
 
 /**
@@ -184,5 +186,49 @@ export async function loopWorktreeAddCommand(
 			console.log(`  ${line.startsWith('⚠') ? chalk.yellow(line) : chalk.gray(line)}`)
 		}
 	}
+	process.exitCode = result.exitCode
+}
+
+export interface LoopWorktreeInstallOptions {
+	root?: string
+	worktreeRoot?: string
+	/** Test seam: runs `yarn <args>` in `cwd`, returns its exit code. */
+	run?: (args: string[], cwd: string) => number
+}
+
+const realRun = (args: string[], cwd: string): number =>
+	spawnSync('yarn', args, { cwd, stdio: 'inherit' }).status ?? 1
+
+/**
+ * `loop worktree install <worktree>` — the Yarn 2+ worktree install (#394), run
+ * with the worktree as its working directory because Yarn 3 and 4 accept `--cwd`
+ * in opposite positions. Only inside the worktree root, so it never installs in
+ * the main checkout.
+ */
+export async function runLoopWorktreeInstall(
+	worktree: string,
+	options: LoopWorktreeInstallOptions = {}
+): Promise<{ exitCode: number; message?: string }> {
+	const root = path.resolve(options.root ?? process.cwd())
+	const worktreeRoot = options.worktreeRoot
+		? path.resolve(options.worktreeRoot)
+		: defaultWorktreeRoot(root)
+	const real = await fs.realpath(worktree).catch(() => '')
+	const rel = real && path.relative(await fs.realpath(worktreeRoot).catch(() => worktreeRoot), real)
+	if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+		return { exitCode: 1, message: `⚠ ${worktree} is not a worktree under ${worktreeRoot}` }
+	}
+	if (!(await isYarnBerry(real))) {
+		return { exitCode: 1, message: `⚠ ${worktree} is not a Yarn 2+ checkout` }
+	}
+	return { exitCode: (options.run ?? realRun)(YARN_BERRY_ARGS, real) }
+}
+
+export async function loopWorktreeInstallCommand(
+	worktree: string,
+	options: { root?: string; worktreeRoot?: string }
+): Promise<void> {
+	const result = await runLoopWorktreeInstall(worktree, options)
+	if (result.message) console.error(`  ${chalk.yellow(result.message)}`)
 	process.exitCode = result.exitCode
 }
