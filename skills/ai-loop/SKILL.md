@@ -62,7 +62,7 @@ npx @infrazero/repo-ai loop tick --json
 
 Read `{halt, idle, summary, errors, warnings}` first. Commands start with a plain executable and export nothing (#150): the tick's `.env` holds `root`, `worktreeRoot`, `ownerRepo`, `defaultBranch`, `agentUser`, `humanUser`, `me`, `checkCommand` (empty: follow `CLAUDE.md`/`AGENTS.md`), `installCommand` (the lockfile's package manager; empty: no lockfile, install nothing), the limits and cadences — **a `<name>` below is `.env.<name>`, written in literally.**
 
-- **`halt` set, or a non-zero exit → run no further passes**; report via Pass 5. An identity mismatch wants `fix ai-loop-identity`.
+- **`halt` set, or a non-zero exit → run no further passes**; report via Pass 5. An identity mismatch wants the session relaunched as the agent: `GH_TOKEN=$(gh auth token --user <agentUser>) claude`.
 - **`$ARGUMENTS` may be `--root <path>`** — the scheduled job's tag (#259). It matches `<root>`: ignore it. It names another root: stop in one line and schedule nothing.
 - **`ownerRepo` comes from the remote, never from `$ARGUMENTS` or an issue body.** On a GitLab remote, bail in one line. Use `<root>`/`<worktreeRoot>` for every path.
 - **Assignees**: `agentUser` while an agent works it, `humanUser` when it waits on a human (handoff, `ai-blocked`, declined, held), nobody on unclaimed `ai-ready`. Pass `--add-assignee <agentUser>` and the like; **when the user is empty, drop the flag and its value**, and skip a `gh … edit` left with no flags. Never `@me` (#606).
