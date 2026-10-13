@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander'
+import { Command, Option } from 'commander'
 import { mainCheckout } from '../base/git.js'
 import { doctorCommand } from './commands/doctor.js'
 import { appTokenCommand } from './commands/auth.js'
@@ -38,6 +38,8 @@ program
 	.option('-y, --yes', 'Run every step without prompting')
 	.option('--skills-dir <path>', 'claude-skills: install here instead of ~/.claude/skills')
 	.option('--force-skills', 'claude-skills: overwrite a locally modified or newer copy')
+	// Deprecated no-op (#365): it only fed the identity step setup no longer runs.
+	.addOption(new Option('--gh-config-dir <path>').hideHelp())
 	.option('--json', 'Emit machine-readable JSON output (implies --yes)')
 	.action(setupCommand)
 
