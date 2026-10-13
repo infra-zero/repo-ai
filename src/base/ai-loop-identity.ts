@@ -74,6 +74,7 @@ export async function setupAgentIdentity(
 	}
 	const env = (settings.env ?? {}) as Record<string, unknown>
 	if (env.GH_CONFIG_DIR !== dir) {
+		await assertNotSymlinked(targetDir)
 		await fs.outputJson(
 			settingsPath,
 			{ ...settings, env: { ...env, GH_CONFIG_DIR: dir } },
@@ -83,6 +84,24 @@ export async function setupAgentIdentity(
 	}
 	if (await ensureIgnored(targetDir)) written.push('.gitignore')
 	return written
+}
+
+/**
+ * Refuse to write through a symlinked `.claude` or `.claude/settings.local.json` (#373).
+ * A repo can commit either one, and `fs.outputJson` would follow it and turn a "this
+ * checkout only" write into a write somewhere else.
+ */
+export async function assertNotSymlinked(targetDir: string): Promise<void> {
+	for (const rel of ['.claude', SETTINGS_LOCAL]) {
+		const stat = await fs.lstat(path.join(targetDir, rel)).catch(() => null)
+		if (stat?.isSymbolicLink()) {
+			throw new FixerAbort(
+				'settings-local-symlink',
+				`${rel} is a symlink — not writing through it`,
+				`Replace ${rel} with a real ${rel === '.claude' ? 'directory' : 'file'}, then re-run`
+			)
+		}
+	}
 }
 
 // ponytail: exact-line match on the usual spellings; a glob that happens to

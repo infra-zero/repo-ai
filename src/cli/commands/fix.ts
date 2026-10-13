@@ -76,7 +76,7 @@ export const FIXERS = {
 	},
 	'allow-rules': {
 		description:
-			"Add the loop's missing Claude Code allow rules (gh, git, the lockfile's package manager, repo-ai) to this checkout's gitignored .claude/settings.local.json",
+			"Add the loop's missing Claude Code allow rules (gh, git, the lockfile's package manager, repo-ai), and the deny rules that keep them from running arbitrary commands, to this checkout's gitignored .claude/settings.local.json",
 		run: (dir) => fixAllowRules(dir, os.homedir()),
 	},
 	sandbox: {

@@ -4,7 +4,7 @@ import chalk from 'chalk'
 import fs from 'fs-extra'
 import inquirer from 'inquirer'
 import { SETTINGS_LOCAL } from '../../base/ai-loop-identity.js'
-import { loopAllowRules } from '../../base/allow-rules.js'
+import { loopAllowRules, loopDenyRules } from '../../base/allow-rules.js'
 import { FixerAbort } from '../../base/fixer-abort.js'
 import { applyLoopLabels } from '../../base/labels.js'
 import {
@@ -138,7 +138,7 @@ export async function runSetup(
 async function askToRun(target: string, dir: string): Promise<boolean> {
 	const prompt =
 		target === 'allow-rules'
-			? `Allow the loop's own shell calls in this checkout's ${SETTINGS_LOCAL} (gitignored, this repo only), so an unattended tick doesn't stall on permission prompts:\n  ${(await loopAllowRules(dir)).join('\n  ')}\n Add them`
+			? `Allow the loop's own shell calls in this checkout's ${SETTINGS_LOCAL} (gitignored, this repo only), so an unattended tick doesn't stall on permission prompts:\n  ${(await loopAllowRules(dir)).join('\n  ')}\n and deny the escapes those would open:\n  ${(await loopDenyRules(dir)).join('\n  ')}\n Add them`
 			: undefined
 	const { run } = await inquirer.prompt([
 		{

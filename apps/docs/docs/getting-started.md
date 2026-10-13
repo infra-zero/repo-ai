@@ -81,7 +81,9 @@ calls per tick, plus your package manager's. Without an allow rule, Claude Code
 prompts you for each one, which defeats an unattended loop. `setup` adds the
 missing rules to `.claude/settings.local.json`, which is gitignored and covers
 only this checkout: `Bash(gh:*)`, `Bash(git *)`, `Bash(npx @infrazero/repo-ai *)`
-and the package manager your lockfile names, such as `Bash(pnpm:*)`. It appends
+and the package manager your lockfile names, such as `Bash(pnpm:*)`. Alongside
+them it adds `permissions.deny` rules for the commands those prefixes would let
+run anything, such as `git -c alias.x='!cmd' x` and `pnpm dlx <package>`. It appends
 rules and never removes one. To grant them for everyone who clones the repo,
 put the same rules in `.claude/settings.json` instead; see
 [Claude Code permissions](./ai-loop.md#claude-code-permissions).
