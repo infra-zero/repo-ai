@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GhResult } from '../../src/base/gh.js'
-import {
-	type CmdExec,
-	checkPrerequisites,
-	ghFailure,
-	versionAtLeast,
-} from '../../src/base/prereqs.js'
+import { type CmdExec, checkPrerequisites, ghFailure } from '../../src/base/prereqs.js'
 
 const ok = (stdout: string): GhResult => ({ ok: true, stdout, stderr: '', code: 0 })
 const fail = (stderr: string, code: number | null = 1): GhResult => ({
@@ -131,7 +126,7 @@ describe('checkPrerequisites (#359)', () => {
 		expect(ghBlocked).toBe('there is no GitHub origin remote')
 	})
 
-	it('fails an old Node, a missing claude and an old claude', async () => {
+	it('fails an old Node and a missing claude, but never judges a claude version', async () => {
 		const old = await checkPrerequisites('/x', machine(), '20.11.0', {})
 		expect(byCheck(old.results, 'Node')?.status).toBe('missing')
 
@@ -154,21 +149,24 @@ describe('checkPrerequisites (#359)', () => {
 			'22.1.0',
 			{}
 		)
-		expect(byCheck(stale.results, 'Claude Code')?.status).toBe('missing')
+		expect(byCheck(stale.results, 'Claude Code')).toMatchObject({
+			status: 'ok',
+			detail: '1.0.9 (Claude Code)',
+		})
 	})
-})
 
-it('falls back to plain `gh auth status` on a gh without --active', async () => {
-	const { results } = await checkPrerequisites(
-		'/x',
-		machine({
-			'gh auth status --active': fail('unknown flag: --active\n'),
-			'gh auth status': ok(''),
-		}),
-		'22.1.0',
-		{}
-	)
-	expect(results.find((r) => r.check === 'gh auth')?.status).toBe('ok')
+	it('falls back to plain `gh auth status` on a gh without --active', async () => {
+		const { results } = await checkPrerequisites(
+			'/x',
+			machine({
+				'gh auth status --active': fail('unknown flag: --active\n'),
+				'gh auth status': ok(''),
+			}),
+			'22.1.0',
+			{}
+		)
+		expect(byCheck(results, 'gh auth')?.status).toBe('ok')
+	})
 })
 
 describe('ghFailure', () => {
@@ -178,13 +176,5 @@ describe('ghFailure', () => {
 			'HTTP 401: Bad credentials'
 		)
 		expect(ghFailure(fail('', 4))).toBe('gh exited 4')
-	})
-})
-
-describe('versionAtLeast', () => {
-	it('compares numerically, not as strings', () => {
-		expect(versionAtLeast('2.10.0', '2.9.0')).toBe(true)
-		expect(versionAtLeast('2.0.0', '2.0.0')).toBe(true)
-		expect(versionAtLeast('1.99.99', '2.0.0')).toBe(false)
 	})
 })

@@ -4,8 +4,6 @@ import type { CheckResult } from './types.js'
 
 /** `package.json`'s `engines.node`. */
 export const MIN_NODE_MAJOR = 22
-// ponytail: a conservative floor, not a tested minimum — raise it when the skills need a newer Claude Code tool.
-export const MIN_CLAUDE_VERSION = '2.0.0'
 
 /** Runs `cmd args` in `cwd`; never rejects. `code` is null when the binary never ran. */
 export type CmdExec = (cmd: string, args: string[], cwd: string) => Promise<GhResult>
@@ -33,16 +31,6 @@ export function ghFailure(r: GhResult): string {
 }
 
 const firstLine = (s: string) => s.trim().split('\n')[0] ?? ''
-
-/** Newer-or-equal on dotted numeric versions. */
-export function versionAtLeast(have: string, min: string): boolean {
-	const a = have.split('.').map(Number)
-	const b = min.split('.').map(Number)
-	for (let i = 0; i < b.length; i++) {
-		if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0)
-	}
-	return true
-}
 
 /** `git@host:o/r`, `https://host/o/r` and `ssh://git@host/o/r`, never `nothost.example`. */
 const onHost = (url: string, host: string) =>
@@ -138,9 +126,10 @@ export async function checkPrerequisites(
 		)
 	} else ok('GitHub remote', redact(url))
 
+	// Present and reported, never judged (#369): add a floor only with the feature that needs it, cited here.
 	const claude = await exec('claude', ['--version'], dir)
-	const version = claude.ok ? (/\d+\.\d+\.\d+/.exec(claude.stdout)?.[0] ?? '') : ''
-	if (!claude.ok) {
+	if (claude.ok) ok('Claude Code', firstLine(claude.stdout))
+	else
 		missing(
 			'Claude Code',
 			claude.code === null && /ENOENT/.test(claude.stderr)
@@ -148,9 +137,6 @@ export async function checkPrerequisites(
 				: `\`claude --version\` failed: ${firstLine(claude.stderr)}`,
 			'Install Claude Code: `npm install -g @anthropic-ai/claude-code`'
 		)
-	} else if (version && !versionAtLeast(version, MIN_CLAUDE_VERSION)) {
-		missing('Claude Code', `${version} — need ≥ ${MIN_CLAUDE_VERSION}`, 'Run `claude update`')
-	} else ok('Claude Code', version || firstLine(claude.stdout))
 
 	return { results, ghBlocked }
 }
