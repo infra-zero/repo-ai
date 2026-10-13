@@ -5,7 +5,7 @@ import { type GhExec, realGhExec } from '../../base/gh.js'
 import { safeText } from '../../base/sanitize.js'
 import { type CleanupEntry, runLoopCleanup } from './loop-cleanup.js'
 import { type InstallExec, type RebuildOutcome, runLoopGuard } from './loop-guard.js'
-import { type Target, upsertMarked } from './loop-marker.js'
+import { DECISION_MARKER, type Target, upsertMarked } from './loop-marker.js'
 import type { ReapEntry } from './loop-reap.js'
 import {
 	type FixRound,
@@ -156,6 +156,11 @@ export function agentHeader(env: NodeJS.ProcessEnv): string {
 	if (!name) return '🤖 *Automated — `ai-loop` label change.*'
 	const tag = safeText(env.REPO_AI_AGENT_TAG, 60).replaceAll('`', '')
 	return `🤖 *Automated — \`@${name}\`${tag ? ` ${tag}` : ''} via ai-loop.*`
+}
+
+/** Why an opted-in PR was handed over instead of auto-merged (#370). File names come from the PR: no backtick or newline escapes the code span. */
+export function releaseConfigDecision(header: string, files: string[], human: string): string {
+	return `${header}\nNot auto-merged: this PR changes release config (${files.map((f) => `\`${f.replace(/[`\r\n]/g, '')}\``).join(', ')}). Merging that unattended could remove the release gate that allows auto-merge, so ${human} merges it by hand.`
 }
 
 /** `+\`a\`, −\`b\`` from an edit's label flags; empty when it changes none. */
@@ -326,6 +331,16 @@ export async function runLoopApply(options: LoopApplyOptions = {}): Promise<Loop
 		])
 		if (!ok) continue
 		if (h.notes) result.comments.push({ kind: 'notes', pr: h.pr, handoff: h })
+		// #370: the loop declined an opted-in merge, so the decision comment says which file did it.
+		if (h.releaseConfig?.length) {
+			const r = await upsertMarked(
+				target,
+				h.pr,
+				DECISION_MARKER,
+				releaseConfigDecision(header, h.releaseConfig, human)
+			)
+			if ('error' in r) result.errors.push(`decision comment on #${h.pr} failed: ${r.error}`)
+		}
 		// The one unattended merge: `loop tick` sets `autoMerge` only with the opt-in and the release gate.
 		if (h.autoMerge)
 			await run(1, 'merge', h.pr, ['pr', 'merge', String(h.pr), '--squash', '--auto'])

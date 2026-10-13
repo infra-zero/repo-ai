@@ -3,7 +3,11 @@ import { join } from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
 import type { GhExec } from '../../../src/base/gh.js'
-import { pickupSlug, runLoopApply } from '../../../src/cli/commands/loop-apply.js'
+import {
+	pickupSlug,
+	releaseConfigDecision,
+	runLoopApply,
+} from '../../../src/cli/commands/loop-apply.js'
 import type { LoopEnv } from '../../../src/cli/commands/loop-env.js'
 import { emptyTick, type LoopTickResult } from '../../../src/cli/commands/loop-tick.js'
 import { useTmpDir } from '../../helpers/tmp-dir.js'
@@ -653,5 +657,28 @@ describe('runLoopApply transition comments (#332)', () => {
 			gh: fake.gh,
 		})
 		expect(fake.notes).toEqual([])
+	})
+})
+
+describe('release config handoff (#370)', () => {
+	it('hands over without merging and names the blocking file in the decision comment', async () => {
+		const fake = fakeGh()
+		const result = await runLoopApply({
+			tick: tick(checkout(newTmpDir()), {
+				handoffs: [{ ...handoff, releaseConfig: ['.github/workflows/release.yml'] }],
+			}),
+			gh: fake.gh,
+			env: {},
+		})
+		expect(fake.calls.some((c) => c[1] === 'merge')).toBe(false)
+		const decision = fake.notes.find((n) => n.body.startsWith('<!-- ai-issue-loop:decision -->'))
+		expect(decision?.body).toContain('Not auto-merged')
+		expect(decision?.body).toContain('`.github/workflows/release.yml`')
+		expect(result.errors).toEqual([])
+	})
+
+	it('keeps a hostile file name inside its code span', () => {
+		const text = releaseConfigDecision('h', ['.github/workflows/a`@x\nb.yml'], 'a human')
+		expect(text).toContain('`.github/workflows/a@xb.yml`')
 	})
 })
