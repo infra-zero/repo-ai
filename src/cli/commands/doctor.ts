@@ -69,6 +69,7 @@ export async function runDoctor(
 		await checkPluginSkills(),
 		await checkWorkflows(skillsDir),
 		await checkStatusline(os.homedir()),
+		await checkAgentInstructions(dir, config.checkCommand),
 	]
 	const schemaCheck = await checkConfigSchema(dir)
 	if (schemaCheck) results.push(schemaCheck)
@@ -91,6 +92,43 @@ export async function runDoctor(
 		results.push(...(await checkSandboxExcludes(dir, os.homedir())))
 	}
 	return results
+}
+
+/**
+ * Implementers and fixers run the checks a repo's CLAUDE.md or AGENTS.md states
+ * before pushing (#361). repo-ai never writes either file, so a repo with neither
+ * and no `checkCommand` gives its agents no gate at all.
+ */
+export async function checkAgentInstructions(
+	dir: string,
+	checkCommand: string | undefined
+): Promise<CheckResult> {
+	const check = 'Agent instructions'
+	const files = ['CLAUDE.md', '.claude/CLAUDE.md', 'AGENTS.md']
+	const found: string[] = []
+	for (const f of files) if (await fs.pathExists(path.join(dir, f))) found.push(f)
+	if (found.length > 0) {
+		return {
+			check,
+			status: 'ok',
+			detail: `${found.join(', ')}${checkCommand ? `; agents also run \`${checkCommand}\`` : ''}`,
+		}
+	}
+	if (checkCommand) {
+		return {
+			check,
+			status: 'ok',
+			detail: `no CLAUDE.md or AGENTS.md; agents run \`${checkCommand}\` before pushing`,
+		}
+	}
+	// A warning, not drift: a fresh repo has neither file, and doctor must pass there.
+	return {
+		check,
+		status: 'optional-missing',
+		detail:
+			'no CLAUDE.md or AGENTS.md, and no checkCommand: agents push without running any checks',
+		hint: `Set "checkCommand" in ${CONFIG_FILE} (e.g. "npm test"), or add an AGENTS.md naming the checks to run before pushing`,
+	}
 }
 
 /**

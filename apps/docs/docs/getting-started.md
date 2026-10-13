@@ -90,6 +90,10 @@ the loop needs:
 }
 ```
 
+`npx @infrazero/repo-ai setup` offers to add the loop's rules to
+`.claude/settings.local.json` for you. That grant covers only this checkout,
+and `--yes` accepts it. It appends rules and never removes one.
+
 **With Claude Code's sandbox on**, an allow rule only skips the prompt; the
 call still runs sandboxed, where `gh` and `npx` fail. Add the loop's own calls
 to `sandbox.excludedCommands` in whichever settings file sets

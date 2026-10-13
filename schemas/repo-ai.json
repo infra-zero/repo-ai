@@ -99,6 +99,14 @@
       "type": "string",
       "default": "ci.yml",
       "description": "File name of the CI workflow under .github/workflows that runs on pushes to the default branch. `loop tick` and `doctor` watch its runs for cancelled-with-no-jobs, stuck-approval and failed-release symptoms; `doctor` warns when the file does not exist. PR checks need no setting — they cover every workflow."
+    },
+    "checkCommand": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^`\\r\\n]+$",
+      "examples": ["pnpm verify", "npm test", "make check"],
+      "description": "The command implementer and fixer agents run before pushing, and fix until it passes. Unset, they follow the pre-commit checks in the repo's CLAUDE.md or AGENTS.md. One line, no backticks: it is quoted into the agents' prompts."
     }
   }
 }
