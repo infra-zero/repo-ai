@@ -146,7 +146,8 @@ export async function runLoopWorktreeAdd(
 	if (dirs.length === 0) {
 		result.needsInstall = true
 		result.messages.push(
-			'no worktree.symlinkDirectories — run a real install in the worktree (`fix ai` restores the fast path)'
+			// #363: `fix ai` is repo-tooling's, not ours — name it in full.
+			'no worktree.symlinkDirectories — run a real install in the worktree (optional: `npx @rtorcato/repo-tooling fix ai` writes the list and restores the fast path)'
 		)
 	}
 	for (const d of dirs) {
