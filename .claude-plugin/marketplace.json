@@ -22,8 +22,8 @@
         "source": "git-subdir",
         "url": "infra-zero/repo-ai",
         "path": "mods/loop-watch",
-        "ref": "v3.6.0",
-        "sha": "b74ed6f0b219eceb185397b7aa23f2e3be65d15d"
+        "ref": "v3.8.0",
+        "sha": "a5c67cab12871380e9007eb24db9e512b97998a7"
       },
       "description": "Experimental, optional: a live ai-loop view for Claude Code (status line, /loop-watch pane, merge-ready toast, agent dock). Built on the early-access mod API, so it may break between Claude Code releases. Not installed by repo-ai setup or fix. Pinned to a release commit, so a push to main never changes installed code."
     },
@@ -32,9 +32,9 @@
       "source": {
         "source": "git-subdir",
         "url": "infra-zero/repo-ai",
-        "path": "plugins/repo-ai-rainbow",
-        "ref": "v3.6.0",
-        "sha": "b74ed6f0b219eceb185397b7aa23f2e3be65d15d"
+        "path": "mods/repo-ai-rainbow",
+        "ref": "v3.8.0",
+        "sha": "a5c67cab12871380e9007eb24db9e512b97998a7"
       },
       "description": "A colorful band above the prompt with open ai-* label counts and the ai-loop status; /repo-ai refreshes it. Needs gh. Pinned to a release commit, so a push to main never changes installed code."
     }
