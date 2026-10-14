@@ -25,4 +25,12 @@ describe('mods/loop-watch (#326)', () => {
 			expect(source.sha).toMatch(/^[0-9a-f]{40}$/)
 		}
 	})
+
+	it('points the pinned plugins at mods/, where #384 moved them (#385)', () => {
+		const { plugins } = JSON.parse(read('.claude-plugin/marketplace.json'))
+		for (const name of ['loop-watch', 'repo-ai-rainbow']) {
+			const { source } = plugins.find((p: { name: string }) => p.name === name)
+			expect(source.path).toBe(`mods/${name}`)
+		}
+	})
 })
