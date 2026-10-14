@@ -9,7 +9,8 @@ allowBuilds:
   sharp: true
 
 minimumReleaseAgeExclude:
-  - '@rtorcato/repo-tooling@5.4.1'
+  - '@infrazero/*'
+  - '@rtorcato/repo-tooling@6.1.0'
   - '@rtorcato/shared-docs@1.14.0'
 
 # Dependabot alerts #1-3: transitive via Docusaurus (copy-webpack-plugin, sockjs).
@@ -26,3 +27,7 @@ overrides:
   # Dependabot alerts #12-14 (#343): transitive via conventional-changelog-writer
   # (semantic-release), locked at 4.7.9.
   handlebars: '^4.7.10'
+
+# Don't re-verify node_modules on every script run — the check costs a
+# second per invocation and CI installs with --frozen-lockfile anyway.
+verifyDepsBeforeRun: false
