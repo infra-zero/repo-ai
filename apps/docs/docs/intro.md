@@ -74,7 +74,7 @@ npx @infrazero/repo-ai fix claude-skills --skills-dir .claude/skills
 
 The Workflow scripts land next to them in `.claude/workflows`, so everyone who clones the repo runs the same version.
 
-**Prefer a plugin?** In Claude Code, run `/plugin marketplace add infra-zero/repo-ai`, then `/plugin install repo-ai@repo-ai`. You get the same four skills and both Workflow scripts, registered as `repo-ai:ai-loop-pickup` and `repo-ai:ai-loop-recover`, which `ai-loop` finds on its own. The plugin is **unversioned**: it follows `main`, so it can run ahead of the npm release. Pick one way, not both.
+**Prefer a plugin?** In Claude Code, run `/plugin marketplace add rtorcato/repo-ai`, then `/plugin install repo-ai@repo-ai`. You get the same four skills and both Workflow scripts, registered as `repo-ai:ai-loop-pickup` and `repo-ai:ai-loop-recover`, which `ai-loop` finds on its own. The plugin is **unversioned**: it follows `main`, so it can run ahead of the npm release. Pick one way, not both.
 
 Either way, the skills call the CLI through `npx @infrazero/repo-ai`.
 
@@ -82,7 +82,7 @@ Either way, the skills call the CLI through `npx @infrazero/repo-ai`.
 
 ## Optional mods
 
-Mods are Claude Code plugins built on its early-access mod API. They need **Claude Code 2.1.292** or later and may break between Claude Code releases. Neither `setup` nor `fix` installs them. Add the marketplace once with `/plugin marketplace add infra-zero/repo-ai`, then install any of these:
+Mods are Claude Code plugins built on its early-access mod API. They need **Claude Code 2.1.292** or later and may break between Claude Code releases. Neither `setup` nor `fix` installs them. Add the marketplace once with `/plugin marketplace add rtorcato/repo-ai`, then install any of these:
 
 | Mod | Install | What it does | Needs |
 |---|---|---|---|
