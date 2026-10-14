@@ -82,7 +82,13 @@ const config: Config = {
 		},
 		navbar: {
 			title: 'repo-ai',
-			logo: { alt: 'repo-ai', src: 'img/favicon.svg' },
+			logo: {
+				alt: 'repo-ai',
+				src: 'img/logo.svg',
+				srcDark: 'img/logo-dark.svg',
+				width: 26,
+				height: 26,
+			},
 			items: [
 				{ to: '/docs', position: 'left', label: 'Docs' },
 				{ to: '/docs/ai-loop', position: 'left', label: 'Guide' },
