@@ -101,7 +101,7 @@ const EXAMPLES: { label: string; file: string; code: string }[] = [
 	{
 		label: 'install',
 		file: 'Config, skills, allow rules, labels and statusline, then doctor',
-		code: `npx @infrazero/repo-ai setup`,
+		code: `npx @rtorcato/repo-ai setup`,
 	},
 	{
 		label: 'run',
@@ -114,8 +114,8 @@ const EXAMPLES: { label: string; file: string; code: string }[] = [
 	{
 		label: 'audit',
 		file: 'Check labels, agent user, and installed skills',
-		code: `npx @infrazero/repo-ai doctor
-npx @infrazero/repo-ai loop tick --json   # one tick's work list; writes no GitHub state`,
+		code: `npx @rtorcato/repo-ai doctor
+npx @rtorcato/repo-ai loop tick --json   # one tick's work list; writes no GitHub state`,
 	},
 ]
 
@@ -273,7 +273,7 @@ export default function Home(): ReactElement {
 				<Hero />
 				<Pillars />
 				<Parts />
-				<Siblings self="@infrazero/repo-ai" />
+				<Siblings self="@rtorcato/repo-ai" />
 			</main>
 		</Layout>
 	)

@@ -13,7 +13,7 @@ spends your Anthropic credits and your GitHub Actions minutes.
 In the repo, in a terminal:
 
 ```bash
-npx @infrazero/repo-ai setup
+npx @rtorcato/repo-ai setup
 ```
 
 Then in Claude Code, in the same repo:

@@ -85,7 +85,7 @@ jobs:
           done
       - run: pnpm run build
       - name: Build the dashboard app
-        run: pnpm --filter @infrazero/repo-ai-dashboard build
+        run: pnpm --filter @rtorcato/repo-ai-dashboard build
       # Run the package as npm would ship it, not as it sits in the repo: pack,
       # check the non-code files made it in, install the tarball somewhere
       # clean, and invoke the bin.
@@ -129,7 +129,7 @@ jobs:
           tmp="$(mktemp -d)"
           npm pack --pack-destination "$tmp" > /dev/null
           (cd "$tmp" && npm init -y > /dev/null && npm install --no-audit --no-fund "$tmp"/*.tgz > /dev/null)
-          cli="$tmp/node_modules/@infrazero/repo-ai/dist/cli/index.js"
+          cli="$tmp/node_modules/@rtorcato/repo-ai/dist/cli/index.js"
           fresh() { local d; d="$(mktemp -d)"; git -C "$d" init -q; echo "$d"; }
 
           echo "::group::setup --yes with an empty HOME and no terminal"

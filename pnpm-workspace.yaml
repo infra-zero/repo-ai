@@ -9,7 +9,7 @@ allowBuilds:
   sharp: true
 
 minimumReleaseAgeExclude:
-  - '@infrazero/*'
+  - '@rtorcato/repo-ai'
   - '@rtorcato/repo-tooling@6.1.0'
   - '@rtorcato/shared-docs@1.14.0'
 

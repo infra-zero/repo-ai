@@ -68,9 +68,9 @@ export const PASSES = [
 
 const BOT = 'my-bot'
 const YOU = 'you'
-const TICK = 'npx @infrazero/repo-ai loop tick --json'
-const APPLY = 'npx @infrazero/repo-ai loop apply --root <root> --json'
-const COMMENT = 'npx @infrazero/repo-ai loop comment 90 --body-file "$BODY_FILE"'
+const TICK = 'npx @rtorcato/repo-ai loop tick --json'
+const APPLY = 'npx @rtorcato/repo-ai loop apply --root <root> --json'
+const COMMENT = 'npx @rtorcato/repo-ai loop comment 90 --body-file "$BODY_FILE"'
 
 /** The issue as every later scenario finds it: claimed, with a worktree. */
 const claimed = { issue: ['ai-wip'], issueAssignee: BOT, worktree: true }
@@ -141,7 +141,7 @@ export const SCENARIOS: Scenario[] = [
 				node: 'wip',
 				title: 'The tick reports and schedules the next one',
 				body: 'It writes a one-line summary to `.claude/ai-loop-status`, starts a watcher that fires when the work list changes, and keeps exactly one cron job as a fallback: every 30 minutes with a watcher, every 10 without.',
-				cmd: 'Monitor({command: "npx @infrazero/repo-ai loop watch --root <root>"})\nCronCreate({prompt: "/ai-loop --root <root>", recurring: true})',
+				cmd: 'Monitor({command: "npx @rtorcato/repo-ai loop watch --root <root>"})\nCronCreate({prompt: "/ai-loop --root <root>", recurring: true})',
 				...claimed,
 			},
 			{

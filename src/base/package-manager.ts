@@ -49,9 +49,9 @@ export const YARN_BERRY_ARGS = ['install', '--mode=skip-build']
 /**
  * Yarn 3 rejects `--cwd` before the command and Yarn 4 rejects it after (#394), so
  * no flag covers Yarn 2+. `loop worktree install` runs it with the worktree as its
- * working directory instead, under the loop's `npx @infrazero/repo-ai` allow rule.
+ * working directory instead, under the loop's `npx @rtorcato/repo-ai` allow rule.
  */
-export const YARN_BERRY_INSTALL = "npx @infrazero/repo-ai loop worktree install '<worktree>'"
+export const YARN_BERRY_INSTALL = "npx @rtorcato/repo-ai loop worktree install '<worktree>'"
 
 /** Yarn 2+: a `.yarnrc.yml`, or `packageManager` pinning `yarn@2` or later. */
 export async function isYarnBerry(dir: string): Promise<boolean> {

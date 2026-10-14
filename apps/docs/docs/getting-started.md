@@ -31,7 +31,7 @@ auto-merge allowed, delete-branch-on-merge, no required pull request reviews,
 and at least one required status check. One command sets them:
 
 ```bash
-npx @infrazero/repo-ai fix repo-settings
+npx @rtorcato/repo-ai fix repo-settings
 ```
 
 It shows a plan and asks before changing anything; `--yes` applies it. It sets
@@ -60,7 +60,7 @@ matters.
 ## 1. Run `setup`
 
 ```bash
-npx @infrazero/repo-ai setup
+npx @rtorcato/repo-ai setup
 ```
 
 One guided run. It shows the cost notice once per machine, then:
@@ -76,11 +76,11 @@ asking before each step except the labels, then runs `doctor` to confirm.
 `--yes` skips the prompts. See [Commands](./commands.md#setup) for each piece
 run alone.
 
-**Allow rules.** The loop makes many `gh`, `git` and `npx @infrazero/repo-ai`
+**Allow rules.** The loop makes many `gh`, `git` and `npx @rtorcato/repo-ai`
 calls per tick, plus your package manager's. Without an allow rule, Claude Code
 prompts you for each one, which defeats an unattended loop. `setup` adds the
 missing rules to `.claude/settings.local.json`, which is gitignored and covers
-only this checkout: `Bash(gh:*)`, `Bash(git *)`, `Bash(npx @infrazero/repo-ai *)`
+only this checkout: `Bash(gh:*)`, `Bash(git *)`, `Bash(npx @rtorcato/repo-ai *)`
 and the package manager your lockfile names, such as `Bash(pnpm:*)`. Alongside
 them it adds `permissions.deny` rules for the commands those prefixes would let
 run anything, such as `git -c alias.x='!cmd' x` and `pnpm dlx <package>`. It appends
@@ -92,10 +92,10 @@ put the same rules in `.claude/settings.json` instead; see
 skips the prompt; the call still runs sandboxed, where `gh` and `npx` fail. Run:
 
 ```bash
-npx @infrazero/repo-ai fix sandbox
+npx @rtorcato/repo-ai fix sandbox
 ```
 
-It adds `gh *` and `npx @infrazero/repo-ai *` to `sandbox.excludedCommands` in
+It adds `gh *` and `npx @rtorcato/repo-ai *` to `sandbox.excludedCommands` in
 whichever settings file sets `sandbox.enabled`, and `doctor` flags it when it is
 missing. With the sandbox off, skip this.
 

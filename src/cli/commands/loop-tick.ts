@@ -386,7 +386,7 @@ export async function runLoopTick(options: LoopTickOptions = {}): Promise<LoopTi
 	if (result.staleInstall.length > 0) {
 		const fixes = [
 			result.staleInstall.some((s) => !s.startsWith('plugin '))
-				? 'run `npx @infrazero/repo-ai fix claude-skills`'
+				? 'run `npx @rtorcato/repo-ai fix claude-skills`'
 				: null,
 			result.staleInstall.some((s) => s.startsWith('plugin '))
 				? 'run `/plugin update repo-ai@repo-ai` in Claude Code'
