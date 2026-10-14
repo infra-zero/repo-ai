@@ -24,7 +24,7 @@ worktree config — come from [`@rtorcato/repo-tooling`](https://github.com/rtor
 ## Install it
 
 ```bash
-npx @infrazero/repo-ai fix claude-skills
+npx @rtorcato/repo-ai fix claude-skills
 ```
 
 That writes `~/.claude/skills/ai-loop/SKILL.md`. Unlike every other fixer
@@ -101,7 +101,7 @@ rather than silently ignoring it. It also reports a wrong type, and a file that
 is not valid JSON. A valid file that leaves defaulted keys unset is reported
 too, without failing: `doctor` names each one and the default in effect.
 
-`npx @infrazero/repo-ai fix config` adds `$schema` to an existing file and writes
+`npx @rtorcato/repo-ai fix config` adds `$schema` to an existing file and writes
 every unset key that has a default, so the file shows each setting the loop
 runs on. It never changes a key you set, and it leaves out keys with no default
 (`humanUser`, `maxAgents`). A written default stays pinned: if repo-ai later
@@ -175,11 +175,11 @@ alias claude-ai-loop='GH_TOKEN=$(gh auth token --user <agentUser>) claude'
 ```
 
 A GitHub App works the same way:
-`GH_TOKEN=$(npx @infrazero/repo-ai auth app-token --repo <owner/repo>)` gives
+`GH_TOKEN=$(npx @rtorcato/repo-ai auth app-token --repo <owner/repo>)` gives
 `gh` and `git` the App's identity for an hour. Set `REPO_AI_GH_LOGIN` alongside
 it; see [`auth app-token`](./commands.md#setup).
 
-`npx @infrazero/repo-ai fix ai-loop-identity` is **deprecated** (#285). It
+`npx @rtorcato/repo-ai fix ai-loop-identity` is **deprecated** (#285). It
 pointed every Claude session in a checkout at a separate `gh` config directory
 (`GH_CONFIG_DIR`), hands-on sessions included. Prefer `GH_TOKEN`.
 
@@ -382,7 +382,7 @@ whose section is `Nothing.` is adopted as a plain pass, with no `ai-notes`.
 ## Repo prerequisites
 
 ```bash
-npx @infrazero/repo-ai fix repo-settings
+npx @rtorcato/repo-ai fix repo-settings
 ```
 
 It sets exactly what the loop needs, after showing the plan: squash as the
@@ -411,7 +411,7 @@ repo's package manager (read off its lockfile) instead, which costs a duplicate 
 ### Claude Code permissions
 
 Every tick shells out to `gh`, `git`, the repo's package manager and
-`npx @infrazero/repo-ai`. Without allow rules for them, each call prompts, or goes to the auto-mode
+`npx @rtorcato/repo-ai`. Without allow rules for them, each call prompts, or goes to the auto-mode
 classifier, which can block the tick. Add these to `permissions.allow` in
 `.claude/settings.json` (or `~/.claude/settings.json`, or
 `.claude/settings.local.json`):
@@ -423,7 +423,7 @@ classifier, which can block the tick. Add these to `permissions.allow` in
       "Bash(gh:*)",
       "Bash(git *)",
       "Bash(pnpm:*)",
-      "Bash(npx @infrazero/repo-ai *)"
+      "Bash(npx @rtorcato/repo-ai *)"
     ],
     "deny": [
       "Bash(git -c *)",
@@ -450,11 +450,11 @@ lockfile: `pnpm-lock.yaml`, `bun.lock`/`bun.lockb`, `yarn.lock`, or
 `package-lock.json`/`npm-shrinkwrap.json`, first match wins. Use `Bash(npm:*)`,
 `Bash(yarn:*)` or `Bash(bun:*)` to match yours. A repo with no lockfile needs
 none of them. On Yarn 2+ the worktree install runs through
-`npx @infrazero/repo-ai loop worktree install`, which starts yarn with the
+`npx @rtorcato/repo-ai loop worktree install`, which starts yarn with the
 worktree as its working directory: Yarn 3 rejects `--cwd` before the command
 and Yarn 4 rejects it after.
 
-`npx @infrazero/repo-ai setup` offers to add the loop's rules to
+`npx @rtorcato/repo-ai setup` offers to add the loop's rules to
 `.claude/settings.local.json` for you. That grant covers only this checkout,
 and `--yes` accepts it. It appends rules and never removes one.
 
@@ -463,12 +463,12 @@ call still runs sandboxed. There `gh` fails TLS verification on macOS (Seatbelt
 blocks the keychain) and `npx` can't write `~/.npm/_cacache`. The tick then
 needs an unsandboxed retry, which the auto-mode classifier can refuse. Exclude
 the loop's own calls in whichever file sets `sandbox.enabled`, or run
-`npx @infrazero/repo-ai fix sandbox`:
+`npx @rtorcato/repo-ai fix sandbox`:
 
 ```json
 {
   "sandbox": {
-    "excludedCommands": ["gh *", "npx @infrazero/repo-ai *"]
+    "excludedCommands": ["gh *", "npx @rtorcato/repo-ai *"]
   }
 }
 ```
@@ -679,7 +679,7 @@ case the halt clears. Its last line names the fix, e.g. `Next tick: none —
 relaunch as <agentUser>, then /ai-loop`.
 
 **Is a tick coming?** Every tick ends with a `Next tick:` line, and the
-statusline segment (`npx @infrazero/repo-ai fix statusline`) shows it:
+statusline segment (`npx @rtorcato/repo-ai fix statusline`) shows it:
 `🤖 1 agent · next 9m` while the loop runs, and nothing once the last tick is over
 35 minutes old. `/ai-loop-status`
 reports the same.
@@ -715,7 +715,7 @@ cadence and the tick report says `Monitor tool missing`. To run the watcher by
 hand:
 
 ```bash
-npx @infrazero/repo-ai loop watch
+npx @rtorcato/repo-ai loop watch
 ```
 
 A poll costs what a tick's reads cost: a handful of GitHub API calls, plus a

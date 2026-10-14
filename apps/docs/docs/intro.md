@@ -7,7 +7,7 @@ description: What repo-ai is, what it ships, and where to start.
 
 # repo-ai
 
-`@infrazero/repo-ai` is the **ai-loop** pipeline: a label-driven loop that
+`@rtorcato/repo-ai` is the **ai-loop** pipeline: a label-driven loop that
 takes an `ai-ready` GitHub issue, implements it in its own git worktree, opens a
 PR, has two agents review it, and hands it to a human to merge.
 
@@ -55,7 +55,7 @@ Workflow runs show in `/workflows`. If you edit the scripts in `workflows/`, loa
 
 The [Minimum path](./minimum-path.md) is three commands, with no options:
 
-1. Run `npx @infrazero/repo-ai setup`.
+1. Run `npx @rtorcato/repo-ai setup`.
 2. File an issue with `/ai-issue` in Claude Code.
 3. Run `/ai-loop`.
 
@@ -69,14 +69,14 @@ settings, a bot account, the sandbox, stopping, merging and releasing.
 **Sharing them with your team?** Install into the repo instead and commit the result:
 
 ```bash
-npx @infrazero/repo-ai fix claude-skills --skills-dir .claude/skills
+npx @rtorcato/repo-ai fix claude-skills --skills-dir .claude/skills
 ```
 
 The Workflow scripts land next to them in `.claude/workflows`, so everyone who clones the repo runs the same version.
 
 **Prefer a plugin?** In Claude Code, run `/plugin marketplace add rtorcato/repo-ai`, then `/plugin install repo-ai@repo-ai`. You get the same four skills and both Workflow scripts, registered as `repo-ai:ai-loop-pickup` and `repo-ai:ai-loop-recover`, which `ai-loop` finds on its own. The plugin is **unversioned**: it follows `main`, so it can run ahead of the npm release. Pick one way, not both.
 
-Either way, the skills call the CLI through `npx @infrazero/repo-ai`.
+Either way, the skills call the CLI through `npx @rtorcato/repo-ai`.
 
 **Models and reviewers.** The `ai-loop` skill pins `model: sonnet`, and its quick verification step pins `haiku`. Reviews run as `code-reviewer` and `security-expert` when you have agents with those names in `.claude/agents` or `~/.claude/agents`. Otherwise they run as `general-purpose`, with the reviewer's brief in the prompt. `doctor`'s `Reviewer agents` line tells you which you'll get.
 

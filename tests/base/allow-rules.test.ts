@@ -36,7 +36,7 @@ describe('checkAllowRules (#152)', () => {
 		settings(join(dir, '.claude', 'settings.json'), ['Bash(git *)', 'Bash(pnpm *)'])
 		settings(
 			join(dir, '.claude', 'settings.local.json'),
-			['Bash(npx @infrazero/repo-ai:*)'],
+			['Bash(npx @rtorcato/repo-ai:*)'],
 			LOOP_DENY_RULES
 		)
 		expect(await checkAllowRules(dir, home)).toEqual([expect.objectContaining({ status: 'ok' })])
@@ -62,7 +62,7 @@ describe('checkAllowRules (#152)', () => {
 		)
 		expect(results.map((r) => r.status)).toEqual(['drift', 'drift'])
 		expect(results[0].detail).toContain('Bash(pnpm:*)')
-		expect(results[1].detail).toContain('Bash(npx @infrazero/repo-ai *)')
+		expect(results[1].detail).toContain('Bash(npx @rtorcato/repo-ai *)')
 	})
 
 	it("requires the lockfile's package manager, and none without a lockfile (#360)", async () => {
@@ -73,7 +73,7 @@ describe('checkAllowRules (#152)', () => {
 			'Bash(gh:*)',
 			'Bash(git *)',
 			'Bash(npm:*)',
-			'Bash(npx @infrazero/repo-ai *)',
+			'Bash(npx @rtorcato/repo-ai *)',
 		])
 		const details = (await checkAllowRules(dir, newTmpDir())).map((r) => r.detail).join('\n')
 		expect(details).toContain('Bash(npm:*)')
@@ -152,7 +152,7 @@ describe('checkSandboxExcludes (#257)', () => {
 		const home = newTmpDir()
 		sandbox(join(dir, '.claude', 'settings.json'), { enabled: true, excludedCommands: ['gh:*'] })
 		sandbox(join(home, '.claude', 'settings.json'), {
-			excludedCommands: ['npx @infrazero/repo-ai *'],
+			excludedCommands: ['npx @rtorcato/repo-ai *'],
 		})
 		expect((await checkSandboxExcludes(dir, home))[0].status).toBe('ok')
 	})
@@ -238,5 +238,63 @@ describe('fixAllowRules (#371)', () => {
 		)
 		expect(fs.readdirSync(elsewhere)).toEqual(['target.json'])
 		expect(fs.readJsonSync(target)).toEqual({})
+	})
+})
+
+describe('the pre-rename @infrazero/repo-ai rules (#412)', () => {
+	beforeEach(() => {
+		vi.spyOn(console, 'error').mockImplementation(() => {})
+	})
+
+	const OLD_RULE = 'Bash(npx @infrazero/repo-ai *)'
+	const NEW_RULE = 'Bash(npx @rtorcato/repo-ai *)'
+	const withOld = LOOP_ALLOW_RULES.map((r) => (r === NEW_RULE ? OLD_RULE : r))
+
+	it('doctor passes with the old allow rule, the new one, or both', async () => {
+		for (const allow of [withOld, LOOP_ALLOW_RULES, [...LOOP_ALLOW_RULES, OLD_RULE]]) {
+			const home = newTmpDir()
+			settings(join(home, '.claude', 'settings.json'), allow, LOOP_DENY_RULES)
+			expect(await checkAllowRules(newTmpDir(), home)).toEqual([
+				expect.objectContaining({ status: 'ok' }),
+			])
+		}
+	})
+
+	it('names the old rule in the ok line, and fix allow-rules still adds the new one', async () => {
+		const home = newTmpDir()
+		const dir = newTmpDir()
+		settings(join(home, '.claude', 'settings.json'), withOld, LOOP_DENY_RULES)
+		const [result] = await checkAllowRules(dir, home)
+		expect(result.detail).toContain(OLD_RULE)
+		expect(result.hint).toContain('fix allow-rules')
+		await fixAllowRules(dir, home)
+		expect(fs.readJsonSync(join(dir, '.claude', 'settings.local.json')).permissions).toEqual({
+			allow: [NEW_RULE],
+			deny: [],
+		})
+		expect(await checkAllowRules(dir, home)).toEqual([
+			{
+				check: 'Claude Code permissions',
+				status: 'ok',
+				detail: expect.not.stringContaining(OLD_RULE),
+			},
+		])
+	})
+
+	it('doctor passes with the old sandbox exclude, and fix sandbox adds the new one', async () => {
+		const dir = newTmpDir()
+		const file = join(dir, '.claude', 'settings.local.json')
+		fs.outputJsonSync(file, {
+			sandbox: { enabled: true, excludedCommands: ['gh *', 'npx @infrazero/repo-ai:*'] },
+		})
+		const [result] = await checkSandboxExcludes(dir, newTmpDir())
+		expect(result.status).toBe('ok')
+		expect(result.detail).toContain('npx @infrazero/repo-ai *')
+		expect(await fixSandboxExcludes(dir, newTmpDir())).toEqual([file])
+		expect(fs.readJsonSync(file).sandbox.excludedCommands).toEqual([
+			'gh *',
+			'npx @infrazero/repo-ai:*',
+			'npx @rtorcato/repo-ai *',
+		])
 	})
 })

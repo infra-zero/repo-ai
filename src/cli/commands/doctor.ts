@@ -80,7 +80,7 @@ export async function runDoctor(
 			check: 'Loop config',
 			status: 'missing',
 			detail: `no ${CONFIG_FILE}`,
-			hint: 'Run `npx @infrazero/repo-ai fix config` to create it',
+			hint: 'Run `npx @rtorcato/repo-ai fix config` to create it',
 		})
 	}
 	// Gated on agentUser: that key is the "this repo runs the pipeline" signal.

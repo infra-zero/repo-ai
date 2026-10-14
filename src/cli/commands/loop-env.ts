@@ -89,7 +89,7 @@ export async function resolveLoopEnv(options: LoopEnvOptions = {}): Promise<Loop
 	// #359: say why — gh missing, logged out, or a remote that isn't on GitHub.
 	if (!ownerRepo)
 		warnings.push(
-			`could not resolve the GitHub repo from the working directory: ${ghFailure(repo)} — run \`npx @infrazero/repo-ai doctor\``
+			`could not resolve the GitHub repo from the working directory: ${ghFailure(repo)} — run \`npx @rtorcato/repo-ai doctor\``
 		)
 
 	const defaultBranch = await resolveDefaultBranch(git, gh)

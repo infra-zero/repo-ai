@@ -34,7 +34,7 @@ const ITEMS: Item[] = [
 	{ label: 'Commands', to: '/docs/commands' },
 	{ label: 'Changelog', to: '/docs/changelog' },
 	{ label: 'GitHub', href: 'https://github.com/rtorcato/repo-ai' },
-	{ label: 'npm', href: 'https://www.npmjs.com/package/@infrazero/repo-ai' },
+	{ label: 'npm', href: 'https://www.npmjs.com/package/@rtorcato/repo-ai' },
 ]
 
 function closeDrawer(): void {

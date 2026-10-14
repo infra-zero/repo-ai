@@ -95,7 +95,7 @@ const config: Config = {
 				},
 				{ href: 'https://github.com/rtorcato/repo-ai', label: 'GitHub', position: 'right' },
 				{
-					href: 'https://www.npmjs.com/package/@infrazero/repo-ai',
+					href: 'https://www.npmjs.com/package/@rtorcato/repo-ai',
 					label: 'npm',
 					position: 'right',
 				},
@@ -117,7 +117,7 @@ const config: Config = {
 					title: 'Resources',
 					items: [
 						{ label: 'GitHub', href: 'https://github.com/rtorcato/repo-ai' },
-						{ label: 'npm', href: 'https://www.npmjs.com/package/@infrazero/repo-ai' },
+						{ label: 'npm', href: 'https://www.npmjs.com/package/@rtorcato/repo-ai' },
 						{ label: 'Issues', href: 'https://github.com/rtorcato/repo-ai/issues' },
 						{ label: 'repo-tooling', href: 'https://docs.torcato.dev/repo-tooling/' },
 					],

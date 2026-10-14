@@ -5,8 +5,8 @@
     "name": "Richard Torcato",
     "url": "https://github.com/rtorcato"
   },
-  "homepage": "https://docs.infrazero.dev/repo-ai/",
-  "repository": "https://github.com/infra-zero/repo-ai",
+  "homepage": "https://docs.torcato.dev/repo-ai/",
+  "repository": "https://github.com/rtorcato/repo-ai",
   "license": "MIT",
   "keywords": ["ai-agents", "claude-code", "github-automation", "ai-loop"]
 }

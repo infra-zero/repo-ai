@@ -173,7 +173,7 @@ export function blockedDecision(
 	const why =
 		checks.length > 0
 			? `Branch protection requires ${checks.map((c) => `\`${c.replace(/[`\r\n]/g, '')}\``).join(', ')}, which never ran on this PR: a CI job that was renamed, removed or never added. No fix round can change that, so ${human} takes it: rename the job to match, update the required checks (Settings → Branches, or the ruleset).`
-			: `Every required check reported, so protection wants something that isn't a check, most often a required review, which the loop can never give its own PR. ${human} takes it: drop required reviews (\`npx @infrazero/repo-ai fix repo-settings\`).`
+			: `Every required check reported, so protection wants something that isn't a check, most often a required review, which the loop can never give its own PR. ${human} takes it: drop required reviews (\`npx @rtorcato/repo-ai fix repo-settings\`).`
 	return `${header}\nNot merged: GitHub reports this PR BLOCKED although every check on it passed. ${why}${
 		notes
 			? "\n\nBoth reviews passed with notes: read the reviewer's `### Before merging` above."
