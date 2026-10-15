@@ -193,7 +193,8 @@ export default function LoopWalkthrough(): ReactNode {
 					{(Object.keys(NODES) as NodeId[]).map((id) => {
 						const n = NODES[id]
 						const fill = n.label ? COLOR.get(n.label) : undefined
-						const text = fill ? ink(fill) : undefined
+						// Nudge the text right to make room for the label-colour dot.
+						const tx = fill ? 6 : 0
 						return (
 							<g
 								key={id}
@@ -204,12 +205,13 @@ export default function LoopWalkthrough(): ReactNode {
 									id === step.node ? styles.nodeOn : seen.has(id) && styles.nodeSeen
 								)}
 							>
-								<rect x={-62} y={-22} width={124} height={44} rx={22} fill={fill && `#${fill}`} />
-								<text y={n.sub ? -6 : 0} fill={text}>
+								<rect x={-62} y={-22} width={124} height={44} rx={22} />
+								{fill && <circle cx={-48} cy={0} r={4.5} fill={`#${fill}`} />}
+								<text x={tx} y={n.sub ? -6 : 0}>
 									{n.text}
 								</text>
 								{n.sub && (
-									<text y={10} fill={text} className={styles.sub}>
+									<text x={tx} y={10} className={styles.sub}>
 										{n.sub}
 									</text>
 								)}
