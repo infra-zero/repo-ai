@@ -74,7 +74,7 @@ Geist for everything and Geist Mono for code, as shipped by the shared theme. Th
 
 ## Brand
 
-The repo's own assets live in `brand/`, made with `npx @rtorcato/brand-kit` and rendered by `brand/render.sh`. The family mark and favicon came from #417.
+The repo's own assets live in `brand/`, made with `npx @rtorcato/brand-kit` and rendered by `brand/render.sh`. The torcato.dev repos mark and favicon came from #417.
 
 | Asset | File | Size |
 |---|---|---|
