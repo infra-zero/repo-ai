@@ -157,6 +157,8 @@ line — every agent authenticates as the repo owner:
 ${v.arms.map((a) => `<!-- ai-issue-loop:verdict:${a}:<PASS|PASS-NOTES|CHANGES> -->`).join('\n')}
 🤖 *Automated review — \`${v.type}\` via ai-loop${v.arm === 'both' ? ' (docs-only: code + security), same verdict on both markers' : ''}.*
 
+Mention a handle only if it is a repo collaborator; backtick every other one (\`@name\`), the PR author's included, because a bare \`@handle\` notifies its owner.
+
 It must END with a \`### Before merging\` section — findings that change what a
 human would do at merge time, or exactly \`Nothing.\` Cap the body at that
 section plus ≤600 characters above it; never list what you checked and found
