@@ -22,6 +22,8 @@ One **tick** of an unattended pipeline: `ai-ready` issue → worktree → PR →
 
 Every agent authenticates as the owner's own `gh`, so a real GitHub approval is impossible: approval is a *label*, and required status checks are the merge gate. **Never run `gh pr review --approve`; never set `required_pull_request_reviews`.** Everything an agent posts looks hand-written by the owner, so **every comment opens with `🤖 *Automated — <which agent> via ai-loop.*`**, then a blank line.
 
+**@mention only repo collaborators.** A bare `@handle` notifies whoever owns that GitHub account, and agent and role names are often real accounts. So wrap every other handle in backticks (`` `@name` ``), agent and role names included, in the body as well as the header. The header names the agent as `` `@<which agent>` ``. The one exception is a Dependabot command (`@dependabot recreate`), which must start line 1.
+
 **Comment budget: ≤10 lines, action first, cause under. A clean outcome gets no comment** (`merge-ready` + assignee already says it). `ai-notes` links the reviewer's `### Before merging`; a follow-up is one line, `Follow-up: #<new>`; a reviewer verdict is ≤600 characters above `### Before merging`. Declining an issue is the one exception (Pass 4).
 
 ## Labels

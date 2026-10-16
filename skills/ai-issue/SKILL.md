@@ -57,9 +57,10 @@ concurrency slot, two review passes, and up to two fix rounds before it lands as
 
 ## Create
 
-Draft title and body from `$ARGUMENTS` plus the conversation. The body opens
-with a line saying an agent wrote it — everything you post appears under the
-owner's own account:
+Draft title and body from `$ARGUMENTS` plus the conversation. Mention a handle
+only if it is a repo collaborator; backtick every other one (`` `@name` ``),
+because a bare `@handle` notifies its owner. The body opens with a line saying
+an agent wrote it — everything you post appears under the owner's own account:
 
 ```bash
 gh issue create --label ai-ready --title "TITLE" --body "$(cat <<'EOF'
